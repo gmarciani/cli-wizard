@@ -4,11 +4,12 @@
 """HTTP client for API requests."""
 
 import json
+from pathlib import Path
 from typing import Any
 
 import requests
 
-from .constants import DEFAULT_BASE_URL, DEFAULT_TIMEOUT
+from .constants import DEFAULT_BASE_URL, DEFAULT_TIMEOUT, DEFAULT_CA_FILE
 
 
 class ApiClient:
@@ -19,13 +20,18 @@ class ApiClient:
         base_url: str | None = None,
         api_key: str | None = None,
         timeout: int = DEFAULT_TIMEOUT,
+        ca_file: str | None = DEFAULT_CA_FILE,
+        verify_ssl: bool = True,
     ) -> None:
         """Initialize the API client."""
         self.base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        self.ca_file = ca_file
+        self.verify_ssl = verify_ssl
         self.session = requests.Session()
         self._setup_headers()
+        self._setup_ssl()
 
     def _setup_headers(self) -> None:
         """Set up default headers."""
@@ -33,6 +39,15 @@ class ApiClient:
         self.session.headers["Accept"] = "application/json"
         if self.api_key:
             self.session.headers["Authorization"] = f"Bearer {self.api_key}"
+
+    def _setup_ssl(self) -> None:
+        """Set up SSL verification with custom CA file if provided."""
+        if not self.verify_ssl:
+            self.session.verify = False
+        elif self.ca_file:
+            ca_path = Path(self.ca_file) if isinstance(self.ca_file, str) else self.ca_file
+            if ca_path and ca_path.exists():
+                self.session.verify = str(ca_path)
 
     def _url(self, path: str) -> str:
         """Build full URL from path."""

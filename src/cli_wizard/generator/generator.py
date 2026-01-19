@@ -3,6 +3,7 @@
 
 """CLI code generator using Jinja2 templates."""
 
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -23,9 +24,12 @@ def _build_url_path(op: Operation) -> str:
 class CliGenerator:
     """Generates Click CLI code from parsed OpenAPI."""
 
-    def __init__(self, config: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, config: dict[str, Any] | None = None, config_dir: Path | None = None
+    ) -> None:
         """Initialize generator with package templates."""
         self.config = config or {}
+        self.config_dir = config_dir or Path.cwd()
         self.env = Environment(
             loader=PackageLoader("cli_wizard", "templates"),
             trim_blocks=True,
@@ -46,17 +50,24 @@ class CliGenerator:
         # Create project structure
         src_dir = output_dir / "src" / package_name
         commands_dir = src_dir / "commands"
+        resources_dir = src_dir / "resources"
         commands_dir.mkdir(parents=True, exist_ok=True)
+        resources_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy resources (e.g., CA file, splash file)
+        ca_file_name = self._copy_ca_file(resources_dir)
+        splash_file_name = self._copy_splash_file(resources_dir)
 
         # Generate project files
         self._generate_pyproject(output_dir, cli_name, package_name)
         self._generate_readme(output_dir, cli_name)
+        self._generate_version(output_dir)
 
         # Generate package files
         self._generate_package_init(src_dir, package_name)
         self._generate_cli_main(src_dir, package_name, groups)
         self._generate_client(src_dir)
-        self._generate_constants(src_dir)
+        self._generate_constants(src_dir, ca_file_name, splash_file_name)
 
         # Generate commands
         self._generate_commands_init(commands_dir, groups)
@@ -82,6 +93,12 @@ class CliGenerator:
         content = template.render(cli_name=cli_name, config=self.config)
         with open(output_dir / "README.md", "w") as f:
             f.write(content)
+
+    def _generate_version(self, output_dir: Path) -> None:
+        """Generate VERSION file."""
+        version = self.config.get("version", "0.1.0")
+        with open(output_dir / "VERSION", "w") as f:
+            f.write(f"{version}\n")
 
     def _generate_package_init(self, src_dir: Path, package_name: str) -> None:
         """Generate package __init__.py."""
@@ -110,12 +127,61 @@ class CliGenerator:
         with open(src_dir / "client.py", "w") as f:
             f.write(content)
 
-    def _generate_constants(self, src_dir: Path) -> None:
+    def _generate_constants(
+        self, src_dir: Path, ca_file_name: str | None, splash_file_name: str | None
+    ) -> None:
         """Generate constants module."""
         template = self.env.get_template("constants.py.j2")
-        content = template.render(config=self.config)
+        content = template.render(
+            config=self.config,
+            ca_file_name=ca_file_name,
+            splash_file_name=splash_file_name,
+        )
         with open(src_dir / "constants.py", "w") as f:
             f.write(content)
+
+    def _copy_ca_file(self, resources_dir: Path) -> str | None:
+        """Copy CA file to resources directory if specified in config."""
+        api_config = self.config.get("api", {})
+        ca_file = api_config.get("ca_file")
+        if not ca_file:
+            return None
+
+        # Resolve CA file path relative to config directory
+        ca_path = Path(ca_file)
+        if not ca_path.is_absolute():
+            ca_path = self.config_dir / ca_file
+
+        if not ca_path.exists():
+            return None
+
+        # Copy to resources directory with original filename
+        dest_path = resources_dir / ca_path.name
+        shutil.copy2(ca_path, dest_path)
+        return ca_path.name
+
+    def _copy_splash_file(self, resources_dir: Path) -> str | None:
+        """Copy splash file to resources directory if specified in config."""
+        splash_config = self.config.get("splash", {})
+        if not splash_config.get("enabled", False):
+            return None
+
+        splash_file = splash_config.get("file")
+        if not splash_file:
+            return None
+
+        # Resolve splash file path relative to config directory
+        splash_path = Path(splash_file)
+        if not splash_path.is_absolute():
+            splash_path = self.config_dir / splash_file
+
+        if not splash_path.exists():
+            return None
+
+        # Copy to resources directory with original filename
+        dest_path = resources_dir / splash_path.name
+        shutil.copy2(splash_path, dest_path)
+        return splash_path.name
 
     def _generate_commands_init(
         self, commands_dir: Path, groups: dict[str, CommandGroup]

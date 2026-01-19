@@ -5,6 +5,7 @@
 
 import click
 import logging
+import shutil
 from pathlib import Path
 
 import yaml
@@ -50,13 +51,6 @@ _default_output = _defaults.get("OutputDir", "cli")
     default=_default_output,
     help=f"Output directory for generated CLI (default: {_default_output})",
 )
-@click.option(
-    "--name",
-    "-n",
-    type=str,
-    default=None,
-    help="CLI name (default: from config or 'my-cli')",
-)
 @click.pass_context
 def generate(
     ctx: click.Context,
@@ -64,7 +58,6 @@ def generate(
     openapi: str,
     config: str,
     output: str,
-    name: str | None,
 ) -> None:
     """Generate a CLI from an OpenAPI spec and config file."""
     debug = ctx.obj.get("debug", False) if ctx.obj else False
@@ -75,13 +68,11 @@ def generate(
         base_dir / openapi if not Path(openapi).is_absolute() else Path(openapi)
     )
     config_path = base_dir / config if not Path(config).is_absolute() else Path(config)
-    output_path = base_dir / output if not Path(output).is_absolute() else Path(output)
 
     if debug:
         logger.debug(f"Working directory: {base_dir}")
         logger.debug(f"OpenAPI spec: {openapi_path}")
         logger.debug(f"Config file: {config_path}")
-        logger.debug(f"Output directory: {output_path}")
 
     # Validate input files exist
     if not openapi_path.exists():
@@ -97,8 +88,25 @@ def generate(
     cli_config = _load_cli_config(config_path)
     gen_config = cli_config.get("generator", {})
 
-    # Determine CLI name and package name
-    cli_name = name or cli_config.get("cli", {}).get("name", "my-cli")
+    # Resolve output path (CLI option > config > default)
+    output_dir = output
+    if output == _default_output and cli_config.get("OutputDir"):
+        output_dir = cli_config.get("OutputDir")
+    output_path = (
+        base_dir / output_dir
+        if not Path(output_dir).is_absolute()
+        else Path(output_dir)
+    )
+
+    if debug:
+        logger.debug(f"Output directory: {output_path}")
+
+    # Determine CLI name and package name from config
+    cli_name = cli_config.get("PackageName")
+    if not cli_name:
+        click.secho("✗ PackageName is required in config file", fg="red", err=True)
+        raise SystemExit(1)
+    # Convert hyphens to underscores for Python package compatibility
     package_name = cli_name.replace("-", "_")
 
     # Parse OpenAPI spec
@@ -116,10 +124,30 @@ def generate(
         click.secho("✗ No operations found in OpenAPI spec", fg="red", err=True)
         raise SystemExit(1)
 
+    # Clean up output directory before generating
+    if output_path.exists():
+        # Check if we're inside the output directory
+        try:
+            cwd = Path.cwd()
+            if output_path in cwd.parents or output_path == cwd:
+                click.secho(
+                    f"✗ Cannot clean output directory while inside it. "
+                    f"Please run from a different directory.",
+                    fg="red",
+                    err=True,
+                )
+                raise SystemExit(1)
+        except OSError:
+            # Current directory may already be deleted
+            pass
+        click.secho("🧹 Cleaning output directory: ", fg="cyan", nl=False)
+        click.echo(output_path)
+        shutil.rmtree(output_path)
+
     # Generate CLI project
     click.secho("⚙️  Generating CLI project: ", fg="cyan", nl=False)
     click.echo(output_path)
-    generator = CliGenerator(config=cli_config)
+    generator = CliGenerator(config=cli_config, config_dir=config_path.parent)
     generator.generate(groups, output_path, cli_name, package_name)
 
     # Summary
@@ -136,8 +164,7 @@ def generate(
 
     click.echo()
     click.secho("📋 Next steps:", fg="cyan", bold=True)
-    click.echo(f"   cd {output_path}")
-    click.echo("   pip install -e .")
+    click.echo(f"   pip install -e {output_path}")
     click.echo(f"   {cli_name} --help")
 
 

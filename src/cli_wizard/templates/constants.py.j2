@@ -3,7 +3,18 @@
 
 """Constants for the generated CLI."""
 
-__version__ = "0.1.0"
+from pathlib import Path
+
+
+def _read_version() -> str:
+    """Read version from VERSION file."""
+    version_file = Path(__file__).parent.parent.parent / "VERSION"
+    if version_file.exists():
+        return version_file.read_text().strip()
+    return "0.0.0"
+
+
+__version__ = _read_version()
 {% if config.api and config.api.default_base_url %}
 DEFAULT_BASE_URL = "{{ config.api.default_base_url }}"
 {% else %}
@@ -13,4 +24,20 @@ DEFAULT_BASE_URL = "http://localhost:8080"
 DEFAULT_TIMEOUT = {{ config.api.timeout }}
 {% else %}
 DEFAULT_TIMEOUT = 30
+{% endif %}
+{% if ca_file_name %}
+DEFAULT_CA_FILE = Path(__file__).parent / "resources" / "{{ ca_file_name }}"
+{% else %}
+DEFAULT_CA_FILE = None
+{% endif %}
+
+# Splash screen configuration
+{% if splash_file_name %}
+SPLASH_ENABLED = True
+SPLASH_FILE = Path(__file__).parent / "resources" / "{{ splash_file_name }}"
+SPLASH_COLOR = "{{ config.splash.color | default('cyan') }}"
+{% else %}
+SPLASH_ENABLED = False
+SPLASH_FILE = None
+SPLASH_COLOR = None
 {% endif %}

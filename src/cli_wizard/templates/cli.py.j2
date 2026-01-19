@@ -4,9 +4,11 @@
 """Main CLI entry point."""
 
 import os
+from pathlib import Path
+
 import click
 
-from {{ package_name }}.constants import __version__, DEFAULT_BASE_URL
+from {{ package_name }}.constants import __version__, DEFAULT_BASE_URL, DEFAULT_CA_FILE, SPLASH_ENABLED, SPLASH_FILE, SPLASH_COLOR
 from {{ package_name }}.client import ApiClient
 {% for tag, group in groups.items() %}
 from {{ package_name }}.commands.{{ group.module_name }} import {{ group.module_name }}
@@ -21,19 +23,27 @@ class Context:
         debug: bool = False,
         base_url: str | None = None,
         api_key: str | None = None,
+        no_verify_ssl: bool = False,
+        ca_file: Path | None = None,
     ) -> None:
         self.debug = debug
         self.base_url = base_url or os.environ.get("API_BASE_URL") or DEFAULT_BASE_URL
         self.api_key = api_key or os.environ.get("API_KEY")
+        self.no_verify_ssl = no_verify_ssl
+        self.ca_file = ca_file
         self._client: ApiClient | None = None
 
     @property
     def client(self) -> ApiClient:
         """Get or create the API client."""
         if self._client is None:
+            # Priority: --ca-file option > default CA file from config
+            effective_ca_file = None if self.no_verify_ssl else (self.ca_file or DEFAULT_CA_FILE)
             self._client = ApiClient(
                 base_url=self.base_url,
                 api_key=self.api_key,
+                ca_file=effective_ca_file,
+                verify_ssl=not self.no_verify_ssl,
             )
         return self._client
 
@@ -41,20 +51,41 @@ class Context:
 pass_context = click.make_pass_decorator(Context, ensure=True)
 
 
-@click.group()
+def _show_splash() -> None:
+    """Display splash screen if enabled."""
+    if SPLASH_ENABLED and SPLASH_FILE and SPLASH_FILE.exists():
+        splash_text = SPLASH_FILE.read_text()
+        if SPLASH_COLOR:
+            click.secho(splash_text, fg=SPLASH_COLOR)
+        else:
+            click.echo(splash_text)
+
+
+@click.group(invoke_without_command=True)
 @click.version_option(version=__version__)
 @click.option("--debug", "-d", is_flag=True, help="Enable debug output")
 @click.option("--base-url", "-u", envvar="API_BASE_URL", help="API base URL")
 @click.option("--api-key", "-k", envvar="API_KEY", help="API key")
+@click.option("--no-verify-ssl", is_flag=True, default=False, help="Disable SSL certificate verification")
+@click.option("--ca-file", type=click.Path(exists=True, dir_okay=False, path_type=Path), help="CA certificate file for SSL verification")
 @click.pass_context
 def main(
     ctx: click.Context,
     debug: bool,
     base_url: str | None,
     api_key: str | None,
+    no_verify_ssl: bool,
+    ca_file: Path | None,
 ) -> None:
     """{{ config.get('cli', {}).get('description', 'Generated CLI') }}"""
-    ctx.obj = Context(debug=debug, base_url=base_url, api_key=api_key)
+    ctx.obj = Context(debug=debug, base_url=base_url, api_key=api_key, no_verify_ssl=no_verify_ssl, ca_file=ca_file)
+
+    # Show splash screen on every invocation
+    _show_splash()
+
+    # Show help when no subcommand is invoked
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
 
 
 {% for tag, group in groups.items() %}
