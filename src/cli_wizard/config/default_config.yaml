@@ -1,3 +1,7 @@
 ConfigFileName: config.yaml
 OpenApiFileName: openapi.json
 OutputDir: cli
+# PackageName sets the Python package name for the generated CLI.
+# Hyphens are automatically converted to underscores for Python compatibility.
+# Example: "my-cli" becomes "my_cli" for the package folder.
+PackageName: my-cli
