@@ -59,6 +59,9 @@ Issues = "https://github.com/gmarciani/cli-wizard/issues"
 where = ["src"]
 include = ["cli_wizard*"]
 
+[tool.setuptools.package-data]
+cli_wizard = ["templates/*.j2", "config/*.yaml"]
+
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
 

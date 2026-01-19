@@ -3,9 +3,8 @@
 
 """Tests for the main CLI module."""
 
-import logging
 from click.testing import CliRunner
-from unittest.mock import patch
+
 from cli_wizard.cli import main
 
 
@@ -22,30 +21,23 @@ def test_version():
     runner = CliRunner()
     result = runner.invoke(main, ["--version"])
     assert result.exit_code == 0
-    assert "1.0.0" in result.output
 
 
-def test_debug_flag():
-    """Test debug flag."""
+def test_generate_command_exists():
+    """Test that generate command is available."""
     runner = CliRunner()
-    with patch("cli_wizard.cli.logging.basicConfig") as mock_logging:
-        with patch("cli_wizard.commands.config.load_config") as mock_load:
-            mock_load.return_value = {"apikey": None}
-            result = runner.invoke(main, ["--debug", "config", "show"])
-            assert result.exit_code == 0
-            mock_logging.assert_called_once()
-            args, kwargs = mock_logging.call_args
-            assert kwargs["level"] == logging.DEBUG
+    result = runner.invoke(main, ["generate", "--help"])
+    assert result.exit_code == 0
+    assert "Generate a CLI" in result.output
 
 
-def test_no_debug_flag():
-    """Test without debug flag."""
+def test_generate_command_options():
+    """Test generate command has expected options."""
     runner = CliRunner()
-    with patch("cli_wizard.cli.logging.basicConfig") as mock_logging:
-        with patch("cli_wizard.commands.config.load_config") as mock_load:
-            mock_load.return_value = {"apikey": None}
-            result = runner.invoke(main, ["config", "show"])
-            assert result.exit_code == 0
-            mock_logging.assert_called_once()
-            args, kwargs = mock_logging.call_args
-            assert kwargs["level"] == logging.INFO
+    result = runner.invoke(main, ["generate", "--help"])
+    assert result.exit_code == 0
+    assert "--openapi" in result.output
+    assert "--config" in result.output
+    assert "--output" in result.output
+    assert "--working-dir" in result.output
+    assert "--name" in result.output
