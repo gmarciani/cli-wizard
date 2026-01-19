@@ -1,10 +1,11 @@
 name: CodeQL
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+# Temporarily disabled as it takes too long to acquire a worker
+# on:
+#   push:
+#     branches: [ "main" ]
+#   pull_request:
+#     branches: [ "main" ]
 
 jobs:
   analyze:
