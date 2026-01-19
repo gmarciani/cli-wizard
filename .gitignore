@@ -56,3 +56,6 @@ dmypy.json
 
 # Sphinx documentation
 docs/_build/
+
+# Examples
+resources/examples/cli
