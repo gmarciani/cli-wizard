@@ -1,11 +1,16 @@
 # CLI Generator Configuration
 # Customize the look and feel of the generated CLI
 
+# Output directory for the generated CLI project
+OutputDir: "ops4"
+
+# Python package name for the generated CLI
+# Hyphens are automatically converted to underscores for Python compatibility
+PackageName: "meshub-ops4"
+
 generator:
   # Path to OpenAPI spec (relative to this config file or absolute)
   openapi_spec: "openapi.json"
-  # Output directory for generated commands
-  output_dir: "cli/src/meshub_ops/commands/_generated"
   # Tags to exclude from generation
   exclude_tags:
     - "Actuator"
@@ -82,6 +87,9 @@ api:
   default_base_url: "https://localhost:8002"
   # Request timeout in seconds
   timeout: 30
+  # CA certificate file for SSL verification (optional)
+  # If not set, system CA certificates are used
+  ca_file: "/Users/gmarciani/Projects/meshub/resources/certificates/certs/ca-chain.cert.pem"
   # Retry configuration
   retry:
     max_attempts: 3

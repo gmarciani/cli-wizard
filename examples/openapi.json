@@ -362,6 +362,38 @@
         ],
         "type": "object"
       },
+      "ExampleResponse": {
+        "properties": {
+          "authType": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "userEmail": {
+            "nullable": true,
+            "type": "string"
+          },
+          "userId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "userRole": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "authType",
+          "message",
+          "timestamp"
+        ],
+        "type": "object"
+      },
       "GetApiKeyPricingResponse": {
         "properties": {
           "pricingOptions": {
@@ -1959,6 +1991,27 @@
         ]
       }
     },
+    "/apikey/example": {
+      "get": {
+        "operationId": "ExampleApiKey",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExampleResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "API Key endpoint - requires X-MESHUB-ApiKey header",
+        "tags": [
+          "Example"
+        ]
+      }
+    },
     "/auth/activation": {
       "post": {
         "operationId": "ActivateUser",
@@ -2236,6 +2289,79 @@
         "summary": "Actuator web endpoint 'docs/openapi'",
         "tags": [
           "Documentation"
+        ]
+      }
+    },
+    "/example/admin": {
+      "get": {
+        "operationId": "ExampleAdmin",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExampleResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Admin endpoint - requires JWT access token with ADMIN role",
+        "tags": [
+          "Example"
+        ]
+      }
+    },
+    "/example/authenticated": {
+      "get": {
+        "operationId": "ExampleAuthenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExampleResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Authenticated endpoint - requires JWT access token",
+        "tags": [
+          "Example"
+        ]
+      }
+    },
+    "/example/public": {
+      "get": {
+        "operationId": "ExamplePublic",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExampleResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Public endpoint - no authentication required",
+        "tags": [
+          "Example"
         ]
       }
     },
