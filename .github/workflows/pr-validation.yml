@@ -23,7 +23,7 @@ jobs:
       run: pip install tox
 
     - name: Run tests
-      run: tox -e test
+      run: tox -r -e test
 
     - name: Run linting
       run: tox -e lint
@@ -33,6 +33,7 @@ jobs:
 
     - name: Check code coverage
       run: |
+        pip install -e ".[dev]"
         coverage_result=$(pytest tests/ --cov=cli_wizard --cov-report=term-missing | grep TOTAL | awk '{print $4}' | sed 's/%//')
         if [ "$coverage_result" -lt 90 ]; then
           echo "Coverage $coverage_result% is below 90% threshold"
