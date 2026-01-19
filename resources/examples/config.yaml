@@ -1,0 +1,88 @@
+# CLI Generator Configuration
+# Customize the look and feel of the generated CLI
+
+generator:
+  # Path to OpenAPI spec (relative to this config file or absolute)
+  openapi_spec: "openapi.json"
+  # Output directory for generated commands
+  output_dir: "cli/src/meshub_ops/commands/_generated"
+  # Tags to exclude from generation
+  exclude_tags:
+    - "Actuator"
+    - "Documentation"
+  # Tags to include (if empty, all non-excluded tags are included)
+  include_tags: []
+
+# Map OpenAPI tags to CLI command group names
+tag_mapping:
+  "API Keys": "api-keys"
+  "Authentication": "auth"
+  "Administration": "admin"
+  "Messaging": "messages"
+  "Notifications": "notifications"
+  "Users": "users"
+  "Simple": "simple"
+
+# Customize command names (operationId -> command name)
+command_mapping:
+  # Example: "GetUserProfile" -> "profile"
+  # If not specified, converts CamelCase to kebab-case
+
+# Output formatting configuration
+output:
+  # Default format: json, table, yaml
+  default_format: "json"
+  # Enable colored output
+  colors: true
+  # JSON indentation
+  json_indent: 2
+  # Table style: ascii, rounded, minimal, markdown
+  table_style: "rounded"
+
+# Splash screen configuration
+splash:
+  # Enable splash screen on CLI start
+  enabled: true
+  # Path to splash text file (relative to config or absolute)
+  file: "splash.txt"
+  # Color for splash text (red, green, yellow, blue, magenta, cyan, white)
+  color: "cyan"
+
+# Logging configuration
+logging:
+  # Default level: DEBUG, INFO, WARNING, ERROR
+  default_level: "INFO"
+  # Log format
+  format: "%(asctime)s %(levelname)s: %(message)s"
+  # Date format
+  date_format: "%Y-%m-%dT%H:%M:%SZ"
+  # Use UTC timestamps
+  utc: true
+
+# Error handling configuration
+errors:
+  # Map HTTP status codes to user-friendly messages
+  status_messages:
+    400: "Invalid request. Please check your input parameters."
+    401: "Authentication required. Please provide a valid API key."
+    403: "Access denied. You don't have permission for this operation."
+    404: "Resource not found."
+    409: "Conflict. The resource already exists or is in an invalid state."
+    422: "Validation error. Please check your input."
+    429: "Rate limit exceeded. Please try again later."
+    500: "Server error. Please try again or contact support."
+    502: "Service temporarily unavailable. Please try again."
+    503: "Service temporarily unavailable. Please try again."
+  # Show detailed error info in debug mode
+  show_details_in_debug: true
+
+# API client configuration
+api:
+  # Base URL (can be overridden via --base-url or config)
+  default_base_url: "https://localhost:8002"
+  # Request timeout in seconds
+  timeout: 30
+  # Retry configuration
+  retry:
+    max_attempts: 3
+    backoff_factor: 0.5
