@@ -9,6 +9,9 @@ on:
       - .github/labels.yaml
       - .github/workflows/sync-labels.yaml
 
+permissions:
+  issues: write
+
 jobs:
   sync:
     name: Run
