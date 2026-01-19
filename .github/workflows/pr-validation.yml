@@ -1,0 +1,41 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.12']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install tox
+      run: pip install tox
+
+    - name: Run tests
+      run: tox -e test
+
+    - name: Run linting
+      run: tox -e lint
+
+    - name: Run type checking
+      run: tox -e type
+
+    - name: Check code coverage
+      run: |
+        coverage_result=$(pytest tests/ --cov=cli_wizard --cov-report=term-missing | grep TOTAL | awk '{print $4}' | sed 's/%//')
+        if [ "$coverage_result" -lt 90 ]; then
+          echo "Coverage $coverage_result% is below 90% threshold"
+          exit 1
+        fi
+        echo "Coverage $coverage_result% meets 90% threshold"
