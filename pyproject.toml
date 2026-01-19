@@ -60,7 +60,7 @@ where = ["src"]
 include = ["cli_wizard*"]
 
 [tool.setuptools.dynamic]
-version = {attr = "cli_wizard.constants.__version__"}
+version = {file = "VERSION"}
 
 [tool.black]
 line-length = 88
