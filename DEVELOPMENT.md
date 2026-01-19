@@ -56,8 +56,9 @@ VERSION="1.0.0"
 Draft the release
 
 ```shell
+VERSION="$(cat VERSION)"
 gh release create v${VERSION} \
-   --title "v$VERSION" \
+   --title v${VERSION} \
    --target main \
    --notes-file CHANGELOG.md \
    --latest \
