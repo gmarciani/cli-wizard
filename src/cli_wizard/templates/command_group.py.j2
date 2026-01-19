@@ -1,0 +1,103 @@
+# AUTO-GENERATED FILE - DO NOT EDIT
+# Generated from OpenAPI specification by cli-wizard
+
+"""{{ group.name }} commands."""
+
+import json
+import click
+from typing import Any
+
+
+@click.group(name="{{ group.cli_name }}")
+def {{ group.module_name }}() -> None:
+    """{{ group.description }}"""
+{% for op in group.operations %}
+
+
+@{{ group.module_name }}.command(name="{{ op.command_name }}")
+{% for param in op.parameters if param.location == "path" %}
+@click.argument("{{ param.python_name }}"{% if param.click_type != "str" %}, type={{ param.click_type }}{% endif %})
+{% endfor %}
+{% for param in op.parameters if param.location == "query" %}
+{% if param.enum %}
+@click.option("--{{ param.cli_name }}", type=click.Choice([{% for e in param.enum %}"{{ e }}"{% if not loop.last %}, {% endif %}{% endfor %}]){% if param.required %}, required=True{% endif %}{% if param.default is not none %}, default="{{ param.default }}"{% endif %}, help="{{ param.description }}")
+{% else %}
+@click.option("--{{ param.cli_name }}"{% if param.click_type != "str" %}, type={{ param.click_type }}{% endif %}{% if param.required %}, required=True{% endif %}{% if param.default is not none %}, default={{ param.default }}{% endif %}, help="{{ param.description }}")
+{% endif %}
+{% endfor %}
+{% for prop in op.body_properties %}
+@click.option("--{{ prop.cli_name }}"{% if prop.click_type == "bool" %}, is_flag=True{% elif prop.click_type != "str" %}, type={{ prop.click_type }}{% endif %}{% if prop.required %}, required=True{% endif %}, help="{{ prop.description }}")
+{% endfor %}
+@click.pass_context
+def {{ op.function_name }}(
+    ctx: click.Context,
+{% for param in op.parameters if param.location == "path" %}
+    {{ param.python_name }}: {{ param.click_type }},
+{% endfor %}
+{% for param in op.parameters if param.location == "query" %}
+    {{ param.python_name }}: {{ param.click_type }}{% if not param.required %} | None{% endif %},
+{% endfor %}
+{% for prop in op.body_properties %}
+    {{ prop.python_name }}: {{ prop.click_type }}{% if not prop.required %} | None{% endif %},
+{% endfor %}
+) -> None:
+    """{{ op.summary or op.operation_id }}"""
+    client = ctx.obj.client
+{% if op.parameters | selectattr("location", "equalto", "query") | list %}
+
+    params: dict[str, Any] = {}
+{% for param in op.parameters if param.location == "query" %}
+    if {{ param.python_name }} is not None:
+        params["{{ param.name }}"] = {{ param.python_name }}
+{% endfor %}
+{% endif %}
+{% if op.body_properties %}
+
+    body: dict[str, Any] = {}
+{% for prop in op.body_properties %}
+    if {{ prop.python_name }} is not None:
+        body["{{ prop.name }}"] = {{ prop.python_name }}
+{% endfor %}
+{% endif %}
+
+    try:
+{% if op.method == "GET" %}
+{% if op.parameters | selectattr("location", "equalto", "query") | list %}
+        response = client.get("{{ op | url_path }}", params=params)
+{% else %}
+        response = client.get("{{ op | url_path }}")
+{% endif %}
+{% elif op.method == "POST" %}
+{% if op.body_properties %}
+        response = client.post("{{ op | url_path }}", json_data=body)
+{% else %}
+        response = client.post("{{ op | url_path }}")
+{% endif %}
+{% elif op.method == "PUT" %}
+{% if op.body_properties %}
+        response = client.put("{{ op | url_path }}", json_data=body)
+{% else %}
+        response = client.put("{{ op | url_path }}")
+{% endif %}
+{% elif op.method == "PATCH" %}
+{% if op.body_properties %}
+        response = client.patch("{{ op | url_path }}", json_data=body)
+{% else %}
+        response = client.patch("{{ op | url_path }}")
+{% endif %}
+{% elif op.method == "DELETE" %}
+{% if op.body_properties %}
+        response = client.delete("{{ op | url_path }}", json_data=body)
+{% else %}
+        response = client.delete("{{ op | url_path }}")
+{% endif %}
+{% endif %}
+        response.raise_for_status()
+        if response.text:
+            click.echo(json.dumps(response.json(), indent=2))
+        else:
+            click.echo("Success")
+    except Exception as e:
+        click.secho(f"Error: {e}", fg="red", err=True)
+        raise SystemExit(1)
+{% endfor %}

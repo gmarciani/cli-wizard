@@ -1,0 +1,3 @@
+ConfigFileName: config.yaml
+OpenApiFileName: openapi.json
+OutputDir: cli

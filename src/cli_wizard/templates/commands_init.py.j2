@@ -1,0 +1,14 @@
+# AUTO-GENERATED FILE - DO NOT EDIT
+# Generated from OpenAPI specification by cli-wizard
+
+"""Generated CLI commands."""
+
+{% for tag, group in groups.items() %}
+from .{{ group.module_name }} import {{ group.module_name }}
+{% endfor %}
+
+__all__ = [
+{% for tag, group in groups.items() %}
+    "{{ group.module_name }}",
+{% endfor %}
+]

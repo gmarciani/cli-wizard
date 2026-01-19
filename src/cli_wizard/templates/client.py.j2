@@ -1,0 +1,87 @@
+# AUTO-GENERATED FILE - DO NOT EDIT
+# Generated from OpenAPI specification by cli-wizard
+
+"""HTTP client for API requests."""
+
+import json
+from typing import Any
+
+import requests
+
+from .constants import DEFAULT_BASE_URL, DEFAULT_TIMEOUT
+
+
+class ApiClient:
+    """HTTP client for making API requests."""
+
+    def __init__(
+        self,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        timeout: int = DEFAULT_TIMEOUT,
+    ) -> None:
+        """Initialize the API client."""
+        self.base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
+        self.api_key = api_key
+        self.timeout = timeout
+        self.session = requests.Session()
+        self._setup_headers()
+
+    def _setup_headers(self) -> None:
+        """Set up default headers."""
+        self.session.headers["Content-Type"] = "application/json"
+        self.session.headers["Accept"] = "application/json"
+        if self.api_key:
+            self.session.headers["Authorization"] = f"Bearer {self.api_key}"
+
+    def _url(self, path: str) -> str:
+        """Build full URL from path."""
+        return f"{self.base_url}{path}"
+
+    def get(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> requests.Response:
+        """Make a GET request."""
+        return self.session.get(
+            self._url(path), params=params, timeout=self.timeout
+        )
+
+    def post(
+        self,
+        path: str,
+        json_data: dict[str, Any] | None = None,
+    ) -> requests.Response:
+        """Make a POST request."""
+        return self.session.post(
+            self._url(path), json=json_data, timeout=self.timeout
+        )
+
+    def put(
+        self,
+        path: str,
+        json_data: dict[str, Any] | None = None,
+    ) -> requests.Response:
+        """Make a PUT request."""
+        return self.session.put(
+            self._url(path), json=json_data, timeout=self.timeout
+        )
+
+    def patch(
+        self,
+        path: str,
+        json_data: dict[str, Any] | None = None,
+    ) -> requests.Response:
+        """Make a PATCH request."""
+        return self.session.patch(
+            self._url(path), json=json_data, timeout=self.timeout
+        )
+
+    def delete(
+        self,
+        path: str,
+        json_data: dict[str, Any] | None = None,
+    ) -> requests.Response:
+        """Make a DELETE request."""
+        return self.session.delete(
+            self._url(path), json=json_data, timeout=self.timeout
+        )

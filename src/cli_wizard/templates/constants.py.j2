@@ -1,0 +1,16 @@
+# AUTO-GENERATED FILE - DO NOT EDIT
+# Generated from OpenAPI specification by cli-wizard
+
+"""Constants for the generated CLI."""
+
+__version__ = "0.1.0"
+{% if config.api and config.api.default_base_url %}
+DEFAULT_BASE_URL = "{{ config.api.default_base_url }}"
+{% else %}
+DEFAULT_BASE_URL = "http://localhost:8080"
+{% endif %}
+{% if config.api and config.api.timeout %}
+DEFAULT_TIMEOUT = {{ config.api.timeout }}
+{% else %}
+DEFAULT_TIMEOUT = 30
+{% endif %}

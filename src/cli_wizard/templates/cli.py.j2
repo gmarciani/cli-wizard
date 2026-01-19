@@ -1,0 +1,66 @@
+# AUTO-GENERATED FILE - DO NOT EDIT
+# Generated from OpenAPI specification by cli-wizard
+
+"""Main CLI entry point."""
+
+import os
+import click
+
+from {{ package_name }}.constants import __version__, DEFAULT_BASE_URL
+from {{ package_name }}.client import ApiClient
+{% for tag, group in groups.items() %}
+from {{ package_name }}.commands.{{ group.module_name }} import {{ group.module_name }}
+{% endfor %}
+
+
+class Context:
+    """CLI context object."""
+
+    def __init__(
+        self,
+        debug: bool = False,
+        base_url: str | None = None,
+        api_key: str | None = None,
+    ) -> None:
+        self.debug = debug
+        self.base_url = base_url or os.environ.get("API_BASE_URL") or DEFAULT_BASE_URL
+        self.api_key = api_key or os.environ.get("API_KEY")
+        self._client: ApiClient | None = None
+
+    @property
+    def client(self) -> ApiClient:
+        """Get or create the API client."""
+        if self._client is None:
+            self._client = ApiClient(
+                base_url=self.base_url,
+                api_key=self.api_key,
+            )
+        return self._client
+
+
+pass_context = click.make_pass_decorator(Context, ensure=True)
+
+
+@click.group()
+@click.version_option(version=__version__)
+@click.option("--debug", "-d", is_flag=True, help="Enable debug output")
+@click.option("--base-url", "-u", envvar="API_BASE_URL", help="API base URL")
+@click.option("--api-key", "-k", envvar="API_KEY", help="API key")
+@click.pass_context
+def main(
+    ctx: click.Context,
+    debug: bool,
+    base_url: str | None,
+    api_key: str | None,
+) -> None:
+    """{{ config.get('cli', {}).get('description', 'Generated CLI') }}"""
+    ctx.obj = Context(debug=debug, base_url=base_url, api_key=api_key)
+
+
+{% for tag, group in groups.items() %}
+main.add_command({{ group.module_name }})
+{% endfor %}
+
+
+if __name__ == "__main__":
+    main()
