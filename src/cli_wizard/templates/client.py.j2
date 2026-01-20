@@ -3,13 +3,13 @@
 
 """HTTP client for API requests."""
 
-import json
 from pathlib import Path
 from typing import Any
 
 import requests
 
 from .constants import DEFAULT_BASE_URL, DEFAULT_TIMEOUT, DEFAULT_CA_FILE
+from .logging import log_debug
 
 
 class ApiClient:
@@ -18,17 +18,19 @@ class ApiClient:
     def __init__(
         self,
         base_url: str | None = None,
-        api_key: str | None = None,
+        access_token: str | None = None,
         timeout: int = DEFAULT_TIMEOUT,
         ca_file: str | None = DEFAULT_CA_FILE,
         verify_ssl: bool = True,
+        debug: bool = False,
     ) -> None:
         """Initialize the API client."""
         self.base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
-        self.api_key = api_key
+        self.access_token = access_token
         self.timeout = timeout
         self.ca_file = ca_file
         self.verify_ssl = verify_ssl
+        self.debug = debug
         self.session = requests.Session()
         self._setup_headers()
         self._setup_ssl()
@@ -37,8 +39,8 @@ class ApiClient:
         """Set up default headers."""
         self.session.headers["Content-Type"] = "application/json"
         self.session.headers["Accept"] = "application/json"
-        if self.api_key:
-            self.session.headers["Authorization"] = f"Bearer {self.api_key}"
+        if self.access_token:
+            self.session.headers["Authorization"] = f"Bearer {self.access_token}"
 
     def _setup_ssl(self) -> None:
         """Set up SSL verification with custom CA file if provided."""
@@ -53,13 +55,35 @@ class ApiClient:
         """Build full URL from path."""
         return f"{self.base_url}{path}"
 
+    def _log_request(self, method: str, url: str, params: dict | None = None, json_data: dict | None = None) -> None:
+        """Log request details when debug is enabled."""
+        if not self.debug:
+            return
+        log_debug(f"Request: {method} {url}")
+        if params:
+            log_debug(f"Params: {params}")
+        if json_data:
+            log_debug(f"Body: {json_data}")
+        log_debug(f"Headers: {dict(self.session.headers)}")
+
+    def _log_response(self, response: requests.Response) -> None:
+        """Log response details when debug is enabled."""
+        if not self.debug:
+            return
+        log_debug(f"Response: {response.status_code} {response.reason}")
+        log_debug(f"Response Headers: {dict(response.headers)}")
+        if response.text:
+            log_debug(f"Response Body: {response.text[:1000]}")
+
     def get(
         self, path: str, params: dict[str, Any] | None = None
     ) -> requests.Response:
         """Make a GET request."""
-        return self.session.get(
-            self._url(path), params=params, timeout=self.timeout
-        )
+        url = self._url(path)
+        self._log_request("GET", url, params=params)
+        response = self.session.get(url, params=params, timeout=self.timeout)
+        self._log_response(response)
+        return response
 
     def post(
         self,
@@ -67,9 +91,11 @@ class ApiClient:
         json_data: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a POST request."""
-        return self.session.post(
-            self._url(path), json=json_data, timeout=self.timeout
-        )
+        url = self._url(path)
+        self._log_request("POST", url, json_data=json_data)
+        response = self.session.post(url, json=json_data, timeout=self.timeout)
+        self._log_response(response)
+        return response
 
     def put(
         self,
@@ -77,9 +103,11 @@ class ApiClient:
         json_data: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a PUT request."""
-        return self.session.put(
-            self._url(path), json=json_data, timeout=self.timeout
-        )
+        url = self._url(path)
+        self._log_request("PUT", url, json_data=json_data)
+        response = self.session.put(url, json=json_data, timeout=self.timeout)
+        self._log_response(response)
+        return response
 
     def patch(
         self,
@@ -87,9 +115,11 @@ class ApiClient:
         json_data: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a PATCH request."""
-        return self.session.patch(
-            self._url(path), json=json_data, timeout=self.timeout
-        )
+        url = self._url(path)
+        self._log_request("PATCH", url, json_data=json_data)
+        response = self.session.patch(url, json=json_data, timeout=self.timeout)
+        self._log_response(response)
+        return response
 
     def delete(
         self,
@@ -97,6 +127,8 @@ class ApiClient:
         json_data: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a DELETE request."""
-        return self.session.delete(
-            self._url(path), json=json_data, timeout=self.timeout
-        )
+        url = self._url(path)
+        self._log_request("DELETE", url, json_data=json_data)
+        response = self.session.delete(url, json=json_data, timeout=self.timeout)
+        self._log_response(response)
+        return response

@@ -45,6 +45,7 @@ class CliGenerator:
         package_name: str,
     ) -> None:
         """Generate a complete CLI project."""
+        self.package_name = package_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Create project structure
@@ -58,6 +59,9 @@ class CliGenerator:
         ca_file_name = self._copy_ca_file(resources_dir)
         splash_file_name = self._copy_splash_file(resources_dir)
 
+        # Compute main_dir with variable substitution
+        main_dir = self._compute_main_dir(package_name)
+
         # Generate project files
         self._generate_pyproject(output_dir, cli_name, package_name)
         self._generate_readme(output_dir, cli_name)
@@ -67,10 +71,13 @@ class CliGenerator:
         self._generate_package_init(src_dir, package_name)
         self._generate_cli_main(src_dir, package_name, groups)
         self._generate_client(src_dir)
-        self._generate_constants(src_dir, ca_file_name, splash_file_name)
+        self._generate_logging(src_dir)
+        self._generate_profile(src_dir)
+        self._generate_constants(src_dir, ca_file_name, splash_file_name, main_dir)
 
         # Generate commands
         self._generate_commands_init(commands_dir, groups)
+        self._generate_config_commands(commands_dir)
         for tag, group in groups.items():
             self._generate_command_group(group, commands_dir)
 
@@ -127,8 +134,26 @@ class CliGenerator:
         with open(src_dir / "client.py", "w") as f:
             f.write(content)
 
+    def _generate_logging(self, src_dir: Path) -> None:
+        """Generate logging module."""
+        template = self.env.get_template("logging.py.j2")
+        content = template.render(config=self.config)
+        with open(src_dir / "logging.py", "w") as f:
+            f.write(content)
+
+    def _generate_profile(self, src_dir: Path) -> None:
+        """Generate profile module."""
+        template = self.env.get_template("profile.py.j2")
+        content = template.render(config=self.config)
+        with open(src_dir / "profile.py", "w") as f:
+            f.write(content)
+
     def _generate_constants(
-        self, src_dir: Path, ca_file_name: str | None, splash_file_name: str | None
+        self,
+        src_dir: Path,
+        ca_file_name: str | None,
+        splash_file_name: str | None,
+        main_dir: str,
     ) -> None:
         """Generate constants module."""
         template = self.env.get_template("constants.py.j2")
@@ -136,14 +161,14 @@ class CliGenerator:
             config=self.config,
             ca_file_name=ca_file_name,
             splash_file_name=splash_file_name,
+            main_dir=main_dir,
         )
         with open(src_dir / "constants.py", "w") as f:
             f.write(content)
 
     def _copy_ca_file(self, resources_dir: Path) -> str | None:
         """Copy CA file to resources directory if specified in config."""
-        api_config = self.config.get("api", {})
-        ca_file = api_config.get("ca_file")
+        ca_file = self.config.get("CaFile")
         if not ca_file:
             return None
 
@@ -160,13 +185,17 @@ class CliGenerator:
         shutil.copy2(ca_path, dest_path)
         return ca_path.name
 
+    def _compute_main_dir(self, package_name: str) -> str:
+        """Get main directory path from config.
+
+        The #[Param] references should already be resolved by config loader.
+        ${VAR} environment variables are kept as-is for runtime expansion.
+        """
+        return self.config.get("MainDir", f"${{HOME}}/.{package_name}")
+
     def _copy_splash_file(self, resources_dir: Path) -> str | None:
         """Copy splash file to resources directory if specified in config."""
-        splash_config = self.config.get("splash", {})
-        if not splash_config.get("enabled", False):
-            return None
-
-        splash_file = splash_config.get("file")
+        splash_file = self.config.get("SplashFile")
         if not splash_file:
             return None
 
@@ -192,9 +221,18 @@ class CliGenerator:
         with open(commands_dir / "__init__.py", "w") as f:
             f.write(content)
 
+    def _generate_config_commands(self, commands_dir: Path) -> None:
+        """Generate config commands module."""
+        template = self.env.get_template("commands_config.py.j2")
+        content = template.render(package_name=self.package_name, config=self.config)
+        with open(commands_dir / "config.py", "w") as f:
+            f.write(content)
+
     def _generate_command_group(self, group: CommandGroup, commands_dir: Path) -> None:
         """Generate a command group file."""
         template = self.env.get_template("command_group.py.j2")
-        content = template.render(group=group, config=self.config)
+        content = template.render(
+            group=group, config=self.config, package_name=self.package_name
+        )
         with open(commands_dir / f"{group.module_name}.py", "w") as f:
             f.write(content)

@@ -3,6 +3,7 @@
 
 """Constants for the generated CLI."""
 
+import os
 from pathlib import Path
 
 
@@ -15,16 +16,15 @@ def _read_version() -> str:
 
 
 __version__ = _read_version()
-{% if config.api and config.api.default_base_url %}
-DEFAULT_BASE_URL = "{{ config.api.default_base_url }}"
-{% else %}
-DEFAULT_BASE_URL = "http://localhost:8080"
-{% endif %}
-{% if config.api and config.api.timeout %}
-DEFAULT_TIMEOUT = {{ config.api.timeout }}
-{% else %}
-DEFAULT_TIMEOUT = 30
-{% endif %}
+
+# Main directory for CLI data (config, cache, etc.)
+MAIN_DIR = Path(os.path.expandvars("{{ main_dir }}"))
+
+# Profile configuration
+PROFILE_FILE = Path(os.path.expandvars("{{ config.ProfileFile | default('#[MainDir]/profiles.yaml') }}"))
+
+DEFAULT_BASE_URL = "{{ config.DefaultBaseUrl | default('http://localhost:8080') }}"
+DEFAULT_TIMEOUT = {{ config.Timeout | default(30) }}
 {% if ca_file_name %}
 DEFAULT_CA_FILE = Path(__file__).parent / "resources" / "{{ ca_file_name }}"
 {% else %}
@@ -35,9 +35,33 @@ DEFAULT_CA_FILE = None
 {% if splash_file_name %}
 SPLASH_ENABLED = True
 SPLASH_FILE = Path(__file__).parent / "resources" / "{{ splash_file_name }}"
-SPLASH_COLOR = "{{ config.splash.color | default('cyan') }}"
+SPLASH_COLOR = "{{ config.SplashColor | default('#FFFFFF') }}"
 {% else %}
 SPLASH_ENABLED = False
 SPLASH_FILE = None
 SPLASH_COLOR = None
 {% endif %}
+
+# Log configuration
+LOG_LEVEL = "{{ config.LogLevel | default('INFO') }}"
+LOG_FORMAT = "{{ config.LogFormat | default('%(asctime)s [%(levelname)s] %(message)s') }}"
+LOG_TIMESTAMP_FORMAT = "{{ config.LogTimestampFormat | default('%Y-%m-%dT%H:%M:%S') }}"
+LOG_TIMEZONE = "{{ config.LogTimezone | default('UTC') }}"
+{% if config.LogFile %}
+LOG_FILE = Path(os.path.expandvars("{{ config.LogFile }}"))
+{% else %}
+LOG_FILE = None
+{% endif %}
+LOG_ROTATION_TYPE = "{{ config.LogRotationType | default('days') }}"
+LOG_ROTATION_SIZE_MB = {{ config.LogRotationSize | default(10) }}
+LOG_ROTATION_DAYS = {{ config.LogRotationDays | default(30) }}
+LOG_ROTATION_BACKUP_COUNT = {{ config.LogRotationBackupCount | default(5) }}
+
+# Log color configuration
+LOG_COLOR_STYLE = "{{ config.LogColorStyle | default('level') }}"
+LOG_COLORS = {
+    "DEBUG": "{{ config.LogColorDebug | default('#808080') }}",
+    "INFO": "{{ config.LogColorInfo | default('#00FF00') }}",
+    "WARNING": "{{ config.LogColorWarning | default('#FFFF00') }}",
+    "ERROR": "{{ config.LogColorError | default('#FF0000') }}",
+}

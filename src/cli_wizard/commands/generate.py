@@ -3,14 +3,17 @@
 
 """Generate command for CLI Wizard."""
 
+import re
 import click
 import logging
 import shutil
 from pathlib import Path
 
 import yaml
+from pydantic import ValidationError
 
 from cli_wizard.config.configuration import load_default_config
+from cli_wizard.config.schema import Config
 from cli_wizard.generator import OpenApiParser, CliGenerator
 
 logger = logging.getLogger(__name__)
@@ -84,9 +87,8 @@ def generate(
         click.secho(f"✗ Config file not found: {config_path}", fg="red", err=True)
         raise SystemExit(1)
 
-    # Load configuration
+    # Load and validate configuration
     cli_config = _load_cli_config(config_path)
-    gen_config = cli_config.get("generator", {})
 
     # Resolve output path (CLI option > config > default)
     output_dir = output
@@ -101,11 +103,8 @@ def generate(
     if debug:
         logger.debug(f"Output directory: {output_path}")
 
-    # Determine CLI name and package name from config
-    cli_name = cli_config.get("PackageName")
-    if not cli_name:
-        click.secho("✗ PackageName is required in config file", fg="red", err=True)
-        raise SystemExit(1)
+    # Get CLI name and package name from config
+    cli_name = cli_config["PackageName"]
     # Convert hyphens to underscores for Python package compatibility
     package_name = cli_name.replace("-", "_")
 
@@ -115,9 +114,9 @@ def generate(
     parser = OpenApiParser(str(openapi_path))
 
     groups = parser.parse(
-        exclude_tags=gen_config.get("exclude_tags", []),
-        include_tags=gen_config.get("include_tags", []),
-        tag_mapping=cli_config.get("tag_mapping", {}),
+        exclude_tags=cli_config.get("ExcludeTags", []),
+        include_tags=cli_config.get("IncludeTags", []),
+        tag_mapping=cli_config.get("TagMapping", {}),
     )
 
     if not groups:
@@ -169,10 +168,59 @@ def generate(
 
 
 def _load_cli_config(config_path: Path) -> dict:
-    """Load CLI generator configuration from YAML file."""
+    """Load and validate CLI generator configuration from YAML file."""
     try:
         with open(config_path) as f:
-            return yaml.safe_load(f) or {}
+            raw_config = yaml.safe_load(f) or {}
     except (yaml.YAMLError, IOError) as e:
-        logger.warning(f"Could not load config file: {e}")
-        return {}
+        click.secho(f"✗ Could not load config file: {e}", fg="red", err=True)
+        raise SystemExit(1)
+
+    # Validate with Pydantic schema
+    try:
+        validated = Config(**raw_config)
+        config = validated.model_dump()
+    except ValidationError as e:
+        click.secho("✗ Invalid configuration:", fg="red", err=True)
+        for error in e.errors():
+            field = ".".join(str(loc) for loc in error["loc"])
+            click.secho(f"  • {field}: {error['msg']}", fg="red", err=True)
+        raise SystemExit(1)
+
+    # Expand #[Param] references
+    return _expand_config_references(config)
+
+
+def _expand_config_references(config: dict) -> dict:
+    """Expand #[Param] references in config values recursively.
+
+    Supports referencing other config parameters using #[ParamName] syntax.
+    Environment variables using ${VAR} syntax are left as-is for runtime expansion.
+    Recursively expands until no more references remain.
+    """
+
+    def expand_value(value: any, config: dict) -> any:
+        if isinstance(value, str):
+            # Keep expanding until no more #[Param] references
+            pattern = r"#\[(\w+)\]"
+            prev_value = None
+            while prev_value != value:
+                prev_value = value
+                matches = re.findall(pattern, value)
+                for param_name in matches:
+                    if param_name in config:
+                        replacement = config[param_name]
+                        if isinstance(replacement, str):
+                            value = value.replace(f"#[{param_name}]", replacement)
+            return value
+        elif isinstance(value, dict):
+            return {k: expand_value(v, config) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [expand_value(item, config) for item in value]
+        return value
+
+    # First pass: expand all values
+    expanded = expand_value(config, config)
+
+    # Second pass: re-expand with updated config to handle nested references
+    return expand_value(expanded, expanded)

@@ -90,10 +90,17 @@ class Operation:
     body_properties: list[RequestBodyProperty] = field(default_factory=list)
 
     @property
+    def _base_operation_id(self) -> str:
+        """Get the base operation ID without module path (e.g., 'server.get_greetings' -> 'get_greetings')."""
+        if "." in self.operation_id:
+            return self.operation_id.rsplit(".", 1)[-1]
+        return self.operation_id
+
+    @property
     def command_name(self) -> str:
         """Get CLI command name from operation ID (kebab-case)."""
-        name = re.sub(r"(?<!^)(?=[A-Z])", "-", self.operation_id).lower()
-        return name
+        name = re.sub(r"(?<!^)(?=[A-Z])", "-", self._base_operation_id).lower()
+        return name.replace("_", "-")
 
     @property
     def function_name(self) -> str:

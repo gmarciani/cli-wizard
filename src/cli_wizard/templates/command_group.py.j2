@@ -4,8 +4,35 @@
 """{{ group.name }} commands."""
 
 import json
+import os
+from pathlib import Path
+
 import click
 from typing import Any
+
+from {{ package_name }}.constants import DEFAULT_BASE_URL, DEFAULT_CA_FILE
+from {{ package_name }}.client import ApiClient
+from {{ package_name }}.logging import log_info, log_error, log_debug, set_debug
+from {{ package_name }}.profile import load_profile, get_profile_value
+
+
+def _get_client(
+    base_url: str | None,
+    no_verify_ssl: bool,
+    ca_file: Path | None,
+    debug: bool = False,
+) -> ApiClient:
+    """Create an API client with the given options."""
+    effective_base_url = base_url or os.environ.get("API_BASE_URL") or DEFAULT_BASE_URL
+    effective_ca_file = None if no_verify_ssl else (ca_file or DEFAULT_CA_FILE)
+    access_token = get_profile_value("accessToken")
+    return ApiClient(
+        base_url=effective_base_url,
+        access_token=access_token,
+        ca_file=effective_ca_file,
+        verify_ssl=not no_verify_ssl,
+        debug=debug,
+    )
 
 
 @click.group(name="{{ group.cli_name }}")
@@ -28,9 +55,12 @@ def {{ group.module_name }}() -> None:
 {% for prop in op.body_properties %}
 @click.option("--{{ prop.cli_name }}"{% if prop.click_type == "bool" %}, is_flag=True{% elif prop.click_type != "str" %}, type={{ prop.click_type }}{% endif %}{% if prop.required %}, required=True{% endif %}, help="{{ prop.description }}")
 {% endfor %}
-@click.pass_context
+@click.option("--profile", "-p", default="default", help="Profile name to use")
+@click.option("--debug", "-d", is_flag=True, help="Enable debug output")
+@click.option("--base-url", "-u", envvar="API_BASE_URL", help="API base URL")
+@click.option("--no-verify-ssl", is_flag=True, default=False, help="Disable SSL certificate verification")
+@click.option("--ca-file", type=click.Path(exists=True, dir_okay=False, path_type=Path), help="CA certificate file for SSL verification")
 def {{ op.function_name }}(
-    ctx: click.Context,
 {% for param in op.parameters if param.location == "path" %}
     {{ param.python_name }}: {{ param.click_type }},
 {% endfor %}
@@ -40,9 +70,33 @@ def {{ op.function_name }}(
 {% for prop in op.body_properties %}
     {{ prop.python_name }}: {{ prop.click_type }}{% if not prop.required %} | None{% endif %},
 {% endfor %}
+    profile: str,
+    debug: bool,
+    base_url: str | None,
+    no_verify_ssl: bool,
+    ca_file: Path | None,
 ) -> None:
     """{{ op.summary or op.operation_id }}"""
-    client = ctx.obj.client
+    # Enable debug logging if --debug flag is set
+    set_debug(debug)
+
+    # Load profile
+    load_profile(profile)
+    # Log command execution start
+    cmd_params = {
+{% for param in op.parameters if param.location == "path" %}
+        "{{ param.name }}": {{ param.python_name }},
+{% endfor %}
+{% for param in op.parameters if param.location == "query" %}
+        "{{ param.name }}": {{ param.python_name }},
+{% endfor %}
+{% for prop in op.body_properties %}
+        "{{ prop.name }}": {{ prop.python_name }},
+{% endfor %}
+    }
+    log_debug(f"Executing command '{{ group.cli_name }} {{ op.command_name }}' with params: {cmd_params}")
+
+    client = _get_client(base_url, no_verify_ssl, ca_file, debug)
 {% if op.parameters | selectattr("location", "equalto", "query") | list %}
 
     params: dict[str, Any] = {}
@@ -94,10 +148,14 @@ def {{ op.function_name }}(
 {% endif %}
         response.raise_for_status()
         if response.text:
-            click.echo(json.dumps(response.json(), indent=2))
+            output = json.dumps(response.json(), indent=2)
+            log_debug(f"Command '{{ group.cli_name }} {{ op.command_name }}' completed with output: {output[:500]}")
+            click.echo(output)
         else:
+            log_debug(f"Command '{{ group.cli_name }} {{ op.command_name }}' completed successfully")
             click.echo("Success")
     except Exception as e:
+        log_error(f"Command '{{ group.cli_name }} {{ op.command_name }}' failed: {e}")
         click.secho(f"Error: {e}", fg="red", err=True)
         raise SystemExit(1)
 {% endfor %}

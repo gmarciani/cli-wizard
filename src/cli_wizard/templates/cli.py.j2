@@ -4,51 +4,24 @@
 """Main CLI entry point."""
 
 import os
+import sys
 from pathlib import Path
 
 import click
 
 from {{ package_name }}.constants import __version__, DEFAULT_BASE_URL, DEFAULT_CA_FILE, SPLASH_ENABLED, SPLASH_FILE, SPLASH_COLOR
-from {{ package_name }}.client import ApiClient
+from {{ package_name }}.logging import set_debug
+from {{ package_name }}.profile import load_profile
+from {{ package_name }}.commands.config import config
 {% for tag, group in groups.items() %}
 from {{ package_name }}.commands.{{ group.module_name }} import {{ group.module_name }}
 {% endfor %}
 
 
-class Context:
-    """CLI context object."""
-
-    def __init__(
-        self,
-        debug: bool = False,
-        base_url: str | None = None,
-        api_key: str | None = None,
-        no_verify_ssl: bool = False,
-        ca_file: Path | None = None,
-    ) -> None:
-        self.debug = debug
-        self.base_url = base_url or os.environ.get("API_BASE_URL") or DEFAULT_BASE_URL
-        self.api_key = api_key or os.environ.get("API_KEY")
-        self.no_verify_ssl = no_verify_ssl
-        self.ca_file = ca_file
-        self._client: ApiClient | None = None
-
-    @property
-    def client(self) -> ApiClient:
-        """Get or create the API client."""
-        if self._client is None:
-            # Priority: --ca-file option > default CA file from config
-            effective_ca_file = None if self.no_verify_ssl else (self.ca_file or DEFAULT_CA_FILE)
-            self._client = ApiClient(
-                base_url=self.base_url,
-                api_key=self.api_key,
-                ca_file=effective_ca_file,
-                verify_ssl=not self.no_verify_ssl,
-            )
-        return self._client
-
-
-pass_context = click.make_pass_decorator(Context, ensure=True)
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    """Convert hex color to RGB tuple."""
+    hex_color = hex_color.lstrip("#")
+    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
 
 
 def _show_splash() -> None:
@@ -56,38 +29,53 @@ def _show_splash() -> None:
     if SPLASH_ENABLED and SPLASH_FILE and SPLASH_FILE.exists():
         splash_text = SPLASH_FILE.read_text()
         if SPLASH_COLOR:
-            click.secho(splash_text, fg=SPLASH_COLOR)
+            rgb = _hex_to_rgb(SPLASH_COLOR)
+            click.secho(splash_text, fg=rgb)
         else:
             click.echo(splash_text)
 
 
+# Show splash on startup (before Click processes --help or --version)
+_show_splash()
+
+
 @click.group(invoke_without_command=True)
 @click.version_option(version=__version__)
+@click.option("--profile", "-p", default="default", help="Profile name to use")
 @click.option("--debug", "-d", is_flag=True, help="Enable debug output")
 @click.option("--base-url", "-u", envvar="API_BASE_URL", help="API base URL")
-@click.option("--api-key", "-k", envvar="API_KEY", help="API key")
 @click.option("--no-verify-ssl", is_flag=True, default=False, help="Disable SSL certificate verification")
 @click.option("--ca-file", type=click.Path(exists=True, dir_okay=False, path_type=Path), help="CA certificate file for SSL verification")
 @click.pass_context
 def main(
     ctx: click.Context,
+    profile: str,
     debug: bool,
     base_url: str | None,
-    api_key: str | None,
     no_verify_ssl: bool,
     ca_file: Path | None,
 ) -> None:
-    """{{ config.get('cli', {}).get('description', 'Generated CLI') }}"""
-    ctx.obj = Context(debug=debug, base_url=base_url, api_key=api_key, no_verify_ssl=no_verify_ssl, ca_file=ca_file)
+    """{{ config.get('Description', 'Generated CLI') }}"""
+    ctx.ensure_object(dict)
 
-    # Show splash screen on every invocation
-    _show_splash()
+    # Enable debug logging if --debug flag is set
+    set_debug(debug)
+
+    # Load profile
+    load_profile(profile)
+
+    ctx.obj["profile"] = profile
+    ctx.obj["debug"] = debug
+    ctx.obj["base_url"] = base_url
+    ctx.obj["no_verify_ssl"] = no_verify_ssl
+    ctx.obj["ca_file"] = ca_file
 
     # Show help when no subcommand is invoked
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
 
+main.add_command(config)
 {% for tag, group in groups.items() %}
 main.add_command({{ group.module_name }})
 {% endfor %}
