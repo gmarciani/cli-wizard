@@ -13,7 +13,7 @@ from click.testing import CliRunner
 from cli_wizard.cli import main
 
 
-def create_test_files(temp_dir: Path) -> tuple[Path, Path]:
+def create_test_files(temp_dir: Path, cli_name: str = "test-cli") -> tuple[Path, Path]:
     """Create test OpenAPI spec and config files."""
     openapi_spec = {
         "openapi": "3.0.0",
@@ -31,8 +31,10 @@ def create_test_files(temp_dir: Path) -> tuple[Path, Path]:
     }
 
     config = {
-        "cli": {"name": "test-cli"},
-        "generator": {"exclude_tags": [], "include_tags": []},
+        "PackageName": cli_name,
+        "DefaultBaseUrl": "https://api.example.com",
+        "ExcludeTags": [],
+        "IncludeTags": [],
     }
 
     openapi_path = temp_dir / "openapi.json"
@@ -59,14 +61,15 @@ class TestGenerateCommand:
         assert "--config" in result.output
         assert "--output" in result.output
         assert "--working-dir" in result.output
-        assert "--name" in result.output
 
     def test_generate_missing_openapi(self):
         """Test generate with missing OpenAPI file."""
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.yaml"
-            config_path.write_text("cli:\n  name: test\n")
+            config_path.write_text(
+                "PackageName: test\nDefaultBaseUrl: https://api.example.com\n"
+            )
 
             result = runner.invoke(
                 main,
@@ -125,12 +128,14 @@ class TestGenerateCommand:
             assert "Generated CLI" in result.output
             assert (output_dir / "pyproject.toml").exists()
 
-    def test_generate_with_name_option(self):
-        """Test generate with custom CLI name."""
+    def test_generate_with_custom_name_in_config(self):
+        """Test generate with custom CLI name from config."""
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            openapi_path, config_path = create_test_files(temp_path)
+            openapi_path, config_path = create_test_files(
+                temp_path, cli_name="my-custom-cli"
+            )
             output_dir = temp_path / "output"
 
             result = runner.invoke(
@@ -143,8 +148,6 @@ class TestGenerateCommand:
                     str(config_path),
                     "--output",
                     str(output_dir),
-                    "--name",
-                    "my-custom-cli",
                 ],
             )
             assert result.exit_code == 0
@@ -171,11 +174,11 @@ class TestGenerateCommand:
                     "--config",
                     "config.yaml",
                     "--output",
-                    "cli",
+                    "my-output",
                 ],
             )
             assert result.exit_code == 0
-            assert (temp_path / "cli" / "pyproject.toml").exists()
+            assert (temp_path / "my-output" / "pyproject.toml").exists()
 
     def test_generate_empty_spec(self):
         """Test generate with empty OpenAPI spec."""
@@ -189,7 +192,9 @@ class TestGenerateCommand:
             )
 
             config_path = temp_path / "config.yaml"
-            config_path.write_text("cli:\n  name: test\n")
+            config_path.write_text(
+                "PackageName: test\nDefaultBaseUrl: https://api.example.com\n"
+            )
 
             result = runner.invoke(
                 main,
@@ -231,7 +236,9 @@ class TestGenerateCommand:
                 yaml.dump(openapi_spec, f)
 
             config_path = temp_path / "config.yaml"
-            config_path.write_text("cli:\n  name: test\n")
+            config_path.write_text(
+                "PackageName: test\nDefaultBaseUrl: https://api.example.com\n"
+            )
 
             result = runner.invoke(
                 main,
@@ -295,7 +302,7 @@ class TestGenerateCommand:
             with open(openapi_path, "w") as f:
                 json.dump(openapi_spec, f)
 
-            # Create invalid YAML config
+            # Create invalid YAML config (syntax error)
             config_path = temp_path / "config.yaml"
             config_path.write_text("invalid: yaml: content:")
 
@@ -311,5 +318,9 @@ class TestGenerateCommand:
                     str(temp_path / "output"),
                 ],
             )
-            # Should still work with empty config
-            assert result.exit_code == 0
+            # Should fail with invalid config (missing required fields)
+            assert result.exit_code == 1
+            assert (
+                "Invalid configuration" in result.output
+                or "Could not load config" in result.output
+            )

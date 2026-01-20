@@ -155,10 +155,9 @@ class TestCliGenerator:
         }
 
         config = {
-            "api": {
-                "default_base_url": "https://api.example.com",
-                "timeout": 60,
-            }
+            "PackageName": "test-cli",
+            "DefaultBaseUrl": "https://api.example.com",
+            "Timeout": 60,
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:

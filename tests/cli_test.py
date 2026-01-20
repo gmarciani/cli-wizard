@@ -40,4 +40,3 @@ def test_generate_command_options():
     assert "--config" in result.output
     assert "--output" in result.output
     assert "--working-dir" in result.output
-    assert "--name" in result.output
