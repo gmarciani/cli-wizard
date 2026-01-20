@@ -16,14 +16,52 @@
 
 Generate modern CLI from OpenAPI
 
-Supported CLI:
-* Python based on Click.
+<div align="center">
+<img src="resources/brand/demo.mp4.gif" alt="cli-wizard-demo" width="800">
+</div>
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Issues](#issues)
+- [License](#license)
+
+## Features
+
+### Code Generation
+- Generate complete Python CLI projects from OpenAPI v3 specifications
+- Automatic command grouping based on OpenAPI tags
+- Automatic helper generation for all commands
+- Clean, colored terminal output
+- `--debug` flag for verbose logging
+- Built-in API client with configurable base URL and timeout
+- SSL/TLS support with custom CA certificate bundles
+- `--ca-file` option to specify custom CA certificates at runtime
+- `--no-verify-ssl` flag to disable certificate verification
+
+### Customizations
+- YAML-based configuration for full customization
+- Configurable output directory and package name
+- Tag inclusion/exclusion filters
+- Custom command naming via `tag_mapping` and `command_mapping`
+- Customizable tag-to-command mapping
+- Customizable operation-to-command name mapping
+- Customizable splash screen with color support
+
+### Developer Experience
+- Generated projects are pip-installable out of the box
+- Auto-generated `pyproject.toml`, `README.md`, and `VERSION`
+- Resources (CA certs, splash files) bundled in the package
 
 ## Installation
 
 ```shell
 pip install cli-wizard
 ```
+
+## Usage
 
 ## Issues
 
