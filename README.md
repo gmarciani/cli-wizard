@@ -1,7 +1,7 @@
 # CLI WIZARD
 
 <div align="center">
-<img src="resources/brand/logo.png" alt="cli-wizard-logo" width="500">
+<img src="https://raw.githubusercontent.com/gmarciani/cli-wizard/main/resources/brand/logo.png" alt="cli-wizard-logo" width="500">
 
 [![PyPI version](https://img.shields.io/pypi/v/cli-wizard.svg)](https://pypi.org/project/cli-wizard/)
 [![Python versions](https://img.shields.io/pypi/pyversions/cli-wizard.svg)](https://pypi.org/project/cli-wizard/)
@@ -15,10 +15,6 @@
 </div>
 
 Generate modern CLIs from OpenAPI specifications.
-
-<div align="center">
-<img src="resources/brand/demo.mp4.gif" alt="cli-wizard-demo" width="800">
-</div>
 
 ## Table of Contents
 
