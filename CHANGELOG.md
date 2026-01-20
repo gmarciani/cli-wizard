@@ -13,7 +13,7 @@ CLI Wizard transforms your OpenAPI specifications into customizable Python CLIs 
 **Code Generation**
 - Generate complete Python CLI projects from OpenAPI v3 specifications
 - Automatic command grouping based on OpenAPI tags
-- Automatic helper generation for all commands
+- Automatic help generation for all commands
 - Clean, colored terminal output
 - `--debug` flag for verbose logging
 - Built-in API client with configurable base URL and timeout
@@ -21,14 +21,14 @@ CLI Wizard transforms your OpenAPI specifications into customizable Python CLIs 
 - `--ca-file` option to specify custom CA certificates at runtime
 - `--no-verify-ssl` flag to disable certificate verification
 
-**Customizations**
+**Customization**
 - YAML-based configuration for full customization
 - Configurable output directory and package name
 - Tag inclusion/exclusion filters
-- Custom command naming via `tag_mapping` and `command_mapping`
-- Customizable tag-to-command mapping
-- Customizable operation-to-command name mapping
+- Custom command naming via `TagMapping` and `CommandMapping`
 - Customizable splash screen with color support
+- Configurable logging with colors, file output, and rotation
+- Profile management for storing credentials and settings
 
 **Developer Experience**
 - Generated projects are pip-installable out of the box
@@ -37,4 +37,4 @@ CLI Wizard transforms your OpenAPI specifications into customizable Python CLIs 
 
 ### Commands
 
-- `cli-wizard generate` - Generate a CLI from OpenAPI spec and config file
+- `cli-wizard generate` - Generate a CLI from an OpenAPI spec and config file
