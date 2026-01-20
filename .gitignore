@@ -58,4 +58,4 @@ dmypy.json
 docs/_build/
 
 # Examples
-examples/cli
+examples/my-cli
