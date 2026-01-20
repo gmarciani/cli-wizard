@@ -4,4 +4,4 @@
 ▐▌  ▐▌  ▐▌ ▐▌   ▐▌     █
 ▐▌  ▐▌  ▐▌ ▝▚▄▄▖▐▙▄▄▖▗▄█▄▖
 
-  A cool CLI generated with cli-wizard.
+A cool CLI generated with cli-wizard.
