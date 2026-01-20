@@ -4,6 +4,8 @@
 """Generate command for CLI Wizard."""
 
 import re
+from typing import Any
+
 import click
 import logging
 import shutil
@@ -91,9 +93,11 @@ def generate(
     cli_config = _load_cli_config(config_path)
 
     # Resolve output path (CLI option > config > default)
-    output_dir = output
-    if output == _default_output and cli_config.get("OutputDir"):
-        output_dir = cli_config.get("OutputDir")
+    output_dir: str = output
+    if output == _default_output:
+        config_output = cli_config.get("OutputDir")
+        if config_output is not None:
+            output_dir = str(config_output)
     output_path = (
         base_dir / output_dir
         if not Path(output_dir).is_absolute()
@@ -191,7 +195,7 @@ def _load_cli_config(config_path: Path) -> dict:
     return _expand_config_references(config)
 
 
-def _expand_config_references(config: dict) -> dict:
+def _expand_config_references(config: dict[str, Any]) -> dict[str, Any]:
     """Expand #[Param] references in config values recursively.
 
     Supports referencing other config parameters using #[ParamName] syntax.
@@ -199,11 +203,11 @@ def _expand_config_references(config: dict) -> dict:
     Recursively expands until no more references remain.
     """
 
-    def expand_value(value: any, config: dict) -> any:
+    def expand_value(value: Any, config: dict[str, Any]) -> Any:
         if isinstance(value, str):
             # Keep expanding until no more #[Param] references
             pattern = r"#\[(\w+)\]"
-            prev_value = None
+            prev_value: str | None = None
             while prev_value != value:
                 prev_value = value
                 matches = re.findall(pattern, value)
@@ -220,7 +224,8 @@ def _expand_config_references(config: dict) -> dict:
         return value
 
     # First pass: expand all values
-    expanded = expand_value(config, config)
+    expanded: dict[str, Any] = expand_value(config, config)
 
     # Second pass: re-expand with updated config to handle nested references
-    return expand_value(expanded, expanded)
+    result: dict[str, Any] = expand_value(expanded, expanded)
+    return result

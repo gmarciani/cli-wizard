@@ -191,7 +191,10 @@ class CliGenerator:
         The #[Param] references should already be resolved by config loader.
         ${VAR} environment variables are kept as-is for runtime expansion.
         """
-        return self.config.get("MainDir", f"${{HOME}}/.{package_name}")
+        main_dir = self.config.get("MainDir")
+        if main_dir is not None:
+            return str(main_dir)
+        return f"${{HOME}}/.{package_name}"
 
     def _copy_splash_file(self, resources_dir: Path) -> str | None:
         """Copy splash file to resources directory if specified in config."""
