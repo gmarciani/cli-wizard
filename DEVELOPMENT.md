@@ -81,3 +81,13 @@ To manually publish to Test PyPI
 python -m build
 python -m twine upload --repository testpypi dist/*
 ```
+
+### Demo
+The product demo is a video that emulates the terminal behavior.
+The video is generated with [Terminalizer](https://www.terminalizer.com/).
+To generate the vide:
+```
+nvm use 20
+npm install -g node-gyp terminalizer
+terminalizer render resources/brand/demo.yml --output resources/brand/demo.mp4
+```
