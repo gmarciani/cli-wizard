@@ -47,11 +47,7 @@ make clean-docs
 
 ## Release
 
-Update version in `constants.py`
-
-```shell
-VERSION="1.0.0"
-```
+Update version in `VERSION`
 
 Draft the release
 
