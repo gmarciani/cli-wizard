@@ -13,27 +13,21 @@ class TestConfigSchema:
     """Tests for Config schema validation."""
 
     def test_minimal_valid_config(self):
-        """Test minimal valid configuration with only required fields."""
+        """Test minimal valid configuration uses defaults."""
+        config = Config()
+        assert config.PackageName == "my_project"
+        assert config.DefaultBaseUrl == "http://localhost:3000"
+        assert config.MainDir == "${HOME}/.#[CommandName]"
+        assert config.Timeout == 30
+
+    def test_custom_values(self):
+        """Test configuration with custom values."""
         config = Config(
             PackageName="my-cli",
             DefaultBaseUrl="https://api.example.com",
         )
         assert config.PackageName == "my-cli"
         assert config.DefaultBaseUrl == "https://api.example.com"
-        assert config.OutputDir == "#[PackageName]"
-        assert config.Timeout == 30
-
-    def test_missing_package_name(self):
-        """Test that PackageName is required."""
-        with pytest.raises(ValidationError) as exc_info:
-            Config(DefaultBaseUrl="https://api.example.com")
-        assert "PackageName" in str(exc_info.value)
-
-    def test_missing_default_base_url(self):
-        """Test that DefaultBaseUrl is required."""
-        with pytest.raises(ValidationError) as exc_info:
-            Config(PackageName="my-cli")
-        assert "DefaultBaseUrl" in str(exc_info.value)
 
     def test_extra_fields_forbidden(self):
         """Test that extra fields are not allowed."""
@@ -91,8 +85,7 @@ class TestConfigSchema:
             PackageName="my-cli",
             DefaultBaseUrl="https://api.example.com",
         )
-        assert config.OutputDir == "#[PackageName]"
-        assert config.MainDir == "${HOME}/.#[PackageName]"
+        assert config.MainDir == "${HOME}/.#[CommandName]"
         assert config.ProfileFile == "#[MainDir]/profiles.yaml"
         assert config.ExcludeTags == []
         assert config.IncludeTags == []
@@ -207,7 +200,6 @@ class TestConfigSchema:
         config = Config(
             PackageName="my-cli",
             DefaultBaseUrl="https://api.example.com",
-            OutputDir="output",
             MainDir="/home/user/.my-cli",
             ProfileFile="/home/user/.my-cli/profiles.yaml",
             OpenapiSpec="api.yaml",

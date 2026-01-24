@@ -143,7 +143,6 @@ Configuration uses a YAML file with PascalCase parameter names. You can referenc
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `OutputDir` | `#[PackageName]` | Output directory for the generated CLI project |
 | `MainDir` | `${HOME}/.#[PackageName]` | Main directory for CLI data (config, cache, logs) |
 | `ProfileFile` | `#[MainDir]/profiles.yaml` | Path to profiles YAML file |
 | `ExcludeTags` | `[]` | Tags to exclude from generation |

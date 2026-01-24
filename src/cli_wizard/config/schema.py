@@ -71,10 +71,6 @@ class Config(BaseModel):
     )
 
     # Output settings
-    OutputDir: str = Field(
-        default="#[CommandName]",
-        description="Output directory for the generated CLI project",
-    )
     MainDir: str = Field(
         default="${HOME}/.#[CommandName]",
         description="Main directory for CLI data (config, cache, logging, etc.)",
