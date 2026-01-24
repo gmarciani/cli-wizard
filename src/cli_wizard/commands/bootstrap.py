@@ -64,7 +64,15 @@ def _get_default_for_param(param_name: str, values: dict) -> str:
     return str(Config.get_field_default(param_name) or "")
 
 
-@click.command()
+@click.command(
+    help="""Bootstrap a new CLI project.
+
+You will be guided through a step by step procedure to generate
+a basic CLI and an extensible configuration file to evolve it.
+No OpenAPI file is required.
+
+PATH is the directory where the project will be created. It can be a relative or absolute path."""
+)
 @click.argument(
     "path",
     type=click.Path(file_okay=False, resolve_path=True),
@@ -87,14 +95,7 @@ def _get_default_for_param(param_name: str, values: dict) -> str:
 def bootstrap(
     ctx: click.Context, path: str, force: bool, configuration: str | None
 ) -> None:
-    """Bootstrap a new CLI project.
-
-    You will be guided through a step by step procedure to generate
-    a basic CLI and an extensible configuration file to evolve it.
-    No OpenAPI file is required.
-
-        PATH :: Directory where the project will be created.It can be a relative or absolute path.
-    """
+    """Bootstrap command implementation."""
     debug = ctx.obj.get("debug", False) if ctx.obj else False
     target_dir = Path(path)
 

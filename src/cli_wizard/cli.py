@@ -11,12 +11,12 @@ from cli_wizard.commands.config import config
 from cli_wizard.commands.generate import generate
 
 
-@click.group()
+@click.group(help="CLI Wizard - Generate modern CLI from OpenAPI.")
 @click.version_option(version=__version__, prog_name="cli-wizard")
 @click.option("--debug", "-d", is_flag=True, help="Enable debug output")
 @click.pass_context
 def main(ctx: click.Context, debug: bool) -> None:
-    """CLI Wizard - Generate modern CLI from OpenAPI."""
+    """Main CLI entry point."""
     ctx.ensure_object(dict)
     ctx.obj["debug"] = debug
 

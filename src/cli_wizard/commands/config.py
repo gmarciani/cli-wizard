@@ -15,16 +15,16 @@ from cli_wizard.config.configuration import (
 logger = logging.getLogger(__name__)
 
 
-@click.group()
+@click.group(help="Manage configurations.")
 def config() -> None:
-    """Manage configurations."""
+    """Config command group implementation."""
 
 
-@config.command()
+@config.command(help="Set a configuration value.")
 @click.argument("key")
 @click.argument("value")
 def set(key: str, value: str) -> None:
-    """Set a configuration value."""
+    """Set command implementation."""
     cfg = load_config()
     old_value = cfg.get(key)
     cfg[key] = value
@@ -34,10 +34,10 @@ def set(key: str, value: str) -> None:
     print(json.dumps(result, indent=2))
 
 
-@config.command()
+@config.command(help="Get a configuration value.")
 @click.argument("key")
 def get(key: str) -> None:
-    """Get a configuration value."""
+    """Get command implementation."""
     cfg = load_config()
     if key not in cfg:
         logger.error(f"Unknown configuration key '{key}'")
@@ -47,10 +47,10 @@ def get(key: str) -> None:
     print(json.dumps(result, indent=2))
 
 
-@config.command()
+@config.command(help="Unset a configuration value (set to None).")
 @click.argument("key")
 def unset(key: str) -> None:
-    """Unset a configuration value (set to None)."""
+    """Unset command implementation."""
     cfg = load_config()
     if key not in cfg:
         logger.error(f"Unknown configuration key '{key}'")
@@ -64,16 +64,16 @@ def unset(key: str) -> None:
     print(json.dumps(result, indent=2))
 
 
-@config.command()
+@config.command(help="Show all configuration values as JSON.")
 def show() -> None:
-    """Show all configuration values as JSON."""
+    """Show command implementation."""
     cfg = load_config()
     print(json.dumps(cfg, indent=2))
 
 
-@config.command()
+@config.command(help="Reset configuration to defaults and delete local config file.")
 def reset() -> None:
-    """Reset configuration to defaults and delete local config file."""
+    """Reset command implementation."""
     cfg = load_config()
     print(json.dumps(cfg, indent=2))
 

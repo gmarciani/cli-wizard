@@ -21,7 +21,15 @@ from cli_wizard.generator import OpenApiParser, CliGenerator
 logger = logging.getLogger(__name__)
 
 
-@click.command()
+@click.command(
+    help="""Generate the CLI from config and OpenAPI spec.
+
+PATH is the output directory where the CLI project will be generated.
+It can be a relative or absolute path.
+
+If --api is provided, API commands will be generated from the OpenAPI spec.
+Otherwise, a functional CLI is generated without API commands."""
+)
 @click.argument(
     "path",
     type=click.Path(file_okay=False, resolve_path=True),
@@ -48,14 +56,7 @@ def generate(
     configuration: str,
     api: str | None,
 ) -> None:
-    """Generate a CLI from a configuration file and optional OpenAPI spec.
-
-    PATH is the output directory where the CLI project will be generated.
-    It can be a relative or absolute path.
-
-    If --api is provided, API commands will be generated from the OpenAPI spec.
-    Otherwise, a functional CLI is generated without API commands.
-    """
+    """Generate command implementation."""
     debug = ctx.obj.get("debug", False) if ctx.obj else False
 
     output_path = Path(path)
