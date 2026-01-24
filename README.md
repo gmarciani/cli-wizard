@@ -84,7 +84,7 @@ paths:
 
 ### Step 2: Create a Configuration File
 
-Create a `config.yaml` file with your CLI settings. At minimum, you need `PackageName` and `DefaultBaseUrl`:
+Create a `cli-wizard.yaml` file with your CLI settings. At minimum, you need `PackageName` and `DefaultBaseUrl`:
 
 ```yaml
 # Required parameters
@@ -106,7 +106,7 @@ IncludeTags:
 Run the `generate` command:
 
 ```shell
-cli-wizard generate --openapi openapi.yaml --config config.yaml --output my-cli
+cli-wizard generate --openapi openapi.yaml --config cli-wizard.yaml --output my-cli
 ```
 
 This creates a complete Python CLI project in the `my-cli` directory.
@@ -180,7 +180,7 @@ cli-wizard generate [OPTIONS]
 
 Options:
 - `--openapi, -o` - Path to OpenAPI spec file (default: `openapi.yaml`)
-- `--config, -c` - Path to config YAML file (default: `config.yaml`)
+- `--config, -c` - Path to config YAML file (default: `cli-wizard.yaml`)
 - `--output, -d` - Output directory for generated CLI (default: `cli`)
 - `--working-dir, -w` - Working directory for resolving relative paths
 
