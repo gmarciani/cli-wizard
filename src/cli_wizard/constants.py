@@ -9,3 +9,5 @@ try:
     __version__ = version("cli-wizard")
 except PackageNotFoundError:
     __version__ = "0.0.0"
+
+CONFIG_FILE_NAME = "cli-wizard.yaml"

@@ -9,13 +9,13 @@ from pathlib import Path
 import click
 import yaml
 
-from {{ package_name }}.constants import PROFILE_FILE
-from {{ package_name }}.logging import log_info, log_error, log_warning
+from {{ PackageName }}.constants import PROFILE_FILE
+from {{ PackageName }}.logging import log_info, log_error, log_warning
 
 
 @click.group(name="config")
 def config() -> None:
-    """Configure the CLI"""
+    """Configure the CLI."""
 
 
 @config.command(name="init")

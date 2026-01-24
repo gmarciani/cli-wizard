@@ -1,0 +1,144 @@
+# CLI Wizard Configuration
+# All parameters use PascalCase naming convention.
+# Reference other parameters with #[ParamName] syntax.
+# Reference environment variables with ${VAR} syntax.
+
+# Required parameters
+# ProjectName: The human-readable project name (title case)
+ProjectName: "{{ ProjectName }}"
+# CommandName: The CLI command name (user-facing, kebab-case)
+CommandName: "{{ CommandName }}"
+# PackageName: The Python package name (snake_case, derived from CommandName)
+PackageName: "{{ PackageName }}"
+DefaultBaseUrl: "{{ DefaultBaseUrl }}"
+
+# Output directory for the generated CLI project
+# Default: "#[CommandName]"
+# OutputDir: "#[CommandName]"
+
+# Main directory for CLI data (config, cache, logging, etc.)
+# Default: "${HOME}/.#[CommandName]"
+# MainDir: "${HOME}/.#[CommandName]"
+
+# Path to profiles YAML file
+# Default: "#[MainDir]/profiles.yaml"
+# ProfileFile: "#[MainDir]/profiles.yaml"
+
+# Path to OpenAPI spec (relative to this config file or absolute)
+# Default: "openapi.json"
+# OpenapiSpec: "openapi.json"
+
+# Tags to exclude from generation
+# Default: []
+# ExcludeTags: []
+
+# Tags to include (if empty, all non-excluded tags are included)
+# Default: []
+# IncludeTags: []
+
+# Map OpenAPI tags to CLI command group names
+# Default: {} (tags are converted to kebab-case)
+# TagMapping: {}
+
+# Customize command names (operationId -> command name)
+# Example: "GetUserProfile": "profile"
+# If not specified, converts CamelCase to kebab-case
+# Default: {}
+# CommandMapping: {}
+
+# Output format: json, table, yaml
+# Default: "json"
+# OutputFormat: "json"
+
+# Enable colored output
+# Default: true
+# OutputColors: true
+
+# JSON indentation
+# Default: 2
+# JsonIndent: 2
+
+# Table style: ascii, rounded, minimal, markdown
+# Default: "rounded"
+# TableStyle: "rounded"
+
+# Path to splash text file (relative to config or absolute)
+# Default: None (no splash screen)
+SplashFile: "splash.txt"
+
+# Color for splash text (hex code)
+# Default: "#FFFFFF" (white)
+SplashColor: "#136163"
+
+# Default log level: DEBUG, INFO, WARNING, ERROR
+# Default: "INFO"
+# LogLevel: "INFO"
+
+# Log message format (Python logging format)
+# Default: "[%(levelname)s] %(asctime)s %(message)s"
+# LogFormat: "[%(levelname)s] %(asctime)s %(message)s"
+
+# Timestamp format for log messages (strftime format)
+# Default: "%Y-%m-%dT%H:%M:%S"
+# LogTimestampFormat: "%Y-%m-%dT%H:%M:%S"
+
+# Timezone for log timestamps: "UTC" or "Local"
+# Default: "UTC"
+# LogTimezone: "UTC"
+
+# Log color style: "full" colors entire line, "level" colors only the level prefix
+# Default: "level"
+# LogColorStyle: "level"
+
+# Color for DEBUG log level (hex code)
+# Default: "#808080" (gray)
+# LogColorDebug: "#808080"
+
+# Color for INFO log level (hex code)
+# Default: "#00FF00" (green)
+# LogColorInfo: "#00FF00"
+
+# Color for WARNING log level (hex code)
+# Default: "#FFFF00" (yellow)
+# LogColorWarning: "#FFFF00"
+
+# Color for ERROR log level (hex code)
+# Default: "#FF0000" (red)
+# LogColorError: "#FF0000"
+
+# Path to log file (None means no file logging, only console)
+# Default: None
+LogFile: "#[MainDir]/#[CommandName].log"
+
+# Log rotation type: "size" for file size, "days" for time-based
+# Default: "days"
+# LogRotationType: "days"
+
+# Log rotation size in MB (when LogRotationType is "size")
+# Default: 10
+# LogRotationSize: 10
+
+# Log rotation interval in days (when LogRotationType is "days")
+# Default: 30
+# LogRotationDays: 30
+
+# Number of backup log files to keep
+# Default: 5
+# LogRotationBackupCount: 5
+
+# Request timeout in seconds
+# Default: 30
+# Timeout: 30
+
+# CA certificate file for SSL verification
+# Path relative to config file or absolute
+# Default: None (system CA certificates are used)
+# CaFile: "/path/to/ca-chain.cert.pem"
+
+# Retry max attempts
+# Default: 3
+# RetryMaxAttempts: 3
+
+# Retry backoff factor
+# Default: 0.5
+# RetryBackoffFactor: 0.5

@@ -1,30 +1,82 @@
 # Copyright (c) 2026, Giacomo Marciani
 # Licensed under the MIT License
 
-"""Configuration schema for CLI Wizard."""
+"""Configuration schema for CLI Wizard.
+
+This schema is the single source of truth for:
+- Parameter names (PascalCase)
+- Parameter descriptions (used in prompts and generated config comments)
+- Default values
+- Validation rules
+
+The schema parameters are used directly as Jinja2 template variables.
+"""
 
 import re
-from typing import Literal
+from typing import Literal, Any, get_type_hints, get_origin, get_args
 
 from pydantic import BaseModel, Field, field_validator
+from pydantic.fields import FieldInfo
 
 
 class Config(BaseModel):
     """CLI Wizard configuration schema."""
 
-    # Required parameters
-    PackageName: str = Field(
-        ..., description="Python package name for the generated CLI"
+    # Project identification (prompted during bootstrap)
+    ProjectName: str = Field(
+        default="My Project",
+        description="Human-readable project name (title case)",
     )
-    DefaultBaseUrl: str = Field(..., description="Default API base URL")
+    CommandName: str = Field(
+        default="my-project",
+        description="CLI command name (kebab-case)",
+    )
+    PackageName: str = Field(
+        default="my_project",
+        description="Python package name (snake_case)",
+    )
+    Description: str = Field(
+        default="A CLI application",
+        description="Project description",
+    )
+    Version: str = Field(
+        default="1.0.0",
+        description="Project version",
+    )
+
+    # Author information (prompted during bootstrap)
+    AuthorName: str = Field(
+        default="Your Name",
+        description="Author name",
+    )
+    AuthorEmail: str = Field(
+        default="your.email@example.com",
+        description="Author email",
+    )
+    GithubUser: str = Field(
+        default="username",
+        description="GitHub username",
+    )
+
+    # Python settings (prompted during bootstrap)
+    PythonVersion: str = Field(
+        default="3.12",
+        description="Minimum Python version",
+    )
+
+    # API settings (prompted during bootstrap)
+    DefaultBaseUrl: str = Field(
+        default="http://localhost:3000",
+        description="Default API base URL",
+    )
 
     # Output settings
     OutputDir: str = Field(
-        default="#[PackageName]",
+        default="#[CommandName]",
         description="Output directory for the generated CLI project",
     )
     MainDir: str = Field(
-        default="${HOME}/.#[PackageName]",
+        default="${HOME}/.#[CommandName]",
         description="Main directory for CLI data (config, cache, logging, etc.)",
     )
     ProfileFile: str = Field(
@@ -89,7 +141,7 @@ class Config(BaseModel):
         description="Default log level",
     )
     LogFormat: str = Field(
-        default="[%(levelname)s] %(asctime)s %(message)s",
+        default="%(asctime)s [%(levelname)s] %(message)s",
         description="Log message format (Python logging format)",
     )
     LogTimestampFormat: str = Field(
@@ -180,3 +232,27 @@ class Config(BaseModel):
         return v.upper()
 
     model_config = {"extra": "forbid"}
+
+    @classmethod
+    def get_field_info(cls, field_name: str) -> FieldInfo | None:
+        """Get field info for a specific field."""
+        return cls.model_fields.get(field_name)
+
+    @classmethod
+    def get_field_description(cls, field_name: str) -> str:
+        """Get the description for a specific field."""
+        field_info = cls.get_field_info(field_name)
+        if field_info and field_info.description:
+            return field_info.description
+        return ""
+
+    @classmethod
+    def get_field_default(cls, field_name: str) -> Any:
+        """Get the default value for a specific field."""
+        field_info = cls.get_field_info(field_name)
+        if field_info:
+            if field_info.default is not None:
+                return field_info.default
+            if field_info.default_factory is not None:
+                return field_info.default_factory()
+        return None

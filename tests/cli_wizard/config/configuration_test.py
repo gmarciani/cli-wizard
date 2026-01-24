@@ -5,151 +5,107 @@
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 
 import yaml
 
 from cli_wizard.config.configuration import (
     get_config_path,
-    load_default_config,
     load_config,
     save_config,
 )
-
-
-def test_load_default_config():
-    """Test loading default configuration."""
-    mock_yaml_content = "OpenApiFileName: openapi.json\n"
-    with patch("importlib.resources.open_text", mock_open(read_data=mock_yaml_content)):
-        config = load_default_config()
-        assert config == {"OpenApiFileName": "openapi.json"}
-
-
-def test_load_default_config_error():
-    """Test loading default config with error."""
-    with patch("importlib.resources.open_text", side_effect=FileNotFoundError):
-        config = load_default_config()
-        assert config == {}
-
-
-def test_load_default_config_invalid_yaml():
-    """Test loading default config with invalid YAML."""
-    mock_yaml_content = "invalid: yaml: content:"
-    with patch("importlib.resources.open_text", mock_open(read_data=mock_yaml_content)):
-        config = load_default_config()
-        assert config == {}
-
-
-def test_load_default_config_non_dict():
-    """Test loading default config that's not a dict."""
-    mock_yaml_content = "- item1\n- item2\n"
-    with patch("importlib.resources.open_text", mock_open(read_data=mock_yaml_content)):
-        config = load_default_config()
-        assert config == {}
+from cli_wizard.config.schema import Config
+from cli_wizard.constants import CONFIG_FILE_NAME
 
 
 def test_get_config_path():
     """Test getting config path."""
     config_path = get_config_path()
-    assert config_path.name == "config.yaml"
+    assert config_path.name == CONFIG_FILE_NAME
     assert ".cli_wizard" in str(config_path)
 
 
 def test_load_config_no_user_config():
-    """Test loading config when no user config exists."""
+    """Test loading config when no user config exists returns schema defaults."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = Path(temp_dir) / "config.yaml"
+        config_path = Path(temp_dir) / CONFIG_FILE_NAME
         with patch(
             "cli_wizard.config.configuration.get_config_path",
             return_value=config_path,
         ):
-            with patch(
-                "cli_wizard.config.configuration.load_default_config",
-                return_value={"default": "value"},
-            ):
-                config = load_config()
-                assert config == {"default": "value"}
+            config = load_config()
+            # Should return schema defaults
+            defaults = Config().model_dump()
+            assert config == defaults
 
 
 def test_load_config_with_user_config():
     """Test loading config with user config file."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = Path(temp_dir) / "config.yaml"
-        config_path.write_text("user_key: user_value")
+        config_path = Path(temp_dir) / CONFIG_FILE_NAME
+        config_path.write_text("CommandName: my-cli\nPackageName: my_cli\n")
 
         with patch(
             "cli_wizard.config.configuration.get_config_path",
             return_value=config_path,
         ):
-            with patch(
-                "cli_wizard.config.configuration.load_default_config",
-                return_value={"default": "value"},
-            ):
-                config = load_config()
-                assert config["default"] == "value"
-                assert config["user_key"] == "user_value"
+            config = load_config()
+            assert config["CommandName"] == "my-cli"
+            assert config["PackageName"] == "my_cli"
+            # Schema defaults should be present for other fields
+            assert "ProjectName" in config
 
 
 def test_load_config_user_overrides_default():
-    """Test that user config overrides default config."""
+    """Test that user config overrides schema defaults."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = Path(temp_dir) / "config.yaml"
-        config_path.write_text("key: user_value")
+        config_path = Path(temp_dir) / CONFIG_FILE_NAME
+        config_path.write_text("Version: 2.0.0\n")
 
         with patch(
             "cli_wizard.config.configuration.get_config_path",
             return_value=config_path,
         ):
-            with patch(
-                "cli_wizard.config.configuration.load_default_config",
-                return_value={"key": "default_value"},
-            ):
-                config = load_config()
-                assert config["key"] == "user_value"
+            config = load_config()
+            assert config["Version"] == "2.0.0"
 
 
 def test_load_config_invalid_user_yaml():
-    """Test loading config with invalid user YAML."""
+    """Test loading config with invalid user YAML returns schema defaults."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = Path(temp_dir) / "config.yaml"
+        config_path = Path(temp_dir) / CONFIG_FILE_NAME
         config_path.write_text("invalid: yaml: content:")
 
         with patch(
             "cli_wizard.config.configuration.get_config_path",
             return_value=config_path,
         ):
-            with patch(
-                "cli_wizard.config.configuration.load_default_config",
-                return_value={"default": "value"},
-            ):
-                config = load_config()
-                # Should return default config on error
-                assert config == {"default": "value"}
+            config = load_config()
+            # Should return schema defaults on error
+            defaults = Config().model_dump()
+            assert config == defaults
 
 
 def test_load_config_non_dict_user_config():
-    """Test loading config when user config is not a dict."""
+    """Test loading config when user config is not a dict returns schema defaults."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = Path(temp_dir) / "config.yaml"
+        config_path = Path(temp_dir) / CONFIG_FILE_NAME
         config_path.write_text("- item1\n- item2")
 
         with patch(
             "cli_wizard.config.configuration.get_config_path",
             return_value=config_path,
         ):
-            with patch(
-                "cli_wizard.config.configuration.load_default_config",
-                return_value={"default": "value"},
-            ):
-                config = load_config()
-                # Should return default config when user config is not a dict
-                assert config == {"default": "value"}
+            config = load_config()
+            # Should return schema defaults when user config is not a dict
+            defaults = Config().model_dump()
+            assert config == defaults
 
 
 def test_save_config():
     """Test saving configuration."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        config_path = Path(temp_dir) / "config.yaml"
+        config_path = Path(temp_dir) / CONFIG_FILE_NAME
 
         with patch(
             "cli_wizard.config.configuration.get_config_path",

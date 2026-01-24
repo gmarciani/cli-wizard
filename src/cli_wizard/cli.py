@@ -6,6 +6,7 @@
 import click
 import logging
 from cli_wizard.constants import __version__
+from cli_wizard.commands.bootstrap import bootstrap
 from cli_wizard.commands.config import config
 from cli_wizard.commands.generate import generate
 
@@ -29,6 +30,7 @@ def main(ctx: click.Context, debug: bool) -> None:
     logging.Formatter.converter = lambda *args: __import__("time").gmtime()
 
 
+main.add_command(bootstrap)
 main.add_command(config)
 main.add_command(generate)
 

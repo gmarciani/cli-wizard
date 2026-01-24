@@ -38,7 +38,7 @@ def create_test_files(temp_dir: Path, cli_name: str = "test-cli") -> tuple[Path,
     }
 
     openapi_path = temp_dir / "openapi.json"
-    config_path = temp_dir / "config.yaml"
+    config_path = temp_dir / "cli-wizard.yaml"
 
     with open(openapi_path, "w") as f:
         json.dump(openapi_spec, f)
@@ -66,7 +66,7 @@ class TestGenerateCommand:
         """Test generate with missing OpenAPI file."""
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as temp_dir:
-            config_path = Path(temp_dir) / "config.yaml"
+            config_path = Path(temp_dir) / "cli-wizard.yaml"
             config_path.write_text(
                 "PackageName: test\nDefaultBaseUrl: https://api.example.com\n"
             )
@@ -172,7 +172,7 @@ class TestGenerateCommand:
                     "--openapi",
                     "openapi.json",
                     "--config",
-                    "config.yaml",
+                    "cli-wizard.yaml",
                     "--output",
                     "my-output",
                 ],
@@ -191,7 +191,7 @@ class TestGenerateCommand:
                 '{"openapi": "3.0.0", "info": {"title": "Test", "version": "1.0"}, "paths": {}}'
             )
 
-            config_path = temp_path / "config.yaml"
+            config_path = temp_path / "cli-wizard.yaml"
             config_path.write_text(
                 "PackageName: test\nDefaultBaseUrl: https://api.example.com\n"
             )
@@ -235,7 +235,7 @@ class TestGenerateCommand:
             with open(openapi_path, "w") as f:
                 yaml.dump(openapi_spec, f)
 
-            config_path = temp_path / "config.yaml"
+            config_path = temp_path / "cli-wizard.yaml"
             config_path.write_text(
                 "PackageName: test\nDefaultBaseUrl: https://api.example.com\n"
             )
@@ -303,7 +303,7 @@ class TestGenerateCommand:
                 json.dump(openapi_spec, f)
 
             # Create invalid YAML config (syntax error)
-            config_path = temp_path / "config.yaml"
+            config_path = temp_path / "cli-wizard.yaml"
             config_path.write_text("invalid: yaml: content:")
 
             result = runner.invoke(

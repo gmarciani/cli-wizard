@@ -27,7 +27,7 @@ class TestConfigCommands:
         """Test config set command."""
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as temp_dir:
-            config_path = Path(temp_dir) / "config.yaml"
+            config_path = Path(temp_dir) / "cli-wizard.yaml"
             with patch(
                 "cli_wizard.commands.config.get_config_path",
                 return_value=config_path,
@@ -112,7 +112,7 @@ class TestConfigCommands:
         """Test config reset command."""
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as temp_dir:
-            config_path = Path(temp_dir) / "config.yaml"
+            config_path = Path(temp_dir) / "cli-wizard.yaml"
             config_path.write_text("key: value")
 
             with patch(
@@ -132,7 +132,7 @@ class TestConfigCommands:
         """Test config reset when no config file exists."""
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as temp_dir:
-            config_path = Path(temp_dir) / "config.yaml"
+            config_path = Path(temp_dir) / "cli-wizard.yaml"
             # Don't create the file
 
             with patch(

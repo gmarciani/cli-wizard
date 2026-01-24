@@ -14,118 +14,89 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from cli_wizard.config.configuration import load_default_config
 from cli_wizard.config.schema import Config
+from cli_wizard.constants import CONFIG_FILE_NAME
 from cli_wizard.generator import OpenApiParser, CliGenerator
 
 logger = logging.getLogger(__name__)
 
-# Load defaults from config
-_defaults = load_default_config()
-_default_openapi = _defaults.get("OpenApiFileName", "openapi.yaml")
-_default_config = _defaults.get("ConfigFileName", "config.yaml")
-_default_output = _defaults.get("OutputDir", "cli")
-
 
 @click.command()
-@click.option(
-    "--working-dir",
-    "-w",
-    type=click.Path(exists=True, file_okay=False, resolve_path=True),
-    default=None,
-    help="Working directory for resolving relative paths",
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, resolve_path=True),
+    required=True,
 )
 @click.option(
-    "--openapi",
-    "-o",
-    type=click.Path(dir_okay=False),
-    default=_default_openapi,
-    help=f"Path to OpenAPI spec file in YAML or JSON format (default: {_default_openapi})",
-)
-@click.option(
-    "--config",
+    "--configuration",
     "-c",
-    type=click.Path(dir_okay=False),
-    default=_default_config,
-    help=f"Path to config YAML file (default: {_default_config})",
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+    required=True,
+    help=f"Path to {CONFIG_FILE_NAME} configuration file",
 )
 @click.option(
-    "--output",
-    "-d",
-    type=click.Path(file_okay=False),
-    default=_default_output,
-    help=f"Output directory for generated CLI (default: {_default_output})",
+    "--api",
+    "-a",
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+    default=None,
+    help="Path to OpenAPI spec file in YAML or JSON format (optional)",
 )
 @click.pass_context
 def generate(
     ctx: click.Context,
-    working_dir: str | None,
-    openapi: str,
-    config: str,
-    output: str,
+    path: str,
+    configuration: str,
+    api: str | None,
 ) -> None:
-    """Generate a CLI from an OpenAPI spec and config file."""
+    """Generate a CLI from a configuration file and optional OpenAPI spec.
+
+    PATH is the output directory where the CLI project will be generated.
+    It can be a relative or absolute path.
+
+    If --api is provided, API commands will be generated from the OpenAPI spec.
+    Otherwise, a functional CLI is generated without API commands.
+    """
     debug = ctx.obj.get("debug", False) if ctx.obj else False
 
-    # Resolve paths relative to working directory
-    base_dir = Path(working_dir) if working_dir else Path.cwd()
-    openapi_path = (
-        base_dir / openapi if not Path(openapi).is_absolute() else Path(openapi)
-    )
-    config_path = base_dir / config if not Path(config).is_absolute() else Path(config)
+    output_path = Path(path)
+    config_path = Path(configuration)
+    api_path = Path(api) if api else None
 
     if debug:
-        logger.debug(f"Working directory: {base_dir}")
-        logger.debug(f"OpenAPI spec: {openapi_path}")
+        logger.debug(f"Output directory: {output_path}")
         logger.debug(f"Config file: {config_path}")
-
-    # Validate input files exist
-    if not openapi_path.exists():
-        click.secho(
-            f"✗ OpenAPI spec file not found: {openapi_path}", fg="red", err=True
-        )
-        raise SystemExit(1)
-    if not config_path.exists():
-        click.secho(f"✗ Config file not found: {config_path}", fg="red", err=True)
-        raise SystemExit(1)
+        logger.debug(f"OpenAPI spec: {api_path}")
 
     # Load and validate configuration
     cli_config = _load_cli_config(config_path)
-
-    # Resolve output path (CLI option > config > default)
-    output_dir: str = output
-    if output == _default_output:
-        config_output = cli_config.get("OutputDir")
-        if config_output is not None:
-            output_dir = str(config_output)
-    output_path = (
-        base_dir / output_dir
-        if not Path(output_dir).is_absolute()
-        else Path(output_dir)
-    )
 
     if debug:
         logger.debug(f"Output directory: {output_path}")
 
     # Get CLI name and package name from config
-    cli_name = cli_config["PackageName"]
-    # Convert hyphens to underscores for Python package compatibility
-    package_name = cli_name.replace("-", "_")
+    cli_name = cli_config["CommandName"]
+    package_name = cli_config["PackageName"]
 
-    # Parse OpenAPI spec
-    click.secho("📄 Parsing OpenAPI spec: ", fg="cyan", nl=False)
-    click.echo(openapi_path)
-    parser = OpenApiParser(str(openapi_path))
+    # Parse OpenAPI spec if provided
+    groups: dict = {}
+    if api_path:
+        click.secho("📄 Parsing OpenAPI spec: ", fg="cyan", nl=False)
+        click.echo(api_path)
+        parser = OpenApiParser(str(api_path))
 
-    groups = parser.parse(
-        exclude_tags=cli_config.get("ExcludeTags", []),
-        include_tags=cli_config.get("IncludeTags", []),
-        tag_mapping=cli_config.get("TagMapping", {}),
-    )
+        groups = parser.parse(
+            exclude_tags=cli_config.get("ExcludeTags", []),
+            include_tags=cli_config.get("IncludeTags", []),
+            tag_mapping=cli_config.get("TagMapping", {}),
+        )
 
-    if not groups:
-        click.secho("✗ No operations found in OpenAPI spec", fg="red", err=True)
-        raise SystemExit(1)
+        if not groups:
+            click.secho("⚠️  No operations found in OpenAPI spec", fg="yellow")
+    else:
+        click.secho(
+            "ℹ️  No OpenAPI spec provided, generating CLI without API commands",
+            fg="cyan",
+        )
 
     # Clean up output directory before generating
     if output_path.exists():
@@ -159,11 +130,15 @@ def generate(
     click.echo(output_path)
     click.secho("  📦 Package: ", fg="white", nl=False)
     click.echo(package_name)
-    click.secho("  🔧 Commands: ", fg="white", nl=False)
-    click.echo(f"{len(groups)} groups")
-    for tag, group in groups.items():
-        click.secho(f"     • {group.cli_name}", fg="yellow", nl=False)
-        click.echo(f" ({len(group.operations)} commands)")
+    if groups:
+        click.secho("  🔧 Commands: ", fg="white", nl=False)
+        click.echo(f"{len(groups)} groups")
+        for tag, group in groups.items():
+            click.secho(f"     • {group.cli_name}", fg="yellow", nl=False)
+            click.echo(f" ({len(group.operations)} commands)")
+    else:
+        click.secho("  🔧 Commands: ", fg="white", nl=False)
+        click.echo("config only (no API commands)")
 
     click.echo()
     click.secho("📋 Next steps:", fg="cyan", bold=True)
