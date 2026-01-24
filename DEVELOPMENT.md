@@ -16,7 +16,7 @@ Run tests and linters:
 tox
 
 # Run specific environments
-tox -e test        # Tests on Python 3.12
+tox -e test        # Unit tests
 tox -e coverage    # Code coverage report
 tox -e lint        # Linting only
 tox -e type        # Type checking only
@@ -67,16 +67,7 @@ Make changes to the release notes, and publish
 gh release edit v${VERSION} --draft=false
 ```
 
-This will automatically trigger Test PyPI publishing
-
-### Manual Test PyPI Publishing
-
-To manually publish to Test PyPI
-
-```shell
-python -m build
-python -m twine upload --repository testpypi dist/*
-```
+This will automatically publish to PyPI at https://pypi.org/project/cli-wizard.
 
 ### Demo
 The product demo is a video that emulates the terminal behavior.
