@@ -63,7 +63,7 @@ where = ["src"]
 include = ["cli_wizard*"]
 
 [tool.setuptools.package-data]
-cli_wizard = ["templates/*.j2", "config/*.yaml"]
+cli_wizard = ["templates/*.j2", "templates/bootstrap/*.j2", "templates/bootstrap/github/workflows/*.j2", "config/*.yaml"]
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
