@@ -42,7 +42,7 @@ def _show_splash() -> None:
 _show_splash()
 
 
-@click.group(invoke_without_command=True)
+@click.group(invoke_without_command=True, help="{{ Description }}")
 @click.version_option(version=__version__)
 @click.option("--profile", "-p", default="default", help="Profile name to use.")
 @click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
@@ -58,7 +58,7 @@ def main(
     no_verify_ssl: bool,
     ca_file: Path | None,
 ) -> None:
-    """{{ Description }}"""
+    """Main CLI entry point."""
     ctx.ensure_object(dict)
 
     # Enable debug logging if --debug flag is set

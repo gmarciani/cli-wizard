@@ -35,13 +35,13 @@ def _get_client(
     )
 
 
-@click.group(name="{{ group.cli_name }}")
+@click.group(name="{{ group.cli_name }}", help="{{ group.description }}")
 def {{ group.module_name }}() -> None:
-    """{{ group.description }}"""
+    """{{ group.name }} command group."""
 {% for op in group.operations %}
 
 
-@{{ group.module_name }}.command(name="{{ op.command_name }}")
+@{{ group.module_name }}.command(name="{{ op.command_name }}", help="{{ op.summary or op.operation_id }}")
 {% for param in op.parameters if param.location == "path" %}
 @click.argument("{{ param.python_name }}"{% if param.click_type != "str" %}, type={{ param.click_type }}{% endif %})
 {% endfor %}
@@ -76,7 +76,7 @@ def {{ op.function_name }}(
     no_verify_ssl: bool,
     ca_file: Path | None,
 ) -> None:
-    """{{ op.summary or op.operation_id }}"""
+    """{{ op.function_name }} command implementation."""
     # Enable debug logging if --debug flag is set
     set_debug(debug)
 

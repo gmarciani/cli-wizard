@@ -13,14 +13,14 @@ from {{ PackageName }}.constants import PROFILE_FILE
 from {{ PackageName }}.logging import log_info, log_error, log_warning
 
 
-@click.group(name="config")
+@click.group(name="config", help="Configure the CLI.")
 def config() -> None:
-    """Configure the CLI."""
+    """Config command group."""
 
 
-@config.command(name="init")
+@config.command(name="init", help="Initialize the profile file with default profile.")
 def config_init() -> None:
-    """Initialize the profile file with default profile."""
+    """Init command implementation."""
     if PROFILE_FILE.exists():
         result = {"status": "exists", "path": str(PROFILE_FILE)}
         click.echo(json.dumps(result, indent=2))
@@ -41,9 +41,9 @@ def config_init() -> None:
         raise SystemExit(1)
 
 
-@config.command(name="list-profiles")
+@config.command(name="list-profiles", help="List all available profiles.")
 def config_list_profiles() -> None:
-    """List all available profiles."""
+    """List profiles command implementation."""
     if not PROFILE_FILE.exists():
         result = {"profiles": []}
         click.echo(json.dumps(result, indent=2))
@@ -62,10 +62,10 @@ def config_list_profiles() -> None:
     click.echo(json.dumps(result, indent=2))
 
 
-@config.command(name="show")
+@config.command(name="show", help="Show all parameters and values for a profile.")
 @click.option("--profile", "-p", default="default", help="Profile name")
 def config_show(profile: str) -> None:
-    """Show all parameters and values for a profile."""
+    """Show command implementation."""
     if not PROFILE_FILE.exists():
         click.echo(json.dumps({}, indent=2))
         return
@@ -87,11 +87,11 @@ def config_show(profile: str) -> None:
     click.echo(json.dumps(profile_data, indent=2))
 
 
-@config.command(name="get")
+@config.command(name="get", help="Get a configuration value from a profile.")
 @click.argument("param")
 @click.option("--profile", "-p", default="default", help="Profile name")
 def config_get(param: str, profile: str) -> None:
-    """Get a configuration value from a profile."""
+    """Get command implementation."""
     if not PROFILE_FILE.exists():
         result = {"key": param, "value": None}
         click.echo(json.dumps(result, indent=2))
@@ -117,12 +117,12 @@ def config_get(param: str, profile: str) -> None:
     click.echo(json.dumps(result, indent=2))
 
 
-@config.command(name="set")
+@config.command(name="set", help="Set a configuration value in a profile.")
 @click.argument("param")
 @click.argument("value")
 @click.option("--profile", "-p", default="default", help="Profile name")
 def config_set(param: str, value: str, profile: str) -> None:
-    """Set a configuration value in a profile."""
+    """Set command implementation."""
     if not PROFILE_FILE.exists():
         PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
         profiles = {}
@@ -163,11 +163,11 @@ def config_set(param: str, value: str, profile: str) -> None:
         raise SystemExit(1)
 
 
-@config.command(name="unset")
+@config.command(name="unset", help="Remove a configuration value from a profile.")
 @click.argument("param")
 @click.option("--profile", "-p", default="default", help="Profile name")
 def config_unset(param: str, profile: str) -> None:
-    """Remove a configuration value from a profile."""
+    """Unset command implementation."""
     if not PROFILE_FILE.exists():
         result = {"key": param, "oldValue": None}
         click.echo(json.dumps(result, indent=2))
