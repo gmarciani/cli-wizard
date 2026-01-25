@@ -252,3 +252,71 @@ class Config(BaseModel):
             if field_info.default_factory is not None:
                 return field_info.default_factory()
         return None
+
+    @classmethod
+    def get_all_fields_metadata(cls) -> list[dict[str, Any]]:
+        """Get metadata for all fields in schema order.
+
+        Returns a list of dicts with: name, description, default, type_hint
+        """
+        from pydantic_core import PydanticUndefined
+
+        fields_metadata = []
+        type_hints = get_type_hints(cls)
+
+        for field_name, field_info in cls.model_fields.items():
+            # Handle default values properly
+            if field_info.default is not PydanticUndefined:
+                default = field_info.default
+            elif field_info.default_factory is not None:
+                default = field_info.default_factory()
+            else:
+                default = None
+
+            # Get type hint for display
+            type_hint = type_hints.get(field_name)
+            type_str = cls._format_type_hint(type_hint)
+
+            fields_metadata.append(
+                {
+                    "name": field_name,
+                    "description": field_info.description or "",
+                    "default": default,
+                    "type_hint": type_str,
+                }
+            )
+
+        return fields_metadata
+
+    @classmethod
+    def _format_type_hint(cls, type_hint: Any) -> str:
+        """Format a type hint for display in comments."""
+        import types
+
+        if type_hint is None:
+            return "Any"
+
+        origin = get_origin(type_hint)
+        args = get_args(type_hint)
+
+        if origin is Literal:
+            return f"one of: {', '.join(repr(a) for a in args)}"
+        elif origin is list:
+            return "list"
+        elif origin is dict:
+            return "dict"
+        # Handle Union types (including Optional which is Union[X, None])
+        elif origin is types.UnionType:
+            # Filter out NoneType for cleaner display
+            non_none_args = [a for a in args if a is not type(None)]
+            if len(non_none_args) == 1:
+                return cls._format_type_hint(non_none_args[0]) + " (optional)"
+            return " | ".join(cls._format_type_hint(a) for a in non_none_args)
+        elif hasattr(type_hint, "__name__"):
+            return type_hint.__name__
+        else:
+            # Handle str | None style unions in string form
+            type_str = str(type_hint)
+            if " | None" in type_str:
+                return type_str.replace(" | None", "") + " (optional)"
+            return type_str

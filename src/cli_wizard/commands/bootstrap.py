@@ -8,8 +8,10 @@ import logging
 import os
 from pathlib import Path
 from datetime import date
+from typing import Any
 
 import click
+import yaml
 from jinja2 import Environment, PackageLoader, BaseLoader
 
 from cli_wizard.config.schema import Config
@@ -32,8 +34,20 @@ BOOTSTRAP_PARAMS: list[str] = [
 ]
 
 
-def _get_default_for_param(param_name: str, values: dict) -> str:
-    """Get the default value for a parameter based on current values."""
+def _get_default_for_param(
+    param_name: str, values: dict, existing_config: dict | None = None
+) -> str:
+    """Get the default value for a parameter.
+
+    Priority:
+    1. Existing config file value (if config exists)
+    2. Derived value based on other parameters (for CommandName, ProjectName, etc.)
+    3. Schema default
+    """
+    # First, check existing config
+    if existing_config and param_name in existing_config:
+        return str(existing_config[param_name])
+
     if param_name == "CommandName":
         # Default to folder name in kebab-case
         return (
@@ -62,6 +76,22 @@ def _get_default_for_param(param_name: str, values: dict) -> str:
 
     # Use schema default
     return str(Config.get_field_default(param_name) or "")
+
+
+def _load_existing_config(config_path: Path) -> dict | None:
+    """Load existing config file if it exists.
+
+    Returns None if file doesn't exist or can't be parsed.
+    """
+    if not config_path.exists():
+        return None
+
+    try:
+        with open(config_path) as f:
+            return yaml.safe_load(f) or {}
+    except (yaml.YAMLError, IOError) as e:
+        logger.warning(f"Could not load existing config: {e}")
+        return None
 
 
 @click.command(
@@ -126,6 +156,11 @@ def bootstrap(
         target_dir.mkdir(parents=True, exist_ok=True)
         click.secho(f"📁 Created directory: {target_dir}", fg="cyan")
 
+    # Load existing config if available (for default values)
+    existing_config = _load_existing_config(config_path)
+    if existing_config:
+        click.secho(f"📄 Using existing config: {config_path}", fg="cyan")
+
     # Gather project information interactively
     click.secho("\n📋 Project Configuration\n", fg="cyan", bold=True)
 
@@ -134,7 +169,7 @@ def bootstrap(
 
     for param_name in BOOTSTRAP_PARAMS:
         description = Config.get_field_description(param_name)
-        default = _get_default_for_param(param_name, values)
+        default = _get_default_for_param(param_name, values, existing_config)
 
         value = click.prompt(
             description,
@@ -153,6 +188,12 @@ def bootstrap(
 
     # Remove internal keys
     del values["_target_dir_name"]
+
+    # Add schema metadata for config template generation
+    values["_schema_fields"] = Config.get_all_fields_metadata()
+    values["_prompted_params"] = set(BOOTSTRAP_PARAMS)
+    # Pass all values for template lookup
+    values["_values"] = {k: v for k, v in values.items() if not k.startswith("_")}
 
     if debug:
         logger.debug(f"Template context: {values}")
@@ -228,6 +269,33 @@ def _resolve_output_path(output_name: str, context: dict) -> str:
     return resolved
 
 
+def _yaml_value(value: Any) -> str:
+    """Format a Python value as YAML."""
+    if value is None:
+        return "null"
+    elif isinstance(value, bool):
+        return "true" if value else "false"
+    elif isinstance(value, str):
+        # Quote strings that might be ambiguous
+        if value == "" or value in ("true", "false", "null", "yes", "no"):
+            return f'"{value}"'
+        # Quote strings with special characters
+        if any(c in value for c in ":#{}[]&*!|>'\"%@`"):
+            return f'"{value}"'
+        return f'"{value}"'
+    elif isinstance(value, (int, float)):
+        return str(value)
+    elif isinstance(value, list):
+        if not value:
+            return "[]"
+        return "[" + ", ".join(_yaml_value(v) for v in value) + "]"
+    elif isinstance(value, dict):
+        if not value:
+            return "{}"
+        return "{" + ", ".join(f"{k}: {_yaml_value(v)}" for k, v in value.items()) + "}"
+    return str(value)
+
+
 def _generate_project(target_dir: Path, context: dict, config_path: Path) -> None:
     """Generate all project files by discovering and rendering templates.
 
@@ -243,7 +311,9 @@ def _generate_project(target_dir: Path, context: dict, config_path: Path) -> Non
         loader=PackageLoader("cli_wizard", "templates"),
         trim_blocks=True,
         lstrip_blocks=True,
+        keep_trailing_newline=True,
     )
+    env.filters["yaml_value"] = _yaml_value
 
     # Add 'groups' for templates that expect it (empty for bootstrap)
     context["groups"] = {}

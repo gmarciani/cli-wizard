@@ -34,6 +34,7 @@ class CliGenerator:
             loader=PackageLoader("cli_wizard", "templates"),
             trim_blocks=True,
             lstrip_blocks=True,
+            keep_trailing_newline=True,
         )
         self.env.filters["url_path"] = _build_url_path
 
