@@ -61,18 +61,35 @@ def generate(
 
     output_path = Path(path)
     config_path = Path(configuration)
-    api_path = Path(api) if api else None
 
     if debug:
         logger.debug(f"Output directory: {output_path}")
         logger.debug(f"Config file: {config_path}")
-        logger.debug(f"OpenAPI spec: {api_path}")
+        logger.debug(f"OpenAPI spec (CLI): {api}")
 
     # Load and validate configuration
     cli_config = _load_cli_config(config_path)
 
+    # Resolve OpenAPI spec path: CLI option > config OpenapiSpec > None
+    api_path: Path | None = None
+    if api:
+        api_path = Path(api)
+    elif cli_config.get("OpenapiSpec"):
+        # Resolve relative to config file directory
+        spec_path = Path(cli_config["OpenapiSpec"])
+        if not spec_path.is_absolute():
+            spec_path = config_path.parent / spec_path
+        if spec_path.exists():
+            api_path = spec_path
+        else:
+            click.secho(
+                f"⚠️  OpenapiSpec '{cli_config['OpenapiSpec']}' not found, "
+                "generating CLI without API commands",
+                fg="yellow",
+            )
+
     if debug:
-        logger.debug(f"Output directory: {output_path}")
+        logger.debug(f"OpenAPI spec (resolved): {api_path}")
 
     # Get CLI name and package name from config
     cli_name = cli_config["CommandName"]
@@ -142,7 +159,7 @@ def generate(
         click.echo("config only (no API commands)")
 
     click.echo()
-    click.secho("📋 Next steps:", fg="cyan", bold=True)
+    click.secho("📋 Validate:", fg="cyan", bold=True)
     click.echo(f"   pip install -e {output_path}")
     click.echo(f"   {cli_name} --help")
 

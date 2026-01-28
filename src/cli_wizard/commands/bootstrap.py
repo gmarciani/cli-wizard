@@ -5,17 +5,19 @@
 
 import getpass
 import logging
-import os
+import re
 from pathlib import Path
 from datetime import date
 from typing import Any
 
 import click
 import yaml
-from jinja2 import Environment, PackageLoader, BaseLoader
+from jinja2 import Environment, PackageLoader
+from pydantic import ValidationError
 
 from cli_wizard.config.schema import Config
 from cli_wizard.constants import CONFIG_FILE_NAME
+from cli_wizard.generator import CliGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,8 @@ BOOTSTRAP_PARAMS: list[str] = [
     "PythonVersion",
     "GithubUser",
     "Version",
+    "CopyrightYear",
+    "RepositoryUrl",
 ]
 
 
@@ -73,6 +77,16 @@ def _get_default_for_param(
     if param_name == "GithubUser":
         # Default to current system username
         return getpass.getuser()
+
+    if param_name == "CopyrightYear":
+        # Default to current year
+        return str(date.today().year)
+
+    if param_name == "RepositoryUrl":
+        # Default to GitHub URL based on GithubUser and CommandName
+        github_user = values.get("GithubUser", "username")
+        command_name = values.get("CommandName", "my-project")
+        return f"https://github.com/{github_user}/{command_name}"
 
     # Use schema default
     return str(Config.get_field_default(param_name) or "")
@@ -151,10 +165,6 @@ def bootstrap(
             if not click.confirm("Do you want to continue anyway?"):
                 click.secho("Aborted.", fg="red")
                 raise SystemExit(1)
-    else:
-        # Create the directory
-        target_dir.mkdir(parents=True, exist_ok=True)
-        click.secho(f"📁 Created directory: {target_dir}", fg="cyan")
 
     # Load existing config if available (for default values)
     existing_config = _load_existing_config(config_path)
@@ -177,36 +187,46 @@ def bootstrap(
         )
         values[param_name] = value
 
-    # Derive additional values
-    values["RepositoryUrl"] = (
-        f"https://github.com/{values['GithubUser']}/{values['CommandName']}"
-    )
-    values["MainDir"] = f"${{HOME}}/.{values['CommandName']}"
-    values["ProfileFile"] = f"{values['MainDir']}/profiles.yaml"
-    values["LogFile"] = f"{values['MainDir']}/{values['CommandName']}.log"
-    values["CopyrightYear"] = date.today().year
-
     # Remove internal keys
     del values["_target_dir_name"]
 
-    # Add schema metadata for config template generation
-    values["_schema_fields"] = Config.get_all_fields_metadata()
-    values["_prompted_params"] = set(BOOTSTRAP_PARAMS)
-    # Pass all values for template lookup
-    values["_values"] = {k: v for k, v in values.items() if not k.startswith("_")}
+    # Merge with existing config (prompted values override)
+    if existing_config:
+        cli_config = {**existing_config, **values}
+    else:
+        cli_config = values
+
+    # Derive additional values if not already set
+    if "MainDir" not in cli_config:
+        cli_config["MainDir"] = f"${{HOME}}/.{cli_config['CommandName']}"
+    if "ProfileFile" not in cli_config:
+        cli_config["ProfileFile"] = f"#[MainDir]/profiles.yaml"
 
     if debug:
-        logger.debug(f"Template context: {values}")
+        logger.debug(f"Config: {cli_config}")
 
-    # Generate project files
+    # Generate config file
     click.echo()
-    click.secho("⚙️  Generating project files...", fg="cyan")
+    click.secho("📄 Writing configuration file...", fg="cyan")
+    _generate_config_file(config_path, cli_config)
+    click.secho(f"   ✓ {config_path}", fg="green")
 
-    _generate_project(target_dir, values, config_path)
+    # Load the generated config file (validates with Pydantic and expands references)
+    cli_config = _load_cli_config(config_path)
+
+    # Generate CLI project using the same generator as 'generate' command
+    click.echo()
+    click.secho("⚙️  Generating CLI project...", fg="cyan")
+
+    cli_name = cli_config["CommandName"]
+    package_name = cli_config["PackageName"]
+
+    generator = CliGenerator(config=cli_config, config_dir=config_path.parent)
+    generator.generate({}, target_dir, cli_name, package_name)
 
     # Summary
     click.secho(
-        f"\n✓ Project '{values['ProjectName']}' bootstrapped successfully!",
+        f"\n✓ Project '{cli_config['ProjectName']}' bootstrapped successfully!",
         fg="green",
         bold=True,
     )
@@ -216,57 +236,14 @@ def bootstrap(
     click.echo(config_path)
 
     click.echo()
-    click.secho("📋 Next steps:", fg="cyan", bold=True)
+    click.secho("📋 Validate:", fg="cyan", bold=True)
     click.echo(f"   pip install -e {target_dir}")
-    click.echo(f"   {values['CommandName']} --help")
+    click.echo(f"   {cli_name} --help")
 
-
-def _get_templates_dir() -> Path:
-    """Get the path to the templates directory."""
-    import cli_wizard
-
-    package_dir = Path(cli_wizard.__file__).parent
-    return package_dir / "templates"
-
-
-def _discover_templates(templates_dir: Path) -> list[tuple[Path, str, bool]]:
-    """Discover all files in the templates directory.
-
-    Returns a list of tuples: (file_path_relative_to_templates, output_filename, is_template)
-    - is_template: True if file has .j2 extension (content should be rendered)
-    """
-    # Templates that require OpenAPI-specific variables (skip for bootstrap)
-    skip_templates = {
-        "group.py.j2",  # Requires 'group' variable from OpenAPI parsing
-    }
-
-    files = []
-    for file_path in templates_dir.rglob("*"):
-        if file_path.is_file():
-            # Skip templates that require OpenAPI-specific variables
-            if file_path.name in skip_templates:
-                continue
-
-            # Get path relative to templates_dir
-            rel_path = file_path.relative_to(templates_dir)
-            # Check if it's a Jinja2 template
-            is_template = file_path.suffix == ".j2"
-            # Remove .j2 extension for output filename if it's a template
-            output_name = str(rel_path)[:-3] if is_template else str(rel_path)
-            files.append((rel_path, output_name, is_template))
-    return files
-
-
-def _resolve_output_path(output_name: str, context: dict) -> str:
-    """Resolve output path by expanding Jinja2 variables.
-
-    Handles Jinja2 variables in path (e.g., {{ PackageName }}).
-    """
-    # Use Jinja2 to expand variables in the path
-    env = Environment(loader=BaseLoader())
-    template = env.from_string(output_name)
-    resolved = template.render(**context)
-    return resolved
+    click.echo()
+    click.secho("📋 Next steps:", fg="cyan", bold=True)
+    click.echo(f"   Customize {config_path}")
+    click.echo(f"   cli-wizard generate --configuration {config_path} {target_dir}")
 
 
 def _yaml_value(value: Any) -> str:
@@ -296,16 +273,9 @@ def _yaml_value(value: Any) -> str:
     return str(value)
 
 
-def _generate_project(target_dir: Path, context: dict, config_path: Path) -> None:
-    """Generate all project files by discovering and rendering templates.
-
-    Args:
-        target_dir: Directory where project files are generated
-        context: Template context with all variables
-        config_path: Path where config file should be written
-    """
-    templates_dir = _get_templates_dir()
-    files = _discover_templates(templates_dir)
+def _generate_config_file(config_path: Path, config: dict) -> None:
+    """Generate the cli-wizard.yaml configuration file."""
+    config_path.parent.mkdir(parents=True, exist_ok=True)
 
     env = Environment(
         loader=PackageLoader("cli_wizard", "templates"),
@@ -315,36 +285,66 @@ def _generate_project(target_dir: Path, context: dict, config_path: Path) -> Non
     )
     env.filters["yaml_value"] = _yaml_value
 
-    # Add 'groups' for templates that expect it (empty for bootstrap)
-    context["groups"] = {}
+    # Build context for template
+    context = {
+        **config,
+        "config": config,
+        "CopyrightYear": date.today().year,
+        "_schema_fields": Config.get_all_fields_metadata(),
+        "_prompted_params": set(BOOTSTRAP_PARAMS),
+        "_values": config,
+    }
 
-    for file_rel_path, output_name, is_template in sorted(files):
-        # Resolve output path (expand Jinja2 variables)
-        resolved_output = _resolve_output_path(output_name, context)
+    template = env.get_template("cli-wizard.yaml.j2")
+    content = template.render(**context)
+    config_path.write_text(content)
 
-        # Handle config file separately - write to config_path instead of target_dir
-        if resolved_output == CONFIG_FILE_NAME:
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            template_name = str(file_rel_path).replace(os.sep, "/")
-            template = env.get_template(template_name)
-            content = template.render(**context)
-            config_path.write_text(content)
-            click.secho(f"   ✓ {config_path}", fg="green")
-            continue
 
-        # Create output directory if needed
-        output_path = target_dir / resolved_output
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+def _load_cli_config(config_path: Path) -> dict:
+    """Load and validate CLI generator configuration from YAML file."""
+    try:
+        with open(config_path) as f:
+            raw_config = yaml.safe_load(f) or {}
+    except (yaml.YAMLError, IOError) as e:
+        click.secho(f"✗ Could not load config file: {e}", fg="red", err=True)
+        raise SystemExit(1)
 
-        if is_template:
-            # Render Jinja2 template
-            template_name = str(file_rel_path).replace(os.sep, "/")
-            template = env.get_template(template_name)
-            content = template.render(**context)
-            output_path.write_text(content)
-        else:
-            # Copy file as-is (but path is still expanded)
-            source_path = templates_dir / file_rel_path
-            output_path.write_bytes(source_path.read_bytes())
+    # Validate with Pydantic schema
+    try:
+        validated = Config(**raw_config)
+        config = validated.model_dump()
+    except ValidationError as e:
+        click.secho("✗ Invalid configuration:", fg="red", err=True)
+        for error in e.errors():
+            field = ".".join(str(loc) for loc in error["loc"])
+            click.secho(f"  • {field}: {error['msg']}", fg="red", err=True)
+        raise SystemExit(1)
 
-        click.secho(f"   ✓ {resolved_output}", fg="green")
+    # Expand #[Param] references
+    return _expand_config_references(config)
+
+
+def _expand_config_references(config: dict[str, Any]) -> dict[str, Any]:
+    """Expand #[Param] references in config values recursively."""
+
+    def expand_value(value: Any, config: dict[str, Any]) -> Any:
+        if isinstance(value, str):
+            pattern = r"#\[(\w+)\]"
+            prev_value: str | None = None
+            while prev_value != value:
+                prev_value = value
+                matches = re.findall(pattern, value)
+                for param_name in matches:
+                    if param_name in config:
+                        replacement = config[param_name]
+                        if isinstance(replacement, str):
+                            value = value.replace(f"#[{param_name}]", replacement)
+            return value
+        elif isinstance(value, dict):
+            return {k: expand_value(v, config) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [expand_value(item, config) for item in value]
+        return value
+
+    expanded: dict[str, Any] = expand_value(config, config)
+    return expand_value(expanded, expanded)
