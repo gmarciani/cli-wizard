@@ -15,9 +15,6 @@ Or install from source:
    cd cli-wizard
    pip install -e .
 
-Configuration
--------------
-
 Verify the installation:
 
 .. code-block:: bash

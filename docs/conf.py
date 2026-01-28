@@ -7,7 +7,7 @@ from pathlib import Path
 # Add src to path for autodoc
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-# -- Project information -----------------------------------------------------
+# -- Project information
 project = "CLI Wizard"
 copyright = "2026, Giacomo Marciani"
 author = "Giacomo Marciani"
@@ -17,16 +17,18 @@ from cli_wizard.constants import __version__
 
 release = __version__
 
-# -- General configuration ---------------------------------------------------
+# -- General configuration
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx_click",
+    "sphinx_new_tab_link",
+    "sphinxcontrib.autodoc_pydantic",
 ]
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
-# -- Options for HTML output -------------------------------------------------
+# -- Options for HTML output
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 
@@ -40,5 +42,12 @@ html_theme_options = {
 # html_logo = "_static/logo.png"
 # html_extra_path = ["_static/CNAME"]
 
-# -- sphinx-click configuration ----------------------------------------------
+# -- sphinx-click configuration
 # This automatically documents Click commands
+
+# -- sphinx_new_tab_link
+new_tab_link_show_external_link_icon = True
+
+# -- autodoc_pydantic
+autodoc_pydantic_model_show_json = False
+autodoc_pydantic_model_show_config_summary = True

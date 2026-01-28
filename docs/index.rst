@@ -8,7 +8,8 @@ The official command-line interface for CLI Wizard.
    :caption: Contents:
 
    installation
-   cli
+   commands
+   configuration
 
 Indices and tables
 ==================
