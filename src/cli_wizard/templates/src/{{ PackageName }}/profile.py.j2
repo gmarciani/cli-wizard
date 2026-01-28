@@ -6,7 +6,6 @@
 
 """Profile management for the generated CLI."""
 
-from pathlib import Path
 from typing import Any
 
 import yaml
@@ -32,7 +31,8 @@ def load_profile(profile_name: str = "default") -> dict[str, Any]:
     _profile_name = profile_name
 
     if not PROFILE_FILE.exists():
-        log_warning(f"Profile file not found: {PROFILE_FILE}. Creating default profile file.")
+        msg = f"Profile file not found: {PROFILE_FILE}. Creating default."
+        log_warning(msg)
         _create_default_profile_file()
         _current_profile = {}
         return _current_profile
@@ -59,7 +59,7 @@ def _create_default_profile_file() -> None:
     """Create a default profile file with empty settings."""
     try:
         PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        default_content = {"default": {}}
+        default_content: dict[str, dict[str, Any]] = {"default": {}}
         with open(PROFILE_FILE, "w") as f:
             yaml.safe_dump(default_content, f, default_flow_style=False)
         log_info(f"Created default profile file: {PROFILE_FILE}")

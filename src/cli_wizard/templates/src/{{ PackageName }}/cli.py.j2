@@ -6,13 +6,16 @@
 
 """Main CLI entry point."""
 
-import os
-import sys
 from pathlib import Path
 
 import click
 
-from {{ PackageName }}.constants import __version__, DEFAULT_BASE_URL, DEFAULT_CA_FILE, SPLASH_ENABLED, SPLASH_FILE, SPLASH_COLOR
+from {{ PackageName }}.constants import (
+    __version__,
+    SPLASH_ENABLED,
+    SPLASH_FILE,
+    SPLASH_COLOR,
+)
 from {{ PackageName }}.logging import set_debug
 from {{ PackageName }}.profile import load_profile
 from {{ PackageName }}.commands.config import config
@@ -24,7 +27,10 @@ from {{ PackageName }}.commands.{{ group.module_name }} import {{ group.module_n
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """Convert hex color to RGB tuple."""
     hex_color = hex_color.lstrip("#")
-    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    return (r, g, b)
 
 
 def _show_splash() -> None:
@@ -44,11 +50,20 @@ _show_splash()
 
 @click.group(invoke_without_command=True, help="{{ Description }}")
 @click.version_option(version=__version__)
-@click.option("--profile", "-p", default="default", help="Profile name to use.")
+@click.option("--profile", "-p", default="default", help="Profile name.")
 @click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
 @click.option("--base-url", "-u", envvar="API_BASE_URL", help="API base URL.")
-@click.option("--no-verify-ssl", is_flag=True, default=False, help="Disable SSL certificate verification.")
-@click.option("--ca-file", type=click.Path(exists=True, dir_okay=False, path_type=Path), help="CA certificate file for SSL verification.")
+@click.option(
+    "--no-verify-ssl",
+    is_flag=True,
+    default=False,
+    help="Disable SSL certificate verification.",
+)
+@click.option(
+    "--ca-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="CA certificate file for SSL verification.",
+)
 @click.pass_context
 def main(
     ctx: click.Context,

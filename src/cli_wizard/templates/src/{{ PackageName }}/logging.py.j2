@@ -6,10 +6,9 @@
 
 """Logging utilities for the generated CLI."""
 
-import os
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
-from typing import Literal
+from typing import Literal, Any
 
 import click
 
@@ -63,7 +62,10 @@ def _should_log(level: str) -> bool:
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """Convert hex color to RGB tuple."""
     hex_color = hex_color.lstrip("#")
-    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    return (r, g, b)
 
 
 def _get_timestamp() -> str:
@@ -86,7 +88,7 @@ def _format_message(level: str, message: str) -> str:
     return formatted
 
 
-def _get_file_handler():
+def _get_file_handler() -> Any:
     """Get or create the file handler for logging."""
     global _file_handler
     if _file_handler is not None:
@@ -118,7 +120,7 @@ def _get_file_handler():
 def _log_to_file(formatted_message: str) -> None:
     """Write log message to file if file logging is enabled."""
     handler = _get_file_handler()
-    if handler is None:
+    if handler is None or LOG_FILE is None:
         return
 
     try:
@@ -128,7 +130,10 @@ def _log_to_file(formatted_message: str) -> None:
         pass  # Silently ignore file write errors
 
 
-def log(level: Literal["DEBUG", "INFO", "WARNING", "ERROR"], message: str) -> None:
+def log(
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR"],
+    message: str,
+) -> None:
     """Log a message with the appropriate color based on level and style."""
     if not _should_log(level):
         return
@@ -141,7 +146,7 @@ def log(level: Literal["DEBUG", "INFO", "WARNING", "ERROR"], message: str) -> No
     if LOG_COLOR_STYLE == "full":
         click.secho(formatted, fg=rgb, err=True)
     else:  # "level" style
-        # Find where the level appears in the formatted string and color only that part
+        # Find level in formatted string and color only that part
         level_start = formatted.find(level)
         if level_start >= 0:
             level_end = level_start + len(level)

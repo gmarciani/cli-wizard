@@ -4,13 +4,13 @@
 """Config commands for managing CLI profiles."""
 
 import json
-from pathlib import Path
+from typing import Any
 
 import click
 import yaml
 
 from {{ PackageName }}.constants import PROFILE_FILE
-from {{ PackageName }}.logging import log_info, log_error, log_warning
+from {{ PackageName }}.logging import log_info, log_error
 
 
 @click.group(name="config", help="Configure the CLI.")
@@ -18,17 +18,23 @@ def config() -> None:
     """Config command group."""
 
 
-@config.command(name="init", help="Initialize the profile file with default profile.")
+@config.command(
+    name="init",
+    help="Initialize the profile file with default profile.",
+)
 def config_init() -> None:
     """Init command implementation."""
     if PROFILE_FILE.exists():
-        result = {"status": "exists", "path": str(PROFILE_FILE)}
+        result: dict[str, Any] = {
+            "status": "exists",
+            "path": str(PROFILE_FILE),
+        }
         click.echo(json.dumps(result, indent=2))
         return
 
     try:
         PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        default_content = {"default": {}}
+        default_content: dict[str, dict[str, Any]] = {"default": {}}
         with open(PROFILE_FILE, "w") as f:
             yaml.safe_dump(default_content, f, default_flow_style=False)
         log_info(f"Created profile file: {PROFILE_FILE}")
@@ -45,13 +51,13 @@ def config_init() -> None:
 def config_list_profiles() -> None:
     """List profiles command implementation."""
     if not PROFILE_FILE.exists():
-        result = {"profiles": []}
+        result: dict[str, Any] = {"profiles": []}
         click.echo(json.dumps(result, indent=2))
         return
 
     try:
         with open(PROFILE_FILE) as f:
-            profiles = yaml.safe_load(f) or {}
+            profiles: dict[str, Any] = yaml.safe_load(f) or {}
     except (yaml.YAMLError, IOError) as e:
         log_error(f"Failed to load profile file: {e}")
         result = {"status": "error", "message": str(e)}
@@ -62,7 +68,10 @@ def config_list_profiles() -> None:
     click.echo(json.dumps(result, indent=2))
 
 
-@config.command(name="show", help="Show all parameters and values for a profile.")
+@config.command(
+    name="show",
+    help="Show all parameters and values for a profile.",
+)
 @click.option("--profile", "-p", default="default", help="Profile name")
 def config_show(profile: str) -> None:
     """Show command implementation."""
@@ -72,10 +81,10 @@ def config_show(profile: str) -> None:
 
     try:
         with open(PROFILE_FILE) as f:
-            profiles = yaml.safe_load(f) or {}
+            profiles: dict[str, Any] = yaml.safe_load(f) or {}
     except (yaml.YAMLError, IOError) as e:
         log_error(f"Failed to load profile file: {e}")
-        result = {"status": "error", "message": str(e)}
+        result: dict[str, Any] = {"status": "error", "message": str(e)}
         click.echo(json.dumps(result, indent=2), err=True)
         raise SystemExit(1)
 
@@ -83,7 +92,7 @@ def config_show(profile: str) -> None:
         click.echo(json.dumps({}, indent=2))
         return
 
-    profile_data = profiles[profile] or {}
+    profile_data: dict[str, Any] = profiles[profile] or {}
     click.echo(json.dumps(profile_data, indent=2))
 
 
@@ -93,13 +102,13 @@ def config_show(profile: str) -> None:
 def config_get(param: str, profile: str) -> None:
     """Get command implementation."""
     if not PROFILE_FILE.exists():
-        result = {"key": param, "value": None}
+        result: dict[str, Any] = {"key": param, "value": None}
         click.echo(json.dumps(result, indent=2))
         return
 
     try:
         with open(PROFILE_FILE) as f:
-            profiles = yaml.safe_load(f) or {}
+            profiles: dict[str, Any] = yaml.safe_load(f) or {}
     except (yaml.YAMLError, IOError) as e:
         log_error(f"Failed to load profile file: {e}")
         result = {"status": "error", "message": str(e)}
@@ -111,7 +120,7 @@ def config_get(param: str, profile: str) -> None:
         click.echo(json.dumps(result, indent=2))
         return
 
-    profile_data = profiles[profile] or {}
+    profile_data: dict[str, Any] = profiles[profile] or {}
     value = profile_data.get(param)
     result = {"key": param, "value": value}
     click.echo(json.dumps(result, indent=2))
@@ -123,6 +132,8 @@ def config_get(param: str, profile: str) -> None:
 @click.option("--profile", "-p", default="default", help="Profile name")
 def config_set(param: str, value: str, profile: str) -> None:
     """Set command implementation."""
+    profiles: dict[str, Any]
+    result: dict[str, Any]
     if not PROFILE_FILE.exists():
         PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
         profiles = {}
@@ -154,7 +165,11 @@ def config_set(param: str, value: str, profile: str) -> None:
         with open(PROFILE_FILE, "w") as f:
             yaml.safe_dump(profiles, f, default_flow_style=False)
         log_info(f"Set '{param}' = '{parsed_value}' in profile '{profile}'")
-        result = {"key": param, "value": parsed_value, "oldValue": old_value}
+        result = {
+            "key": param,
+            "value": parsed_value,
+            "oldValue": old_value,
+        }
         click.echo(json.dumps(result, indent=2))
     except (IOError, OSError) as e:
         log_error(f"Failed to save profile file: {e}")
@@ -163,19 +178,22 @@ def config_set(param: str, value: str, profile: str) -> None:
         raise SystemExit(1)
 
 
-@config.command(name="unset", help="Remove a configuration value from a profile.")
+@config.command(
+    name="unset",
+    help="Remove a configuration value from a profile.",
+)
 @click.argument("param")
 @click.option("--profile", "-p", default="default", help="Profile name")
 def config_unset(param: str, profile: str) -> None:
     """Unset command implementation."""
     if not PROFILE_FILE.exists():
-        result = {"key": param, "oldValue": None}
+        result: dict[str, Any] = {"key": param, "oldValue": None}
         click.echo(json.dumps(result, indent=2))
         return
 
     try:
         with open(PROFILE_FILE) as f:
-            profiles = yaml.safe_load(f) or {}
+            profiles: dict[str, Any] = yaml.safe_load(f) or {}
     except (yaml.YAMLError, IOError) as e:
         log_error(f"Failed to load profile file: {e}")
         result = {"status": "error", "message": str(e)}
@@ -187,7 +205,7 @@ def config_unset(param: str, profile: str) -> None:
         click.echo(json.dumps(result, indent=2))
         return
 
-    profile_data = profiles[profile] or {}
+    profile_data: dict[str, Any] = profiles[profile] or {}
     old_value = profile_data.get(param)
 
     if param in profile_data:

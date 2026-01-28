@@ -73,3 +73,7 @@ disallow_untyped_defs = true
 
 [tool.coverage.run]
 omit = ["*/__init__.py"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

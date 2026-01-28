@@ -43,22 +43,29 @@ class ApiClient:
         self.session.headers["Content-Type"] = "application/json"
         self.session.headers["Accept"] = "application/json"
         if self.access_token:
-            self.session.headers["Authorization"] = f"Bearer {self.access_token}"
+            auth_header = f"Bearer {self.access_token}"
+            self.session.headers["Authorization"] = auth_header
 
     def _setup_ssl(self) -> None:
         """Set up SSL verification with custom CA file if provided."""
         if not self.verify_ssl:
             self.session.verify = False
         elif self.ca_file:
-            ca_path = Path(self.ca_file) if isinstance(self.ca_file, str) else self.ca_file
-            if ca_path and ca_path.exists():
+            ca_path = Path(self.ca_file)
+            if isinstance(self.ca_file, str) and ca_path.exists():
                 self.session.verify = str(ca_path)
 
     def _url(self, path: str) -> str:
         """Build full URL from path."""
         return f"{self.base_url}{path}"
 
-    def _log_request(self, method: str, url: str, params: dict | None = None, json_data: dict | None = None) -> None:
+    def _log_request(
+        self,
+        method: str,
+        url: str,
+        params: dict | None = None,
+        json_data: dict | None = None,
+    ) -> None:
         """Log request details when debug is enabled."""
         if not self.debug:
             return
@@ -79,7 +86,9 @@ class ApiClient:
             log_debug(f"Response Body: {response.text[:1000]}")
 
     def get(
-        self, path: str, params: dict[str, Any] | None = None
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a GET request."""
         url = self._url(path)
@@ -120,7 +129,9 @@ class ApiClient:
         """Make a PATCH request."""
         url = self._url(path)
         self._log_request("PATCH", url, json_data=json_data)
-        response = self.session.patch(url, json=json_data, timeout=self.timeout)
+        response = self.session.patch(
+            url, json=json_data, timeout=self.timeout
+        )
         self._log_response(response)
         return response
 
@@ -132,6 +143,8 @@ class ApiClient:
         """Make a DELETE request."""
         url = self._url(path)
         self._log_request("DELETE", url, json_data=json_data)
-        response = self.session.delete(url, json=json_data, timeout=self.timeout)
+        response = self.session.delete(
+            url, json=json_data, timeout=self.timeout
+        )
         self._log_response(response)
         return response
