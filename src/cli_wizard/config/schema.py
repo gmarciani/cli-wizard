@@ -81,8 +81,8 @@ class Config(BaseModel):
     )
 
     # OpenAPI settings
-    OpenapiSpec: str = Field(
-        default="openapi.json",
+    OpenapiSpec: str | None = Field(
+        default=None,
         description="Path to OpenAPI spec (relative to config file or absolute)",
     )
     ExcludeTags: list[str] = Field(
@@ -211,6 +211,24 @@ class Config(BaseModel):
         default=0.5,
         ge=0,
         description="Retry backoff factor",
+    )
+
+    # Generation options
+    IncludeGithubWorkflows: bool = Field(
+        default=False,
+        description="Include .github folder with workflows, issue templates, etc.",
+    )
+
+    # Copyright
+    CopyrightYear: int | None = Field(
+        default=None,
+        description="Copyright year for LICENSE and other files",
+    )
+
+    # Repository
+    RepositoryUrl: str | None = Field(
+        default=None,
+        description="Repository URL for the project",
     )
 
     @field_validator(
