@@ -130,41 +130,7 @@ my-cli users list-users
 
 ## Configuration
 
-Configuration uses a YAML file with PascalCase parameter names. You can reference other parameters with `#[ParamName]` syntax and environment variables with `${VAR}` syntax.
-
-### Required Parameters
-
-| Parameter | Description |
-|-----------|-------------|
-| `PackageName` | Python package name for the generated CLI |
-| `DefaultBaseUrl` | Default API base URL |
-
-### Common Parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `MainDir` | `${HOME}/.#[PackageName]` | Main directory for CLI data (config, cache, logs) |
-| `ProfileFile` | `#[MainDir]/profiles.yaml` | Path to profiles YAML file |
-| `ExcludeTags` | `[]` | Tags to exclude from generation |
-| `IncludeTags` | `[]` | Tags to include (empty means all) |
-| `TagMapping` | `{}` | Map OpenAPI tags to CLI command group names |
-| `CommandMapping` | `{}` | Customize command names (operationId → command name) |
-| `SplashFile` | `None` | Path to splash text file |
-| `SplashColor` | `#FFFFFF` | Color for splash text (hex code) |
-| `Timeout` | `30` | Request timeout in seconds |
-| `CaFile` | `None` | CA certificate file for SSL verification |
-
-### Logging Parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `LogLevel` | `INFO` | Default log level (DEBUG, INFO, WARNING, ERROR) |
-| `LogFormat` | `[%(levelname)s] %(asctime)s %(message)s` | Log message format |
-| `LogFile` | `None` | Path to log file (None means console only) |
-| `LogRotationType` | `days` | Log rotation type: `size` or `days` |
-| `LogRotationDays` | `30` | Log rotation interval in days |
-| `LogColorStyle` | `level` | Color style: `full` or `level` |
-
+See [configuration reference](https://gmarciani.github.io/cli-wizard/configuration.html) for full documentation.
 See the [examples](examples/) directory for complete configuration examples.
 
 ## Commands
