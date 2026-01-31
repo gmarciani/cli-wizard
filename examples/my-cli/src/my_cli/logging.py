@@ -27,7 +27,6 @@ from .constants import (
     LOG_ROTATION_BACKUP_COUNT,
 )
 
-
 _file_handler = None
 _debug_enabled = False
 

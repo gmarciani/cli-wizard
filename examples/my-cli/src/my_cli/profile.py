@@ -14,7 +14,6 @@ import yaml
 from .constants import PROFILE_FILE
 from .logging import log_error, log_info, log_warning, log_debug
 
-
 _current_profile: dict[str, Any] = {}
 _profile_name: str = "default"
 
