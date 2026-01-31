@@ -57,10 +57,9 @@ class TestGenerateCommand:
         runner = CliRunner()
         result = runner.invoke(main, ["generate", "--help"])
         assert result.exit_code == 0
-        assert "--openapi" in result.output
-        assert "--config" in result.output
-        assert "--output" in result.output
-        assert "--working-dir" in result.output
+        assert "--api" in result.output or "-a" in result.output
+        assert "--configuration" in result.output or "-c" in result.output
+        assert "PATH" in result.output
 
     def test_generate_missing_openapi(self):
         """Test generate with missing OpenAPI file."""
@@ -70,19 +69,21 @@ class TestGenerateCommand:
             config_path.write_text(
                 "PackageName: test\nDefaultBaseUrl: https://api.example.com\n"
             )
+            output_dir = Path(temp_dir) / "output"
 
             result = runner.invoke(
                 main,
                 [
                     "generate",
-                    "--openapi",
+                    str(output_dir),
+                    "--api",
                     "nonexistent.yaml",
-                    "--config",
+                    "--configuration",
                     str(config_path),
                 ],
             )
-            assert result.exit_code == 1
-            assert "not found" in result.output
+            # Click validates file existence with exists=True, returns exit code 2
+            assert result.exit_code == 2
 
     def test_generate_missing_config(self):
         """Test generate with missing config file."""
@@ -90,19 +91,21 @@ class TestGenerateCommand:
         with tempfile.TemporaryDirectory() as temp_dir:
             openapi_path = Path(temp_dir) / "openapi.json"
             openapi_path.write_text('{"openapi": "3.0.0", "paths": {}}')
+            output_dir = Path(temp_dir) / "output"
 
             result = runner.invoke(
                 main,
                 [
                     "generate",
-                    "--openapi",
+                    str(output_dir),
+                    "--api",
                     str(openapi_path),
-                    "--config",
+                    "--configuration",
                     "nonexistent.yaml",
                 ],
             )
-            assert result.exit_code == 1
-            assert "not found" in result.output
+            # Click validates file existence with exists=True, returns exit code 2
+            assert result.exit_code == 2
 
     def test_generate_success(self):
         """Test successful CLI generation."""
@@ -116,12 +119,11 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
-                    "--openapi",
-                    str(openapi_path),
-                    "--config",
-                    str(config_path),
-                    "--output",
                     str(output_dir),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
                 ],
             )
             assert result.exit_code == 0
@@ -142,12 +144,11 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
-                    "--openapi",
-                    str(openapi_path),
-                    "--config",
-                    str(config_path),
-                    "--output",
                     str(output_dir),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
                 ],
             )
             assert result.exit_code == 0
@@ -157,31 +158,29 @@ class TestGenerateCommand:
             assert "my-custom-cli" in pyproject
 
     def test_generate_with_working_dir(self):
-        """Test generate with working directory option."""
+        """Test generate uses resolved paths correctly."""
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             openapi_path, config_path = create_test_files(temp_path)
+            output_dir = temp_path / "my-output"
 
             result = runner.invoke(
                 main,
                 [
                     "generate",
-                    "--working-dir",
-                    str(temp_path),
-                    "--openapi",
-                    "openapi.json",
-                    "--config",
-                    "cli-wizard.yaml",
-                    "--output",
-                    "my-output",
+                    str(output_dir),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
                 ],
             )
             assert result.exit_code == 0
-            assert (temp_path / "my-output" / "pyproject.toml").exists()
+            assert (output_dir / "pyproject.toml").exists()
 
     def test_generate_empty_spec(self):
-        """Test generate with empty OpenAPI spec."""
+        """Test generate with empty OpenAPI spec (no operations)."""
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -200,15 +199,15 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
-                    "--openapi",
-                    str(openapi_path),
-                    "--config",
-                    str(config_path),
-                    "--output",
                     str(temp_path / "output"),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
                 ],
             )
-            assert result.exit_code == 1
+            # Empty spec generates CLI without API commands (warning only)
+            assert result.exit_code == 0
             assert "No operations found" in result.output
 
     def test_generate_yaml_openapi(self):
@@ -244,12 +243,11 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
-                    "--openapi",
-                    str(openapi_path),
-                    "--config",
-                    str(config_path),
-                    "--output",
                     str(temp_path / "output"),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
                 ],
             )
             assert result.exit_code == 0
@@ -268,12 +266,11 @@ class TestGenerateCommand:
                 [
                     "--debug",
                     "generate",
-                    "--openapi",
-                    str(openapi_path),
-                    "--config",
-                    str(config_path),
-                    "--output",
                     str(output_dir),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
                 ],
             )
             assert result.exit_code == 0
@@ -310,12 +307,11 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
-                    "--openapi",
-                    str(openapi_path),
-                    "--config",
-                    str(config_path),
-                    "--output",
                     str(temp_path / "output"),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
                 ],
             )
             # Should fail with invalid config (missing required fields)

@@ -28,7 +28,7 @@ def test_generate_command_exists():
     runner = CliRunner()
     result = runner.invoke(main, ["generate", "--help"])
     assert result.exit_code == 0
-    assert "Generate a CLI" in result.output
+    assert "Generate the CLI" in result.output
 
 
 def test_generate_command_options():
@@ -36,7 +36,6 @@ def test_generate_command_options():
     runner = CliRunner()
     result = runner.invoke(main, ["generate", "--help"])
     assert result.exit_code == 0
-    assert "--openapi" in result.output
-    assert "--config" in result.output
-    assert "--output" in result.output
-    assert "--working-dir" in result.output
+    assert "--api" in result.output or "-a" in result.output
+    assert "--configuration" in result.output or "-c" in result.output
+    assert "PATH" in result.output

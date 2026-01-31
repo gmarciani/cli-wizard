@@ -26,7 +26,6 @@ class TestConfigureLogging:
         # Add a handler
         handler = logging.StreamHandler()
         logging.root.addHandler(handler)
-        initial_count = len(logging.root.handlers)
 
         configure_logging(debug=False)
 

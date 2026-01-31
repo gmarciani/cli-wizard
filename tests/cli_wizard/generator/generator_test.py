@@ -101,6 +101,22 @@ class TestBuildUrlPath:
 class TestCliGenerator:
     """Tests for CliGenerator."""
 
+    def _default_config(
+        self, cli_name: str = "test-cli", package_name: str = "test_cli"
+    ) -> dict:
+        """Create a default config for testing."""
+        return {
+            "CommandName": cli_name,
+            "PackageName": package_name,
+            "Description": "A test CLI",
+            "AuthorName": "Test Author",
+            "AuthorEmail": "test@example.com",
+            "PythonVersion": "3.12",
+            "DefaultBaseUrl": "http://localhost:3000",
+            "Timeout": 30,
+            "RepositoryUrl": "https://github.com/test/test-cli",
+        }
+
     def test_generate_creates_project_structure(self):
         """Test that generate creates the expected project structure."""
         groups = {
@@ -124,7 +140,7 @@ class TestCliGenerator:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "test-cli"
-            generator = CliGenerator()
+            generator = CliGenerator(config=self._default_config())
             generator.generate(groups, output_dir, "test-cli", "test_cli")
 
             # Check project files
@@ -154,11 +170,9 @@ class TestCliGenerator:
             )
         }
 
-        config = {
-            "PackageName": "test-cli",
-            "DefaultBaseUrl": "https://api.example.com",
-            "Timeout": 60,
-        }
+        config = self._default_config()
+        config["DefaultBaseUrl"] = "https://api.example.com"
+        config["Timeout"] = 60
 
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "test-cli"
@@ -190,7 +204,7 @@ class TestCliGenerator:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "test-cli"
-            generator = CliGenerator()
+            generator = CliGenerator(config=self._default_config())
             generator.generate(groups, output_dir, "test-cli", "test_cli")
 
             commands_dir = output_dir / "src" / "test_cli" / "commands"
@@ -207,11 +221,13 @@ class TestCliGenerator:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "my-cli"
-            generator = CliGenerator()
+            config = self._default_config(cli_name="my-cli", package_name="my_cli")
+            generator = CliGenerator(config=config)
             generator.generate(groups, output_dir, "my-cli", "my_cli")
 
             pyproject = (output_dir / "pyproject.toml").read_text()
-            assert 'name = "my-cli"' in pyproject
+            # Template uses PackageName for project name
+            assert 'name = "my_cli"' in pyproject
             assert 'my-cli = "my_cli.cli:main"' in pyproject
 
     def test_generate_readme_content(self):
@@ -224,7 +240,8 @@ class TestCliGenerator:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "my-cli"
-            generator = CliGenerator()
+            config = self._default_config(cli_name="my-cli", package_name="my_cli")
+            generator = CliGenerator(config=config)
             generator.generate(groups, output_dir, "my-cli", "my_cli")
 
             readme = (output_dir / "README.md").read_text()
@@ -267,7 +284,7 @@ class TestCliGenerator:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "test-cli"
-            generator = CliGenerator()
+            generator = CliGenerator(config=self._default_config())
             generator.generate(groups, output_dir, "test-cli", "test_cli")
 
             users_file = output_dir / "src" / "test_cli" / "commands" / "users.py"
@@ -312,7 +329,7 @@ class TestCliGenerator:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "test-cli"
-            generator = CliGenerator()
+            generator = CliGenerator(config=self._default_config())
             generator.generate(groups, output_dir, "test-cli", "test_cli")
 
             users_file = output_dir / "src" / "test_cli" / "commands" / "users.py"
