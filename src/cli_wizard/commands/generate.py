@@ -123,8 +123,8 @@ def generate(
             cwd = Path.cwd()
             if output_path in cwd.parents or output_path == cwd:
                 click.secho(
-                    f"✗ Cannot clean output directory while inside it. "
-                    f"Please run from a different directory.",
+                    "✗ Cannot clean output directory while inside it. "
+                    "Please run from a different directory.",
                     fg="red",
                     err=True,
                 )

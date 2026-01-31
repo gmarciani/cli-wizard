@@ -384,9 +384,11 @@ class CliGenerator:
         ]
         for template_name, output_path in static_files:
             # Use get_template to read static files through Jinja loader
-            source = self.env.loader.get_source(self.env, template_name)[0]
-            with open(output_path, "w") as f:
-                f.write(source)
+            loader = self.env.loader
+            if loader is not None:
+                source = loader.get_source(self.env, template_name)[0]
+                with open(output_path, "w") as f:
+                    f.write(source)
 
     def _generate_tests(self, tests_dir: Path) -> None:
         """Generate test files."""

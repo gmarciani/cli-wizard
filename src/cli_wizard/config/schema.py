@@ -268,7 +268,7 @@ class Config(BaseModel):
             if field_info.default is not None:
                 return field_info.default
             if field_info.default_factory is not None:
-                return field_info.default_factory()
+                return field_info.default_factory()  # type: ignore[call-arg]
         return None
 
     @classmethod
@@ -287,7 +287,7 @@ class Config(BaseModel):
             if field_info.default is not PydanticUndefined:
                 default = field_info.default
             elif field_info.default_factory is not None:
-                default = field_info.default_factory()
+                default = field_info.default_factory()  # type: ignore[call-arg]
             else:
                 default = None
 
@@ -318,7 +318,7 @@ class Config(BaseModel):
         args = get_args(type_hint)
 
         if origin is Literal:
-            return f"one of: {', '.join(repr(a) for a in args)}"
+            return "one of: " + ", ".join(repr(a) for a in args)
         elif origin is list:
             return "list"
         elif origin is dict:
@@ -331,7 +331,7 @@ class Config(BaseModel):
                 return cls._format_type_hint(non_none_args[0]) + " (optional)"
             return " | ".join(cls._format_type_hint(a) for a in non_none_args)
         elif hasattr(type_hint, "__name__"):
-            return type_hint.__name__
+            return str(type_hint.__name__)
         else:
             # Handle str | None style unions in string form
             type_str = str(type_hint)

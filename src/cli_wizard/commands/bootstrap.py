@@ -39,7 +39,9 @@ BOOTSTRAP_PARAMS: list[str] = [
 
 
 def _get_default_for_param(
-    param_name: str, values: dict, existing_config: dict | None = None
+    param_name: str,
+    values: dict[str, Any],
+    existing_config: dict[str, Any] | None = None,
 ) -> str:
     """Get the default value for a parameter.
 
@@ -54,24 +56,18 @@ def _get_default_for_param(
 
     if param_name == "CommandName":
         # Default to folder name in kebab-case
-        return (
-            values.get("_target_dir_name", "my-project")
-            .lower()
-            .replace("_", "-")
-            .replace(" ", "-")
-        )
+        target_dir_name = str(values.get("_target_dir_name", "my-project"))
+        return target_dir_name.lower().replace("_", "-").replace(" ", "-")
 
     if param_name == "ProjectName":
         # Default to title case of CommandName
-        command_name = values.get("CommandName", "my-project")
-        return " ".join(
-            word.capitalize()
-            for word in command_name.replace("-", " ").replace("_", " ").split()
-        )
+        command_name = str(values.get("CommandName", "my-project"))
+        words = command_name.replace("-", " ").replace("_", " ").split()
+        return " ".join(word.capitalize() for word in words)
 
     if param_name == "PackageName":
         # Default to snake_case of CommandName
-        command_name = values.get("CommandName", "my-project")
+        command_name = str(values.get("CommandName", "my-project"))
         return command_name.lower().replace("-", "_").replace(" ", "_")
 
     if param_name == "GithubUser":
@@ -84,15 +80,16 @@ def _get_default_for_param(
 
     if param_name == "RepositoryUrl":
         # Default to GitHub URL based on GithubUser and CommandName
-        github_user = values.get("GithubUser", "username")
-        command_name = values.get("CommandName", "my-project")
+        github_user = str(values.get("GithubUser", "username"))
+        command_name = str(values.get("CommandName", "my-project"))
         return f"https://github.com/{github_user}/{command_name}"
 
     # Use schema default
-    return str(Config.get_field_default(param_name) or "")
+    default_value = Config.get_field_default(param_name)
+    return str(default_value) if default_value is not None else ""
 
 
-def _load_existing_config(config_path: Path) -> dict | None:
+def _load_existing_config(config_path: Path) -> dict[str, Any] | None:
     """Load existing config file if it exists.
 
     Returns None if file doesn't exist or can't be parsed.
@@ -102,7 +99,10 @@ def _load_existing_config(config_path: Path) -> dict | None:
 
     try:
         with open(config_path) as f:
-            return yaml.safe_load(f) or {}
+            result = yaml.safe_load(f)
+            if result is None:
+                return {}
+            return dict(result)
     except (yaml.YAMLError, IOError) as e:
         logger.warning(f"Could not load existing config: {e}")
         return None
@@ -200,7 +200,7 @@ def bootstrap(
     if "MainDir" not in cli_config:
         cli_config["MainDir"] = f"${{HOME}}/.{cli_config['CommandName']}"
     if "ProfileFile" not in cli_config:
-        cli_config["ProfileFile"] = f"#[MainDir]/profiles.yaml"
+        cli_config["ProfileFile"] = "#[MainDir]/profiles.yaml"
 
     if debug:
         logger.debug(f"Config: {cli_config}")
@@ -327,7 +327,7 @@ def _load_cli_config(config_path: Path) -> dict:
 def _expand_config_references(config: dict[str, Any]) -> dict[str, Any]:
     """Expand #[Param] references in config values recursively."""
 
-    def expand_value(value: Any, config: dict[str, Any]) -> Any:
+    def expand_value(value: Any, cfg: dict[str, Any]) -> Any:
         if isinstance(value, str):
             pattern = r"#\[(\w+)\]"
             prev_value: str | None = None
@@ -335,16 +335,18 @@ def _expand_config_references(config: dict[str, Any]) -> dict[str, Any]:
                 prev_value = value
                 matches = re.findall(pattern, value)
                 for param_name in matches:
-                    if param_name in config:
-                        replacement = config[param_name]
+                    if param_name in cfg:
+                        replacement = cfg[param_name]
                         if isinstance(replacement, str):
                             value = value.replace(f"#[{param_name}]", replacement)
             return value
         elif isinstance(value, dict):
-            return {k: expand_value(v, config) for k, v in value.items()}
+            return {k: expand_value(v, cfg) for k, v in value.items()}
         elif isinstance(value, list):
-            return [expand_value(item, config) for item in value]
+            return [expand_value(item, cfg) for item in value]
         return value
 
-    expanded: dict[str, Any] = expand_value(config, config)
-    return expand_value(expanded, expanded)
+    expanded = expand_value(config, config)
+    result = expand_value(expanded, expanded)
+    # expand_value always returns a dict when given a dict
+    return dict(result) if isinstance(result, dict) else config
