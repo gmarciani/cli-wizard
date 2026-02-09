@@ -368,8 +368,8 @@ class CliGenerator:
                 github_dir / "PULL_REQUEST_TEMPLATE.md",
             ),
             (
-                ".github/workflows/changelog_enforcer.yaml",
-                workflows_dir / "changelog_enforcer.yaml",
+                ".github/workflows/changelog-enforcer.yaml",
+                workflows_dir / "changelog-enforcer.yaml",
             ),
             (".github/workflows/codeql.yaml", workflows_dir / "codeql.yaml"),
             (".github/workflows/docs.yaml", workflows_dir / "docs.yaml"),
