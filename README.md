@@ -155,4 +155,4 @@ Please report any issues or feature requests on the [GitHub Issues](https://gith
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](https://github.com/gmarciani/cli-wizard/blob/main/LICENSE) file for details.

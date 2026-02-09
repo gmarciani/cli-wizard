@@ -47,7 +47,7 @@ Looking at the existing issues is a great way to find something to contribute on
 
 
 ## Code of Conduct
-This project has adopted the code of conduct described [here](CODE_OF_CONDUCT.md).
+This project has adopted the code of conduct described [here](https://github.com/gmarciani/cli-wizard/blob/main/CODE_OF_CONDUCT.md).
 
 
 ## Security issue notifications
@@ -56,7 +56,7 @@ Please do **not** create a public github issue.
 
 
 ## Licensing
-See the [LICENSE](LICENSE) file for our project's licensing.
+See the [LICENSE](https://github.com/gmarciani/cli-wizard/blob/main/LICENSE) file for our project's licensing.
 We will ask you to confirm the licensing of your contribution.
 
 We may ask you to sign a [Contributor License Agreement (CLA)](http://en.wikipedia.org/wiki/Contributor_License_Agreement) for larger changes.
