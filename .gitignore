@@ -35,6 +35,7 @@ htmlcov/
 .tox/
 .coverage
 .coverage.*
+.pytest_cache
 
 # PyBuilder
 .pybuilder/
