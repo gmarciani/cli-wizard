@@ -15,7 +15,7 @@ The schema parameters are used directly as Jinja2 template variables.
 import re
 from typing import Literal, Any, get_type_hints, get_origin, get_args
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.fields import FieldInfo
 
 
@@ -27,13 +27,13 @@ class Config(BaseModel):
         default="My Project",
         description="Human-readable project name (title case)",
     )
-    CommandName: str = Field(
-        default="my-project",
-        description="CLI command name (kebab-case)",
+    CommandName: str | None = Field(
+        default=None,
+        description="CLI command name (kebab-case, derived from ProjectName if not set)",
     )
-    PackageName: str = Field(
-        default="my_project",
-        description="Python package name (snake_case)",
+    PackageName: str | None = Field(
+        default=None,
+        description="Python package name (snake_case, derived from ProjectName if not set)",
     )
     Description: str = Field(
         default="A CLI application",
@@ -230,6 +230,22 @@ class Config(BaseModel):
         default=None,
         description="Repository URL for the project",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def derive_names_from_project(cls, data: Any) -> Any:
+        """Derive CommandName and PackageName from ProjectName when not set."""
+        if isinstance(data, dict):
+            project_name = data.get("ProjectName", "My Project")
+            if not data.get("CommandName"):
+                data["CommandName"] = (
+                    re.sub(r"[^a-zA-Z0-9]+", "-", project_name).strip("-").lower()
+                )
+            if not data.get("PackageName"):
+                data["PackageName"] = (
+                    re.sub(r"[^a-zA-Z0-9]+", "_", project_name).strip("_").lower()
+                )
+        return data
 
     @field_validator(
         "SplashColor",

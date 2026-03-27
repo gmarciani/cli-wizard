@@ -36,14 +36,19 @@ def _get_client(
 
 
 @click.group(name="{{ group.cli_name }}", help="{{ group.description }}")
-def {{ group.module_name }}() -> None:
+@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+@click.pass_context
+def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
     """{{ group.name }} command group."""
+    ctx.ensure_object(dict)
+    set_debug(debug)
+    ctx.obj["debug"] = debug
 {% for op in group.operations %}
 
 
 @{{ group.module_name }}.command(name="{{ op.command_name }}", help="{{ op.summary or op.operation_id }}")
 {% for param in op.parameters if param.location == "path" %}
-@click.argument("{{ param.python_name }}"{% if param.click_type != "str" %}, type={{ param.click_type }}{% endif %})
+@click.option("--{{ param.cli_name }}"{% if param.click_type != "str" %}, type={{ param.click_type }}{% endif %}, required=True, help="{{ param.description }}")
 {% endfor %}
 {% for param in op.parameters if param.location == "query" %}
 {% if param.enum %}

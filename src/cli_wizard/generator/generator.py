@@ -24,6 +24,20 @@ def _build_url_path(op: Operation) -> str:
 class CliGenerator:
     """Generates Click CLI code from parsed OpenAPI."""
 
+    # Config fields that become runtime profile parameters in the generated CLI.
+    # Maps wizard config PascalCase names to camelCase profile key names.
+    PROFILE_PARAM_FIELDS: dict[str, str] = {
+        "DefaultBaseUrl": "baseUrl",
+        "Timeout": "timeout",
+        "OutputFormat": "outputFormat",
+        "OutputColors": "outputColors",
+        "JsonIndent": "jsonIndent",
+        "TableStyle": "tableStyle",
+        "LogLevel": "logLevel",
+        "RetryMaxAttempts": "retryMaxAttempts",
+        "RetryBackoffFactor": "retryBackoffFactor",
+    }
+
     def __init__(
         self, config: dict[str, Any] | None = None, config_dir: Path | None = None
     ) -> None:
@@ -44,11 +58,19 @@ class CliGenerator:
         This allows templates to use {{ ParamName }} directly instead of
         {{ config.ParamName }}.
         """
+        # Build profile defaults from config
+        profile_defaults = {
+            profile_key: self.config[config_key]
+            for config_key, profile_key in self.PROFILE_PARAM_FIELDS.items()
+            if config_key in self.config
+        }
+
         context = {
             **self.config,  # Spread all config values at top level
             "config": self.config,  # Also include as nested dict for compatibility
             "cli_name": self.cli_name,
             "package_name": self.package_name,
+            "profile_defaults": profile_defaults,
         }
         context.update(extra)
         return context

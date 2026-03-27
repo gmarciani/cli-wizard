@@ -45,6 +45,23 @@ SPLASH_FILE = None
 SPLASH_COLOR = None
 {% endif %}
 
+# Profile defaults (generated from cli-wizard configuration)
+PROFILE_DEFAULTS: dict[str, object] = {
+{% for key, value in profile_defaults.items() %}
+{% if value is string %}
+    "{{ key }}": "{{ value }}",
+{% elif value is sameas true %}
+    "{{ key }}": True,
+{% elif value is sameas false %}
+    "{{ key }}": False,
+{% elif value is none %}
+    "{{ key }}": None,
+{% else %}
+    "{{ key }}": {{ value }},
+{% endif %}
+{% endfor %}
+}
+
 # Log configuration
 LOG_LEVEL = "{{ LogLevel | default('INFO') }}"
 LOG_FORMAT = "{{ LogFormat | default('%(asctime)s [%(levelname)s] %(message)s') }}"

@@ -9,21 +9,28 @@ from typing import Any
 import click
 import yaml
 
-from {{ PackageName }}.constants import PROFILE_FILE
-from {{ PackageName }}.logging import log_info, log_error
+from {{ PackageName }}.constants import PROFILE_FILE, PROFILE_DEFAULTS
+from {{ PackageName }}.logging import log_info, log_error, set_debug
 
 
 @click.group(name="config", help="Configure the CLI.")
-def config() -> None:
+@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+@click.pass_context
+def config(ctx: click.Context, debug: bool) -> None:
     """Config command group."""
+    ctx.ensure_object(dict)
+    set_debug(debug)
+    ctx.obj["debug"] = debug
 
 
 @config.command(
     name="init",
     help="Initialize the profile file with default profile.",
 )
-def config_init() -> None:
+@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+def config_init(debug: bool) -> None:
     """Init command implementation."""
+    set_debug(debug)
     if PROFILE_FILE.exists():
         result: dict[str, Any] = {
             "status": "exists",
@@ -48,8 +55,10 @@ def config_init() -> None:
 
 
 @config.command(name="list-profiles", help="List all available profiles.")
-def config_list_profiles() -> None:
+@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+def config_list_profiles(debug: bool) -> None:
     """List profiles command implementation."""
+    set_debug(debug)
     if not PROFILE_FILE.exists():
         result: dict[str, Any] = {"profiles": []}
         click.echo(json.dumps(result, indent=2))
@@ -73,10 +82,12 @@ def config_list_profiles() -> None:
     help="Show all parameters and values for a profile.",
 )
 @click.option("--profile", "-p", default="default", help="Profile name")
-def config_show(profile: str) -> None:
+@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+def config_show(profile: str, debug: bool) -> None:
     """Show command implementation."""
+    set_debug(debug)
     if not PROFILE_FILE.exists():
-        click.echo(json.dumps({}, indent=2))
+        click.echo(json.dumps(PROFILE_DEFAULTS, indent=2))
         return
 
     try:
@@ -89,20 +100,24 @@ def config_show(profile: str) -> None:
         raise SystemExit(1)
 
     if profile not in profiles:
-        click.echo(json.dumps({}, indent=2))
+        click.echo(json.dumps(PROFILE_DEFAULTS, indent=2))
         return
 
     profile_data: dict[str, Any] = profiles[profile] or {}
-    click.echo(json.dumps(profile_data, indent=2))
+    merged: dict[str, Any] = {**PROFILE_DEFAULTS, **profile_data}
+    click.echo(json.dumps(merged, indent=2))
 
 
 @config.command(name="get", help="Get a configuration value from a profile.")
-@click.argument("param")
+@click.option("--param", required=True, help="Parameter name.")
 @click.option("--profile", "-p", default="default", help="Profile name")
-def config_get(param: str, profile: str) -> None:
+@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+def config_get(param: str, profile: str, debug: bool) -> None:
     """Get command implementation."""
+    set_debug(debug)
     if not PROFILE_FILE.exists():
-        result: dict[str, Any] = {"key": param, "value": None}
+        value = PROFILE_DEFAULTS.get(param)
+        result: dict[str, Any] = {"key": param, "value": value}
         click.echo(json.dumps(result, indent=2))
         return
 
@@ -116,22 +131,25 @@ def config_get(param: str, profile: str) -> None:
         raise SystemExit(1)
 
     if profile not in profiles:
-        result = {"key": param, "value": None}
+        value = PROFILE_DEFAULTS.get(param)
+        result = {"key": param, "value": value}
         click.echo(json.dumps(result, indent=2))
         return
 
     profile_data: dict[str, Any] = profiles[profile] or {}
-    value = profile_data.get(param)
+    value = profile_data.get(param, PROFILE_DEFAULTS.get(param))
     result = {"key": param, "value": value}
     click.echo(json.dumps(result, indent=2))
 
 
 @config.command(name="set", help="Set a configuration value in a profile.")
-@click.argument("param")
-@click.argument("value")
+@click.option("--param", required=True, help="Parameter name.")
+@click.option("--value", required=True, help="Parameter value.")
 @click.option("--profile", "-p", default="default", help="Profile name")
-def config_set(param: str, value: str, profile: str) -> None:
+@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+def config_set(param: str, value: str, profile: str, debug: bool) -> None:
     """Set command implementation."""
+    set_debug(debug)
     profiles: dict[str, Any]
     result: dict[str, Any]
     if not PROFILE_FILE.exists():
@@ -182,10 +200,12 @@ def config_set(param: str, value: str, profile: str) -> None:
     name="unset",
     help="Remove a configuration value from a profile.",
 )
-@click.argument("param")
+@click.option("--param", required=True, help="Parameter name.")
 @click.option("--profile", "-p", default="default", help="Profile name")
-def config_unset(param: str, profile: str) -> None:
+@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+def config_unset(param: str, profile: str, debug: bool) -> None:
     """Unset command implementation."""
+    set_debug(debug)
     if not PROFILE_FILE.exists():
         result: dict[str, Any] = {"key": param, "oldValue": None}
         click.echo(json.dumps(result, indent=2))

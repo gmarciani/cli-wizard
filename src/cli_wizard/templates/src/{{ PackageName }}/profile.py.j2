@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-from .constants import PROFILE_FILE
+from .constants import PROFILE_FILE, PROFILE_DEFAULTS
 from .logging import log_error, log_info, log_warning, log_debug
 
 
@@ -85,6 +85,8 @@ def get_profile_value(key: str, default: Any = None) -> Any:
         default: Default value if key not found
 
     Returns:
-        The value from the profile, or default if not found
+        The value from the profile, the profile default, or default if not found
     """
-    return _current_profile.get(key, default)
+    if key in _current_profile:
+        return _current_profile[key]
+    return PROFILE_DEFAULTS.get(key, default)
