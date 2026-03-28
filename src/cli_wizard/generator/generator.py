@@ -3,7 +3,9 @@
 
 """CLI code generator using Jinja2 templates."""
 
+import logging
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,9 @@ def _build_url_path(op: Operation) -> str:
         if param.location == "path":
             path = path.replace(f"{{{param.name}}}", f"{{{param.python_name}}}")
     return path
+
+
+logger = logging.getLogger(__name__)
 
 
 class CliGenerator:
@@ -147,6 +152,9 @@ class CliGenerator:
         self._generate_config_commands(commands_dir)
         for tag, group in groups.items():
             self._generate_command_group(group, commands_dir)
+
+        # Format generated Python files with Black
+        self._format_python_files(output_dir)
 
     def _generate_pyproject(
         self, output_dir: Path, cli_name: str, package_name: str
@@ -423,3 +431,17 @@ class CliGenerator:
         content = template.render(**self._template_context())
         with open(tests_dir / "cli_test.py", "w") as f:
             f.write(content)
+
+    @staticmethod
+    def _format_python_files(output_dir: Path) -> None:
+        """Format generated Python files with Black if available."""
+        try:
+            subprocess.run(
+                ["black", "--quiet", str(output_dir)],
+                check=True,
+                capture_output=True,
+            )
+        except FileNotFoundError:
+            logger.debug("Black not found, skipping formatting")
+        except subprocess.CalledProcessError as e:
+            logger.warning("Black formatting failed: %s", e.stderr.decode())

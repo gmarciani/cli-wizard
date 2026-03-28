@@ -262,9 +262,7 @@ class TestConfigCommands:
                     profile_path,
                 ):
                     with patch("{{ PackageName }}.cli.load_profile"):
-                        result = runner.invoke(
-                            main, ["config", "show", "-p", "nonexistent"]
-                        )
+                        result = runner.invoke(main, ["config", "show", "-p", "nonexistent"])
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output == {}

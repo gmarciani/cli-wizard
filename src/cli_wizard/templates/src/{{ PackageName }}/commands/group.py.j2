@@ -35,11 +35,7 @@ def _get_client(
         or os.environ.get("API_BASE_URL")
         or DEFAULT_BASE_URL
     )
-    effective_ca_file = (
-        None
-        if no_verify_ssl
-        else (str(ca_file) if ca_file else DEFAULT_CA_FILE)
-    )
+    effective_ca_file = None if no_verify_ssl else (str(ca_file) if ca_file else DEFAULT_CA_FILE)
     access_token = get_profile_value("accessToken")
     return ApiClient(
         base_url=effective_base_url,
