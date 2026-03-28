@@ -51,11 +51,15 @@ class OpenApiParser:
         exclude_tags: list[str] | None = None,
         include_tags: list[str] | None = None,
         tag_mapping: dict[str, str] | None = None,
+        include_operations: list[str] | None = None,
+        exclude_operations: list[str] | None = None,
     ) -> dict[str, CommandGroup]:
         """Parse the OpenAPI spec into command groups."""
         exclude_tags = exclude_tags or []
         include_tags = include_tags or []
         tag_mapping = tag_mapping or {}
+        include_operations = include_operations or []
+        exclude_operations = exclude_operations or []
 
         groups: dict[str, CommandGroup] = {}
 
@@ -64,11 +68,25 @@ class OpenApiParser:
                 if method not in ("get", "post", "put", "patch", "delete"):
                     continue
 
+                operation_id = operation.get("operationId", f"{method}_{path}")
+
+                if operation_id in exclude_operations:
+                    continue
+
+                # Explicitly included operations bypass tag filtering
+                explicitly_included = (
+                    include_operations and operation_id in include_operations
+                )
+
                 tags = operation.get("tags", ["default"])
                 for tag in tags:
-                    if tag in exclude_tags:
+                    if tag in exclude_tags and not explicitly_included:
                         continue
-                    if include_tags and tag not in include_tags:
+                    if (
+                        include_tags
+                        and tag not in include_tags
+                        and not explicitly_included
+                    ):
                         continue
 
                     if tag not in groups:

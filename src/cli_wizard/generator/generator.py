@@ -64,6 +64,8 @@ class CliGenerator:
             for config_key, profile_key in self.PROFILE_PARAM_FIELDS.items()
             if config_key in self.config
         }
+        # Runtime-only profile parameters (not derived from wizard config)
+        profile_defaults["accessToken"] = None
 
         context = {
             **self.config,  # Spread all config values at top level

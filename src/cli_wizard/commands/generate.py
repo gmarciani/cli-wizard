@@ -104,6 +104,8 @@ def generate(
             exclude_tags=cli_config.get("ExcludeTags", []),
             include_tags=cli_config.get("IncludeTags", []),
             tag_mapping=cli_config.get("TagMapping", {}),
+            include_operations=cli_config.get("IncludeOperations", []),
+            exclude_operations=cli_config.get("ExcludeOperations", []),
         )
 
         if not groups:

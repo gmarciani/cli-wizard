@@ -85,13 +85,21 @@ class Config(BaseModel):
         default=None,
         description="Path to OpenAPI spec (relative to config file or absolute)",
     )
+    IncludeTags: list[str] = Field(
+        default_factory=list,
+        description="Tags to include (if empty, all non-excluded tags are included)",
+    )
     ExcludeTags: list[str] = Field(
         default_factory=list,
         description="Tags to exclude from generation",
     )
-    IncludeTags: list[str] = Field(
+    IncludeOperations: list[str] = Field(
         default_factory=list,
-        description="Tags to include (if empty, all non-excluded tags are included)",
+        description="Operation IDs to include (if empty, all non-excluded operations are included)",
+    )
+    ExcludeOperations: list[str] = Field(
+        default_factory=list,
+        description="Operation IDs to exclude from generation",
     )
     TagMapping: dict[str, str] = Field(
         default_factory=dict,
