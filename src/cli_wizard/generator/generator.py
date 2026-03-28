@@ -437,7 +437,7 @@ class CliGenerator:
         """Format generated Python files with Black if available."""
         try:
             subprocess.run(
-                ["black", "--quiet", str(output_dir)],
+                ["black", "--quiet", "--line-length=100", str(output_dir)],
                 check=True,
                 capture_output=True,
             )
