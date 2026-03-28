@@ -24,7 +24,9 @@ __version__ = _read_version()
 MAIN_DIR = Path(os.path.expandvars("{{ MainDir }}"))
 
 # Profile configuration
-PROFILE_FILE = Path(os.path.expandvars("{{ ProfileFile | default(MainDir ~ '/profiles.yaml') }}"))
+PROFILE_FILE = Path(os.path.expandvars(
+    "{{ ProfileFile | default(MainDir ~ '/profiles.yaml') }}"
+))
 
 DEFAULT_BASE_URL = "{{ DefaultBaseUrl | default('http://localhost:8080') }}"
 DEFAULT_TIMEOUT = {{ Timeout | default(30) }}

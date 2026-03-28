@@ -48,7 +48,10 @@ def _show_splash() -> None:
 _show_splash()
 
 
-@click.group(invoke_without_command=True, help="{{ Description }}")
+@click.group(
+    invoke_without_command=True,
+    help="{{ Description }}",
+)
 @click.version_option(version=__version__)
 @click.option("--profile", "-p", default="default", help="Profile name.")
 @click.option("--debug", "-d", is_flag=True, help="Enable debug output.")

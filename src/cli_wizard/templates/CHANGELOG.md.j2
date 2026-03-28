@@ -14,6 +14,18 @@ Add features here ...
 
 ### Commands
 
-- `{{ CommandName }} config` - Configures the CLI.
+- `{{ CommandName }} config` - Configure the CLI.
+  - `{{ CommandName }} config init` - Initialize the profile file with default profile.
+  - `{{ CommandName }} config list-profiles` - List all available profiles.
+  - `{{ CommandName }} config show` - Show all parameters and values for a profile.
+  - `{{ CommandName }} config get` - Get a configuration value from a profile.
+  - `{{ CommandName }} config set` - Set a configuration value in a profile.
+  - `{{ CommandName }} config unset` - Remove a configuration value from a profile.
+{% for tag, group in groups.items() %}
+- `{{ CommandName }} {{ group.cli_name }}` - {{ group.description }}
+{% for op in group.operations %}
+  - `{{ CommandName }} {{ group.cli_name }} {{ op.command_name }}` - {{ op.summary }}
+{% endfor %}
+{% endfor %}
 - `{{ CommandName }} --help` - Prints the helper.
 - `{{ CommandName }} --version` - Prints the version.

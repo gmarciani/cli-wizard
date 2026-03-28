@@ -85,7 +85,8 @@ def get_profile_value(key: str, default: Any = None) -> Any:
         default: Default value if key not found
 
     Returns:
-        The value from the profile, the profile default, or default if not found
+        The value from the profile, the profile default,
+        or the provided default if not found
     """
     if key in _current_profile:
         return _current_profile[key]

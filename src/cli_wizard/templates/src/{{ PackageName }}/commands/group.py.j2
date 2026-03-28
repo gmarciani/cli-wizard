@@ -10,9 +10,16 @@ from pathlib import Path
 import click
 from typing import Any
 
-from {{ PackageName }}.constants import DEFAULT_BASE_URL, DEFAULT_CA_FILE
+from {{ PackageName }}.constants import (
+    DEFAULT_BASE_URL,
+    DEFAULT_CA_FILE,
+)
 from {{ PackageName }}.client import ApiClient
-from {{ PackageName }}.logging import log_info, log_error, log_debug, set_debug
+from {{ PackageName }}.logging import (
+    log_error,
+    log_debug,
+    set_debug,
+)
 from {{ PackageName }}.profile import load_profile, get_profile_value
 
 
@@ -23,8 +30,16 @@ def _get_client(
     debug: bool = False,
 ) -> ApiClient:
     """Create an API client with the given options."""
-    effective_base_url = base_url or os.environ.get("API_BASE_URL") or DEFAULT_BASE_URL
-    effective_ca_file = None if no_verify_ssl else (ca_file or DEFAULT_CA_FILE)
+    effective_base_url = (
+        base_url
+        or os.environ.get("API_BASE_URL")
+        or DEFAULT_BASE_URL
+    )
+    effective_ca_file = (
+        None
+        if no_verify_ssl
+        else (str(ca_file) if ca_file else DEFAULT_CA_FILE)
+    )
     access_token = get_profile_value("accessToken")
     return ApiClient(
         base_url=effective_base_url,
@@ -35,8 +50,13 @@ def _get_client(
     )
 
 
-@click.group(name="{{ group.cli_name }}", help="{{ group.description }}")
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+@click.group(
+    name="{{ group.cli_name }}",
+    help="{{ group.description }}",
+)
+@click.option(
+    "--debug", "-d", is_flag=True, help="Enable debug output.",
+)
 @click.pass_context
 def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
     """{{ group.name }} command group."""
@@ -46,25 +66,93 @@ def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
 {% for op in group.operations %}
 
 
-@{{ group.module_name }}.command(name="{{ op.command_name }}", help="{{ op.summary or op.operation_id }}")
+@{{ group.module_name }}.command(
+    name="{{ op.command_name }}",
+    help="{{ op.summary or op.operation_id }}",
+)
 {% for param in op.parameters if param.location == "path" %}
-@click.option("--{{ param.cli_name }}"{% if param.click_type != "str" %}, type={{ param.click_type }}{% endif %}, required=True, help="{{ param.description }}")
+@click.option(
+    "--{{ param.cli_name }}",
+{% if param.click_type != "str" %}
+    type={{ param.click_type }},
+{% endif %}
+    required=True,
+    help="{{ param.description }}",
+)
 {% endfor %}
 {% for param in op.parameters if param.location == "query" %}
 {% if param.enum %}
-@click.option("--{{ param.cli_name }}", type=click.Choice([{% for e in param.enum %}"{{ e }}"{% if not loop.last %}, {% endif %}{% endfor %}]){% if param.required %}, required=True{% endif %}{% if param.default is not none %}, default="{{ param.default }}"{% endif %}, help="{{ param.description }}")
+@click.option(
+    "--{{ param.cli_name }}",
+    type=click.Choice([
+{% for e in param.enum %}
+        "{{ e }}",
+{% endfor %}
+    ]),
+{% if param.required %}
+    required=True,
+{% endif %}
+{% if param.default is not none %}
+    default="{{ param.default }}",
+{% endif %}
+    help="{{ param.description }}",
+)
 {% else %}
-@click.option("--{{ param.cli_name }}"{% if param.click_type != "str" %}, type={{ param.click_type }}{% endif %}{% if param.required %}, required=True{% endif %}{% if param.default is not none %}, default={{ param.default }}{% endif %}, help="{{ param.description }}")
+@click.option(
+    "--{{ param.cli_name }}",
+{% if param.click_type != "str" %}
+    type={{ param.click_type }},
+{% endif %}
+{% if param.required %}
+    required=True,
+{% endif %}
+{% if param.default is not none %}
+    default={{ param.default }},
+{% endif %}
+    help="{{ param.description }}",
+)
 {% endif %}
 {% endfor %}
 {% for prop in op.body_properties %}
-@click.option("--{{ prop.cli_name }}"{% if prop.click_type == "bool" %}, is_flag=True{% elif prop.click_type != "str" %}, type={{ prop.click_type }}{% endif %}{% if prop.required %}, required=True{% endif %}, help="{{ prop.description }}")
+@click.option(
+    "--{{ prop.cli_name }}",
+{% if prop.click_type == "bool" %}
+    is_flag=True,
+{% elif prop.click_type != "str" %}
+    type={{ prop.click_type }},
+{% endif %}
+{% if prop.required %}
+    required=True,
+{% endif %}
+    help="{{ prop.description }}",
+)
 {% endfor %}
-@click.option("--profile", "-p", default="default", help="Profile name to use.")
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
-@click.option("--base-url", "-u", envvar="API_BASE_URL", help="API base URL.")
-@click.option("--no-verify-ssl", is_flag=True, default=False, help="Disable SSL certificate verification.")
-@click.option("--ca-file", type=click.Path(exists=True, dir_okay=False, path_type=Path), help="CA certificate file for SSL verification.")
+@click.option(
+    "--profile", "-p",
+    default="default",
+    help="Profile name to use.",
+)
+@click.option(
+    "--debug", "-d", is_flag=True, help="Enable debug output.",
+)
+@click.option(
+    "--base-url", "-u",
+    envvar="API_BASE_URL",
+    help="API base URL.",
+)
+@click.option(
+    "--no-verify-ssl",
+    is_flag=True,
+    default=False,
+    help="Disable SSL certificate verification.",
+)
+@click.option(
+    "--ca-file",
+    type=click.Path(
+        exists=True, dir_okay=False, path_type=Path,
+    ),
+    help="CA certificate file for SSL verification.",
+)
 def {{ op.function_name }}(
 {% for param in op.parameters if param.location == "path" %}
     {{ param.python_name }}: {{ param.click_type }},
@@ -81,14 +169,14 @@ def {{ op.function_name }}(
     no_verify_ssl: bool,
     ca_file: Path | None,
 ) -> None:
-    """{{ op.function_name }} command implementation."""
+    """{{ op.function_name }} command."""
     # Enable debug logging if --debug flag is set
     set_debug(debug)
 
     # Load profile
     load_profile(profile)
     # Log command execution start
-    cmd_params = {
+    cmd_params: dict[str, Any] = {
 {% for param in op.parameters if param.location == "path" %}
         "{{ param.name }}": {{ param.python_name }},
 {% endfor %}
@@ -99,7 +187,11 @@ def {{ op.function_name }}(
         "{{ prop.name }}": {{ prop.python_name }},
 {% endfor %}
     }
-    log_debug(f"Executing command '{{ group.cli_name }} {{ op.command_name }}' with params: {cmd_params}")
+    cmd_name = "{{ group.cli_name }} {{ op.command_name }}"
+    log_debug(
+        f"Executing command '{cmd_name}'"
+        f" with params: {cmd_params}"
+    )
 
     client = _get_client(base_url, no_verify_ssl, ca_file, debug)
 {% if op.parameters | selectattr("location", "equalto", "query") | list %}
@@ -122,31 +214,41 @@ def {{ op.function_name }}(
     try:
 {% if op.method == "GET" %}
 {% if op.parameters | selectattr("location", "equalto", "query") | list %}
-        response = client.get("{{ op | url_path }}", params=params)
+        response = client.get(
+            "{{ op | url_path }}", params=params,
+        )
 {% else %}
         response = client.get("{{ op | url_path }}")
 {% endif %}
 {% elif op.method == "POST" %}
 {% if op.body_properties %}
-        response = client.post("{{ op | url_path }}", json_data=body)
+        response = client.post(
+            "{{ op | url_path }}", json_data=body,
+        )
 {% else %}
         response = client.post("{{ op | url_path }}")
 {% endif %}
 {% elif op.method == "PUT" %}
 {% if op.body_properties %}
-        response = client.put("{{ op | url_path }}", json_data=body)
+        response = client.put(
+            "{{ op | url_path }}", json_data=body,
+        )
 {% else %}
         response = client.put("{{ op | url_path }}")
 {% endif %}
 {% elif op.method == "PATCH" %}
 {% if op.body_properties %}
-        response = client.patch("{{ op | url_path }}", json_data=body)
+        response = client.patch(
+            "{{ op | url_path }}", json_data=body,
+        )
 {% else %}
         response = client.patch("{{ op | url_path }}")
 {% endif %}
 {% elif op.method == "DELETE" %}
 {% if op.body_properties %}
-        response = client.delete("{{ op | url_path }}", json_data=body)
+        response = client.delete(
+            "{{ op | url_path }}", json_data=body,
+        )
 {% else %}
         response = client.delete("{{ op | url_path }}")
 {% endif %}
@@ -154,13 +256,21 @@ def {{ op.function_name }}(
         response.raise_for_status()
         if response.text:
             output = json.dumps(response.json(), indent=2)
-            log_debug(f"Command '{{ group.cli_name }} {{ op.command_name }}' completed with output: {output[:500]}")
+            log_debug(
+                f"Command '{cmd_name}' completed"
+                f" with output: {output[:500]}"
+            )
             click.echo(output)
         else:
-            log_debug(f"Command '{{ group.cli_name }} {{ op.command_name }}' completed successfully")
+            log_debug(
+                "Command '%s' completed successfully"
+                % cmd_name
+            )
             click.echo("Success")
     except Exception as e:
-        log_error(f"Command '{{ group.cli_name }} {{ op.command_name }}' failed: {e}")
+        log_error(
+            f"Command '{cmd_name}' failed: {e}"
+        )
         click.secho(f"Error: {e}", fg="red", err=True)
         raise SystemExit(1)
 {% endfor %}

@@ -120,7 +120,7 @@ class CliGenerator:
         self._generate_version(output_dir)
         self._generate_gitignore(output_dir)
         self._generate_makefile(output_dir)
-        self._generate_changelog(output_dir)
+        self._generate_changelog(output_dir, groups)
         self._generate_development(output_dir)
         self._generate_license(output_dir)
         self._generate_manifest(output_dir)
@@ -314,10 +314,12 @@ class CliGenerator:
         with open(output_dir / "Makefile", "w") as f:
             f.write(content)
 
-    def _generate_changelog(self, output_dir: Path) -> None:
+    def _generate_changelog(
+        self, output_dir: Path, groups: dict[str, "CommandGroup"] | None = None
+    ) -> None:
         """Generate CHANGELOG.md."""
         template = self.env.get_template("CHANGELOG.md.j2")
-        content = template.render(**self._template_context())
+        content = template.render(**self._template_context(groups=groups or {}))
         with open(output_dir / "CHANGELOG.md", "w") as f:
             f.write(content)
 
