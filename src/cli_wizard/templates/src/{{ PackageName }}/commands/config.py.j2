@@ -14,7 +14,9 @@ from {{ PackageName }}.logging import log_info, log_error, set_debug
 
 
 @click.group(name="config", help="Configure the CLI.")
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+@click.option(
+    "--debug", "-d", is_flag=True, help="Enable debug output.",
+)
 @click.pass_context
 def config(ctx: click.Context, debug: bool) -> None:
     """Config command group."""
@@ -27,7 +29,9 @@ def config(ctx: click.Context, debug: bool) -> None:
     name="init",
     help="Initialize the profile file with default profile.",
 )
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+@click.option(
+    "--debug", "-d", is_flag=True, help="Enable debug output.",
+)
 def config_init(debug: bool) -> None:
     """Init command implementation."""
     set_debug(debug)
@@ -41,21 +45,31 @@ def config_init(debug: bool) -> None:
 
     try:
         PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        default_content: dict[str, dict[str, Any]] = {"default": {}}
+        default_content: dict[str, dict[str, Any]] = {
+            "default": {},
+        }
         with open(PROFILE_FILE, "w") as f:
             yaml.safe_dump(
-                default_content, f, default_flow_style=False
+                default_content,
+                f,
+                default_flow_style=False,
             )
-        log_info(f"Created profile file: {PROFILE_FILE}")
+        log_info(
+            f"Created profile file: {PROFILE_FILE}"
+        )
         result = {
             "status": "created",
             "path": str(PROFILE_FILE),
         }
         click.echo(json.dumps(result, indent=2))
     except (IOError, OSError) as e:
-        log_error(f"Failed to create profile file: {e}")
+        log_error(
+            f"Failed to create profile file: {e}"
+        )
         result = {"status": "error", "message": str(e)}
-        click.echo(json.dumps(result, indent=2), err=True)
+        click.echo(
+            json.dumps(result, indent=2), err=True,
+        )
         raise SystemExit(1)
 
 
@@ -63,7 +77,9 @@ def config_init(debug: bool) -> None:
     name="list-profiles",
     help="List all available profiles.",
 )
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+@click.option(
+    "--debug", "-d", is_flag=True, help="Enable debug output.",
+)
 def config_list_profiles(debug: bool) -> None:
     """List profiles command implementation."""
     set_debug(debug)
@@ -74,11 +90,17 @@ def config_list_profiles(debug: bool) -> None:
 
     try:
         with open(PROFILE_FILE) as f:
-            profiles: dict[str, Any] = yaml.safe_load(f) or {}
+            profiles: dict[str, Any] = (
+                yaml.safe_load(f) or {}
+            )
     except (yaml.YAMLError, IOError) as e:
-        log_error(f"Failed to load profile file: {e}")
+        log_error(
+            f"Failed to load profile file: {e}"
+        )
         result = {"status": "error", "message": str(e)}
-        click.echo(json.dumps(result, indent=2), err=True)
+        click.echo(
+            json.dumps(result, indent=2), err=True,
+        )
         raise SystemExit(1)
 
     result = {"profiles": list(profiles.keys())}
@@ -90,9 +112,12 @@ def config_list_profiles(debug: bool) -> None:
     help="Show all parameters and values for a profile.",
 )
 @click.option(
-    "--profile", "-p", default="default", help="Profile name",
+    "--profile", "-p", default="default",
+    help="Profile name",
 )
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+@click.option(
+    "--debug", "-d", is_flag=True, help="Enable debug output.",
+)
 def config_show(profile: str, debug: bool) -> None:
     """Show command implementation."""
     set_debug(debug)
@@ -102,22 +127,33 @@ def config_show(profile: str, debug: bool) -> None:
 
     try:
         with open(PROFILE_FILE) as f:
-            profiles: dict[str, Any] = yaml.safe_load(f) or {}
+            profiles: dict[str, Any] = (
+                yaml.safe_load(f) or {}
+            )
     except (yaml.YAMLError, IOError) as e:
-        log_error(f"Failed to load profile file: {e}")
+        log_error(
+            f"Failed to load profile file: {e}"
+        )
         result: dict[str, Any] = {
             "status": "error",
             "message": str(e),
         }
-        click.echo(json.dumps(result, indent=2), err=True)
+        click.echo(
+            json.dumps(result, indent=2), err=True,
+        )
         raise SystemExit(1)
 
     if profile not in profiles:
         click.echo(json.dumps({}, indent=2))
         return
 
-    profile_data: dict[str, Any] = profiles[profile] or {}
-    merged: dict[str, Any] = {**PROFILE_DEFAULTS, **profile_data}
+    profile_data: dict[str, Any] = (
+        profiles[profile] or {}
+    )
+    merged: dict[str, Any] = {
+        **PROFILE_DEFAULTS,
+        **profile_data,
+    }
     click.echo(json.dumps(merged, indent=2))
 
 
@@ -125,26 +161,42 @@ def config_show(profile: str, debug: bool) -> None:
     name="get",
     help="Get a configuration value from a profile.",
 )
-@click.argument("param")
 @click.option(
-    "--profile", "-p", default="default", help="Profile name",
+    "--param", required=True, help="Parameter name.",
 )
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
-def config_get(param: str, profile: str, debug: bool) -> None:
+@click.option(
+    "--profile", "-p", default="default",
+    help="Profile name",
+)
+@click.option(
+    "--debug", "-d", is_flag=True, help="Enable debug output.",
+)
+def config_get(
+    param: str, profile: str, debug: bool,
+) -> None:
     """Get command implementation."""
     set_debug(debug)
     if not PROFILE_FILE.exists():
-        result: dict[str, Any] = {"key": param, "value": None}
+        result: dict[str, Any] = {
+            "key": param,
+            "value": None,
+        }
         click.echo(json.dumps(result, indent=2))
         return
 
     try:
         with open(PROFILE_FILE) as f:
-            profiles: dict[str, Any] = yaml.safe_load(f) or {}
+            profiles: dict[str, Any] = (
+                yaml.safe_load(f) or {}
+            )
     except (yaml.YAMLError, IOError) as e:
-        log_error(f"Failed to load profile file: {e}")
+        log_error(
+            f"Failed to load profile file: {e}"
+        )
         result = {"status": "error", "message": str(e)}
-        click.echo(json.dumps(result, indent=2), err=True)
+        click.echo(
+            json.dumps(result, indent=2), err=True,
+        )
         raise SystemExit(1)
 
     if profile not in profiles:
@@ -152,7 +204,9 @@ def config_get(param: str, profile: str, debug: bool) -> None:
         click.echo(json.dumps(result, indent=2))
         return
 
-    profile_data: dict[str, Any] = profiles[profile] or {}
+    profile_data: dict[str, Any] = (
+        profiles[profile] or {}
+    )
     value = profile_data.get(param)
     result = {"key": param, "value": value}
     click.echo(json.dumps(result, indent=2))
@@ -162,14 +216,24 @@ def config_get(param: str, profile: str, debug: bool) -> None:
     name="set",
     help="Set a configuration value in a profile.",
 )
-@click.argument("param")
-@click.argument("value")
 @click.option(
-    "--profile", "-p", default="default", help="Profile name",
+    "--param", required=True, help="Parameter name.",
 )
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
+@click.option(
+    "--value", required=True, help="Parameter value.",
+)
+@click.option(
+    "--profile", "-p", default="default",
+    help="Profile name",
+)
+@click.option(
+    "--debug", "-d", is_flag=True, help="Enable debug output.",
+)
 def config_set(
-    param: str, value: str, profile: str, debug: bool,
+    param: str,
+    value: str,
+    profile: str,
+    debug: bool,
 ) -> None:
     """Set command implementation."""
     set_debug(debug)
@@ -183,8 +247,13 @@ def config_set(
             with open(PROFILE_FILE) as f:
                 profiles = yaml.safe_load(f) or {}
         except (yaml.YAMLError, IOError) as e:
-            log_error(f"Failed to load profile file: {e}")
-            result = {"status": "error", "message": str(e)}
+            log_error(
+                f"Failed to load profile file: {e}"
+            )
+            result = {
+                "status": "error",
+                "message": str(e),
+            }
             click.echo(
                 json.dumps(result, indent=2), err=True,
             )
@@ -207,7 +276,9 @@ def config_set(
     try:
         with open(PROFILE_FILE, "w") as f:
             yaml.safe_dump(
-                profiles, f, default_flow_style=False,
+                profiles,
+                f,
+                default_flow_style=False,
             )
         log_info(
             f"Set '{param}' = '{parsed_value}'"
@@ -220,9 +291,13 @@ def config_set(
         }
         click.echo(json.dumps(result, indent=2))
     except (IOError, OSError) as e:
-        log_error(f"Failed to save profile file: {e}")
+        log_error(
+            f"Failed to save profile file: {e}"
+        )
         result = {"status": "error", "message": str(e)}
-        click.echo(json.dumps(result, indent=2), err=True)
+        click.echo(
+            json.dumps(result, indent=2), err=True,
+        )
         raise SystemExit(1)
 
 
@@ -230,26 +305,42 @@ def config_set(
     name="unset",
     help="Remove a configuration value from a profile.",
 )
-@click.argument("param")
 @click.option(
-    "--profile", "-p", default="default", help="Profile name",
+    "--param", required=True, help="Parameter name.",
 )
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
-def config_unset(param: str, profile: str, debug: bool) -> None:
+@click.option(
+    "--profile", "-p", default="default",
+    help="Profile name",
+)
+@click.option(
+    "--debug", "-d", is_flag=True, help="Enable debug output.",
+)
+def config_unset(
+    param: str, profile: str, debug: bool,
+) -> None:
     """Unset command implementation."""
     set_debug(debug)
     if not PROFILE_FILE.exists():
-        result: dict[str, Any] = {"key": param, "oldValue": None}
+        result: dict[str, Any] = {
+            "key": param,
+            "oldValue": None,
+        }
         click.echo(json.dumps(result, indent=2))
         return
 
     try:
         with open(PROFILE_FILE) as f:
-            profiles: dict[str, Any] = yaml.safe_load(f) or {}
+            profiles: dict[str, Any] = (
+                yaml.safe_load(f) or {}
+            )
     except (yaml.YAMLError, IOError) as e:
-        log_error(f"Failed to load profile file: {e}")
+        log_error(
+            f"Failed to load profile file: {e}"
+        )
         result = {"status": "error", "message": str(e)}
-        click.echo(json.dumps(result, indent=2), err=True)
+        click.echo(
+            json.dumps(result, indent=2), err=True,
+        )
         raise SystemExit(1)
 
     if profile not in profiles:
@@ -257,7 +348,9 @@ def config_unset(param: str, profile: str, debug: bool) -> None:
         click.echo(json.dumps(result, indent=2))
         return
 
-    profile_data: dict[str, Any] = profiles[profile] or {}
+    profile_data: dict[str, Any] = (
+        profiles[profile] or {}
+    )
     old_value = profile_data.get(param)
 
     if param in profile_data:
@@ -265,18 +358,25 @@ def config_unset(param: str, profile: str, debug: bool) -> None:
         try:
             with open(PROFILE_FILE, "w") as f:
                 yaml.safe_dump(
-                    profiles, f, default_flow_style=False,
+                    profiles,
+                    f,
+                    default_flow_style=False,
                 )
             log_info(
-                f"Removed '{param}' from profile '{profile}'"
+                f"Removed '{param}'"
+                f" from profile '{profile}'"
             )
         except (IOError, OSError) as e:
             log_error(
                 f"Failed to save profile file: {e}"
             )
-            result = {"status": "error", "message": str(e)}
+            result = {
+                "status": "error",
+                "message": str(e),
+            }
             click.echo(
-                json.dumps(result, indent=2), err=True,
+                json.dumps(result, indent=2),
+                err=True,
             )
             raise SystemExit(1)
 

@@ -282,7 +282,8 @@ class TestConfigCommands:
                 ):
                     with patch("{{ PackageName }}.cli.load_profile"):
                         result = runner.invoke(
-                            main, ["config", "get", "mykey"]
+                            main,
+                            ["config", "get", "--param", "mykey"],
                         )
             assert result.exit_code == 0
             output = json.loads(result.output)
@@ -302,7 +303,11 @@ class TestConfigCommands:
                 ):
                     with patch("{{ PackageName }}.cli.load_profile"):
                         result = runner.invoke(
-                            main, ["config", "get", "nonexistent"]
+                            main,
+                            [
+                                "config", "get",
+                                "--param", "nonexistent",
+                            ],
                         )
             assert result.exit_code == 0
             output = json.loads(result.output)
@@ -319,7 +324,12 @@ class TestConfigCommands:
                 profile_path,
             ):
                 result = runner.invoke(
-                    main, ["config", "set", "newkey", "newvalue"]
+                    main,
+                    [
+                        "config", "set",
+                        "--param", "newkey",
+                        "--value", "newvalue",
+                    ],
                 )
             assert result.exit_code == 0
             json_start = result.output.find("{")
@@ -338,7 +348,12 @@ class TestConfigCommands:
                 profile_path,
             ):
                 result = runner.invoke(
-                    main, ["config", "set", "list", '["a", "b"]']
+                    main,
+                    [
+                        "config", "set",
+                        "--param", "list",
+                        "--value", '["a", "b"]',
+                    ],
                 )
             assert result.exit_code == 0
             json_start = result.output.find("{")
@@ -355,7 +370,10 @@ class TestConfigCommands:
                 "{{ PackageName }}.commands.config.PROFILE_FILE",
                 profile_path,
             ):
-                result = runner.invoke(main, ["config", "unset", "mykey"])
+                result = runner.invoke(
+                    main,
+                    ["config", "unset", "--param", "mykey"],
+                )
             assert result.exit_code == 0
             json_start = result.output.find("{")
             output = json.loads(result.output[json_start:])
@@ -372,7 +390,11 @@ class TestConfigCommands:
                 profile_path,
             ):
                 result = runner.invoke(
-                    main, ["config", "unset", "nonexistent"]
+                    main,
+                    [
+                        "config", "unset",
+                        "--param", "nonexistent",
+                    ],
                 )
             assert result.exit_code == 0
             json_start = result.output.find("{")
@@ -390,7 +412,8 @@ class TestConfigCommands:
             ):
                 with patch("{{ PackageName }}.cli.load_profile"):
                     result = runner.invoke(
-                        main, ["config", "unset", "mykey"]
+                        main,
+                        ["config", "unset", "--param", "mykey"],
                     )
             assert result.exit_code == 0
             output = json.loads(result.output)
@@ -409,7 +432,11 @@ class TestConfigCommands:
                 with patch("{{ PackageName }}.cli.load_profile"):
                     result = runner.invoke(
                         main,
-                        ["config", "unset", "mykey", "-p", "nonexistent"],
+                        [
+                            "config", "unset",
+                            "--param", "mykey",
+                            "-p", "nonexistent",
+                        ],
                     )
             assert result.exit_code == 0
             output = json.loads(result.output)
@@ -488,7 +515,13 @@ class TestConfigCommands:
                 profile_path,
             ):
                 with patch("{{ PackageName }}.cli.load_profile"):
-                    result = runner.invoke(main, ["config", "get", "mykey"])
+                    result = runner.invoke(
+                        main,
+                        [
+                            "config", "get",
+                            "--param", "mykey",
+                        ],
+                    )
             assert result.exit_code == 1
 
     def test_config_get_file_not_exists(self):
@@ -501,7 +534,13 @@ class TestConfigCommands:
                 profile_path,
             ):
                 with patch("{{ PackageName }}.cli.load_profile"):
-                    result = runner.invoke(main, ["config", "get", "mykey"])
+                    result = runner.invoke(
+                        main,
+                        [
+                            "config", "get",
+                            "--param", "mykey",
+                        ],
+                    )
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output["value"] is None
@@ -519,7 +558,11 @@ class TestConfigCommands:
                 with patch("{{ PackageName }}.cli.load_profile"):
                     result = runner.invoke(
                         main,
-                        ["config", "get", "mykey", "-p", "nonexistent"],
+                        [
+                            "config", "get",
+                            "--param", "mykey",
+                            "-p", "nonexistent",
+                        ],
                     )
             assert result.exit_code == 0
             output = json.loads(result.output)
@@ -537,7 +580,12 @@ class TestConfigCommands:
             ):
                 with patch("{{ PackageName }}.cli.load_profile"):
                     result = runner.invoke(
-                        main, ["config", "set", "mykey", "myvalue"]
+                        main,
+                        [
+                            "config", "set",
+                            "--param", "mykey",
+                            "--value", "myvalue",
+                        ],
                     )
             assert result.exit_code == 1
 
@@ -553,7 +601,12 @@ class TestConfigCommands:
             ):
                 result = runner.invoke(
                     main,
-                    ["config", "set", "mykey", "myvalue", "-p", "newprofile"],
+                    [
+                        "config", "set",
+                        "--param", "mykey",
+                        "--value", "myvalue",
+                        "-p", "newprofile",
+                    ],
                 )
             assert result.exit_code == 0
             json_start = result.output.find("{")
@@ -571,7 +624,12 @@ class TestConfigCommands:
                 profile_path,
             ):
                 result = runner.invoke(
-                    main, ["config", "set", "mykey", "myvalue"]
+                    main,
+                    [
+                        "config", "set",
+                        "--param", "mykey",
+                        "--value", "myvalue",
+                    ],
                 )
             assert result.exit_code == 0
             json_start = result.output.find("{")
@@ -589,7 +647,13 @@ class TestConfigCommands:
                 profile_path,
             ):
                 with patch("{{ PackageName }}.cli.load_profile"):
-                    result = runner.invoke(main, ["config", "unset", "mykey"])
+                    result = runner.invoke(
+                        main,
+                        [
+                            "config", "unset",
+                            "--param", "mykey",
+                        ],
+                    )
             assert result.exit_code == 1
 
 
