@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.1.0
+
+### Changes
+
+- Pinned all dependency version constraints (`~=`) to the minor version instead of the patch version
+- Upgraded click from ~8.3.1 to ~8.4
+- Upgraded pydantic from ~2.12.5 to ~2.13
+- Upgraded requests from ~2.32.5 to ~2.34
+- Upgraded black from ~26.1 to ~26.5
+- Upgraded build from ~1.4 to ~1.5
+- Upgraded mypy from ~1.19 to ~2.2
+- Upgraded pre-commit from ~4.5 to ~4.6
+- Upgraded pytest from ~9.0 to ~9.1
+- Upgraded pytest-cov from ~7.0 to ~7.1
+- Upgraded tox from ~4.34 to ~4.56
+- Upgraded types-requests from ~2.32 to ~2.33
+
+
 ## 2.0.0
 
 ### New Features
