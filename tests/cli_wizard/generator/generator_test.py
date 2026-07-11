@@ -3,6 +3,7 @@
 
 """Tests for CLI generator."""
 
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -337,3 +338,88 @@ class TestCliGenerator:
             assert "--name" in content
             assert "--email" in content
             assert "required=True" in content
+
+    def test_generate_copies_ca_and_splash_files(self):
+        """Test that CA and splash files are copied into the resources directory."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_dir = Path(temp_dir) / "config"
+            config_dir.mkdir()
+            ca_file = config_dir / "ca.pem"
+            ca_file.write_text("fake-ca-cert")
+            splash_file = config_dir / "splash.txt"
+            splash_file.write_text("fake-splash")
+
+            config = self._default_config()
+            config["CaFile"] = "ca.pem"
+            config["SplashFile"] = "splash.txt"
+
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=config, config_dir=config_dir)
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            resources_dir = output_dir / "src" / "test_cli" / "resources"
+            assert (resources_dir / "ca.pem").read_text() == "fake-ca-cert"
+            assert (resources_dir / "splash.txt").read_text() == "fake-splash"
+
+    def test_generate_missing_ca_and_splash_files_skipped(self):
+        """Test that missing CA/splash files are silently skipped."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self._default_config()
+            config["CaFile"] = "missing-ca.pem"
+            config["SplashFile"] = "missing-splash.txt"
+
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=config, config_dir=Path(temp_dir))
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            resources_dir = output_dir / "src" / "test_cli" / "resources"
+            assert list(resources_dir.iterdir()) == []
+
+    def test_generate_with_github_workflows(self):
+        """Test that .github files are generated when IncludeGithubWorkflows is set."""
+        config = self._default_config()
+        config["IncludeGithubWorkflows"] = True
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=config)
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            github_dir = output_dir / ".github"
+            assert (github_dir / "CODEOWNERS").exists()
+            assert (github_dir / "labels.yaml").exists()
+            assert (github_dir / "ISSUE_TEMPLATE" / "bug-report.yml").exists()
+            assert (github_dir / "workflows" / "test.yaml").exists()
+            assert (github_dir / "dependabot.yaml").exists()
+
+    def test_generate_skips_formatting_when_black_missing(self, monkeypatch):
+        """Test that generation succeeds even if Black is not installed."""
+
+        def fake_run(*args, **kwargs):
+            raise FileNotFoundError("black not found")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            assert (output_dir / "pyproject.toml").exists()
+
+    def test_generate_logs_warning_when_black_fails(self, monkeypatch):
+        """Test that a Black formatting failure is logged but does not raise."""
+
+        def fake_run(*args, **kwargs):
+            raise subprocess.CalledProcessError(
+                1, ["black"], stderr=b"formatting error"
+            )
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            assert (output_dir / "pyproject.toml").exists()

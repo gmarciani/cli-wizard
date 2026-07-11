@@ -275,6 +275,152 @@ class TestGenerateCommand:
             )
             assert result.exit_code == 0
 
+    def test_generate_no_api_no_openapi_spec(self):
+        """Test generate without --api and without OpenapiSpec in config."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_path = temp_path / "cli-wizard.yaml"
+            config_path.write_text(
+                "PackageName: test\nDefaultBaseUrl: https://api.example.com\n"
+            )
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    str(temp_path / "output"),
+                    "--configuration",
+                    str(config_path),
+                ],
+            )
+            assert result.exit_code == 0
+            assert "No OpenAPI spec provided" in result.output
+
+    def test_generate_openapi_spec_from_config(self):
+        """Test generate resolves OpenapiSpec from config relative to config dir."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            openapi_path, _ = create_test_files(temp_path)
+
+            config_path = temp_path / "cli-wizard.yaml"
+            config_path.write_text(
+                "PackageName: test\n"
+                "DefaultBaseUrl: https://api.example.com\n"
+                "OpenapiSpec: openapi.json\n"
+            )
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    str(temp_path / "output"),
+                    "--configuration",
+                    str(config_path),
+                ],
+            )
+            assert result.exit_code == 0
+            assert "Parsing OpenAPI spec" in result.output
+
+    def test_generate_openapi_spec_from_config_missing(self):
+        """Test generate warns when configured OpenapiSpec file is missing."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_path = temp_path / "cli-wizard.yaml"
+            config_path.write_text(
+                "PackageName: test\n"
+                "DefaultBaseUrl: https://api.example.com\n"
+                "OpenapiSpec: missing.json\n"
+            )
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    str(temp_path / "output"),
+                    "--configuration",
+                    str(config_path),
+                ],
+            )
+            assert result.exit_code == 0
+            assert "not found" in result.output
+
+    def test_generate_cleans_existing_output_directory(self):
+        """Test generate removes a pre-existing output directory before writing."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            openapi_path, config_path = create_test_files(temp_path)
+            output_dir = temp_path / "output"
+            output_dir.mkdir()
+            (output_dir / "stale-file.txt").write_text("stale")
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    str(output_dir),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
+                ],
+            )
+            assert result.exit_code == 0
+            assert "Cleaning output directory" in result.output
+            assert not (output_dir / "stale-file.txt").exists()
+
+    def test_generate_output_dir_is_cwd_fails(self):
+        """Test generate refuses to clean the output directory when it is cwd."""
+        runner = CliRunner()
+        with runner.isolated_filesystem() as temp_dir:
+            temp_path = Path(temp_dir)
+            openapi_path, config_path = create_test_files(temp_path)
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    ".",
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
+                ],
+            )
+            assert result.exit_code == 1
+            assert "Cannot clean output directory" in result.output
+
+    def test_generate_invalid_field_value(self):
+        """Test generate with a syntactically valid but semantically invalid config."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            openapi_path, _ = create_test_files(temp_path)
+
+            config_path = temp_path / "cli-wizard.yaml"
+            config_path.write_text(
+                "PackageName: test\n"
+                "DefaultBaseUrl: https://api.example.com\n"
+                "OutputFormat: xml\n"
+            )
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    str(temp_path / "output"),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
+                ],
+            )
+            assert result.exit_code == 1
+            assert "Invalid configuration" in result.output
+
     def test_generate_invalid_config_yaml(self):
         """Test generate with invalid config YAML."""
         runner = CliRunner()
