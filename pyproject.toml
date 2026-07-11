@@ -22,27 +22,27 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "click~=8.3.1",
-    "Jinja2~=3.1.6",
-    "pydantic~=2.12.5",
-    "PyYAML~=6.0.3",
-    "requests~=2.32.5",
+    "click~=8.4",
+    "Jinja2~=3.1",
+    "pydantic~=2.13",
+    "PyYAML~=6.0",
+    "requests~=2.34",
 ]
 
 [project.optional-dependencies]
 dev = [
     "autoflake~=2.3",
-    "black~=26.1",
-    "build~=1.4",
+    "black~=26.5",
+    "build~=1.5",
     "flake8~=7.3",
-    "mypy~=1.19",
-    "pre-commit~=4.5",
-    "pytest~=9.0",
-    "pytest-cov~=7.0",
-    "tox~=4.34",
+    "mypy~=2.2",
+    "pre-commit~=4.6",
+    "pytest~=9.1",
+    "pytest-cov~=7.1",
+    "tox~=4.56",
     "twine~=6.2",
     "types-PyYAML~=6.0",
-    "types-requests~=2.32",
+    "types-requests~=2.33",
 ]
 docs = [
     "sphinx~=9.1",
