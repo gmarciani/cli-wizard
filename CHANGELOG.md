@@ -15,6 +15,7 @@
 - Upgraded pytest from ~9.0 to ~9.1
 - Upgraded pytest-cov from ~7.0 to ~7.1
 - Upgraded tox from ~4.34 to ~4.56
+- Upgraded twine from ~6.2 to >=6.2,<8.0
 - Upgraded types-requests from ~2.32 to ~2.33
 - Increased test coverage from 71% to 98%, with new tests for the `bootstrap` command and previously untested code paths in `generate`, `CliGenerator`, and `constants`
 
