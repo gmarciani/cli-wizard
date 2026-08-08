@@ -27,14 +27,12 @@ dependencies = [
     "pydantic~=2.13",
     "PyYAML~=6.0",
     "requests~=2.34",
+    "ruff~=0.16.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "autoflake~=2.3",
-    "black~=26.5",
     "build~=1.5",
-    "flake8~=7.3",
     "mypy~=2.2",
     "pre-commit~=4.6",
     "pytest~=9.1",
@@ -76,9 +74,12 @@ cli_wizard = [
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ['py312']
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
 
 [tool.mypy]
 python_version = "3.12"

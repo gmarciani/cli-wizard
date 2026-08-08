@@ -11,12 +11,13 @@ coverage:
 	pytest tests/ -v --cov={{ PackageName }} --cov-report=html --cov-report=term
 
 lint:
-	flake8 src/ tests/
+	ruff check src/ tests/
+	ruff format --check src/ tests/
 	mypy src/
 
 format:
-	black src/ tests/
-	autoflake --in-place --remove-all-unused-imports --recursive src/ tests/
+	ruff check --fix src/ tests/
+	ruff format src/ tests/
 
 build:
 	python -m build

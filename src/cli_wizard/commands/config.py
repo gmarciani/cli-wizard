@@ -3,13 +3,15 @@
 
 """Configuration commands for CLI Wizard."""
 
-import click
-import logging
 import json
+import logging
+
+import click
+
 from cli_wizard.config.configuration import (
+    get_config_path,
     load_config,
     save_config,
-    get_config_path,
 )
 
 logger = logging.getLogger(__name__)

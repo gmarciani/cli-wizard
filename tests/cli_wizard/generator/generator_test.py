@@ -6,8 +6,18 @@
 import subprocess
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
-from cli_wizard.generator.generator import CliGenerator, _build_url_path
+import pytest
+import yaml
+
+from cli_wizard.generator.generator import (
+    RUFF_COMMANDS,
+    CliGenerator,
+    RuffNotFoundError,
+    _build_url_path,
+    resolve_ruff,
+)
 from cli_wizard.generator.models import (
     CommandGroup,
     Operation,
@@ -392,30 +402,120 @@ class TestCliGenerator:
             assert (github_dir / "workflows" / "test.yaml").exists()
             assert (github_dir / "dependabot.yaml").exists()
 
-    def test_generate_skips_formatting_when_black_missing(self, monkeypatch):
-        """Test that generation succeeds even if Black is not installed."""
-
-        def fake_run(*args, **kwargs):
-            raise FileNotFoundError("black not found")
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
-
+    def test_generated_pyproject_configures_ruff(self):
+        """Test that the generated pyproject configures ruff and drops black."""
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "test-cli"
             generator = CliGenerator(config=self._default_config())
             generator.generate({}, output_dir, "test-cli", "test_cli")
 
-            assert (output_dir / "pyproject.toml").exists()
+            content = (output_dir / "pyproject.toml").read_text()
 
-    def test_generate_logs_warning_when_black_fails(self, monkeypatch):
-        """Test that a Black formatting failure is logged but does not raise."""
+            assert "[tool.ruff]" in content
+            assert "line-length = 88" in content
+            assert 'target-version = "py312"' in content
+            assert '["E", "F", "W", "I"]' in content
 
-        def fake_run(*args, **kwargs):
-            raise subprocess.CalledProcessError(
-                1, ["black"], stderr=b"formatting error"
+            assert "[tool.black]" not in content
+            assert "black" not in content
+            assert "flake8" not in content
+            assert "autoflake" not in content
+
+    def test_missing_ruff_is_fatal(self):
+        """Test that a missing ruff aborts generation before writing anything."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+
+            with patch(
+                "cli_wizard.generator.generator.resolve_ruff",
+                side_effect=RuffNotFoundError("ruff not found"),
+            ):
+                with pytest.raises(RuffNotFoundError):
+                    generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            assert not output_dir.exists()
+
+    def test_generated_workflow_uses_generated_package_name(self):
+        """Test that the CI workflow references the generated package."""
+        config = self._default_config()
+        config["IncludeGithubWorkflows"] = True
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=config)
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            workflow = output_dir / ".github" / "workflows" / "test.yaml"
+            content = workflow.read_text()
+
+            assert "src/test_cli" in content
+            assert "--cov=test_cli" in content
+            assert "cli_wizard" not in content
+            assert "flake8" not in content
+            assert "black" not in content
+
+            # GitHub Actions expressions collide with Jinja delimiters and
+            # must survive rendering verbatim.
+            assert "${{ matrix.python-version }}" in content
+            assert "${{ secrets.CODECOV_TOKEN }}" in content
+
+            # Rendering must not join lines or otherwise break the YAML.
+            parsed = yaml.safe_load(content)
+            steps = parsed["jobs"]["test"]["steps"]
+            assert {"uses": "actions/checkout@v4"} in steps
+            assert any(s.get("name") == "Lint with ruff" for s in steps)
+
+    def _sample_groups(self) -> dict:
+        """Create a sample command group for generation tests."""
+        return {
+            "Users": CommandGroup(
+                name="Users",
+                cli_name="users",
+                description="User management",
+                operations=[
+                    Operation(
+                        operation_id="listUsers",
+                        method="GET",
+                        path="/users",
+                        summary="List users",
+                        description="",
+                        tags=["Users"],
+                        parameters=[],
+                    )
+                ],
+            )
+        }
+
+    def test_generate_is_idempotent(self):
+        """Test that generating twice produces byte-identical output."""
+        groups = self._sample_groups()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            first = Path(temp_dir) / "first"
+            second = Path(temp_dir) / "second"
+
+            for target in (first, second):
+                generator = CliGenerator(config=self._default_config())
+                generator.generate(groups, target, "test-cli", "test_cli")
+
+            first_files = sorted(
+                p.relative_to(first) for p in first.rglob("*") if p.is_file()
+            )
+            second_files = sorted(
+                p.relative_to(second) for p in second.rglob("*") if p.is_file()
             )
 
-        monkeypatch.setattr(subprocess, "run", fake_run)
+            assert first_files == second_files
+            for rel in first_files:
+                assert (first / rel).read_bytes() == (second / rel).read_bytes(), rel
+
+            # Formatting must not leave a ruff cache behind in the output.
+            assert not (first / ".ruff_cache").exists()
+
+    def test_generated_output_is_ruff_clean(self):
+        """Test that fresh output needs no further ruff changes."""
+        groups = self._sample_groups()
 
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "test-cli"
@@ -423,3 +523,31 @@ class TestCliGenerator:
             generator.generate({}, output_dir, "test-cli", "test_cli")
 
             assert (output_dir / "pyproject.toml").exists()
+            generator.generate(groups, output_dir, "test-cli", "test_cli")
+
+            ruff = resolve_ruff()
+            for args in (("check",), ("format", "--check")):
+                result = subprocess.run(
+                    [*ruff, *args, str(output_dir)],
+                    capture_output=True,
+                )
+                assert result.returncode == 0, result.stdout.decode()
+
+    def test_format_recipe_matches_tox_template(self):
+        """Test that the generator runs the same ruff commands as tox -e format."""
+        from cli_wizard.generator import generator as generator_module
+
+        template_path = (
+            Path(generator_module.__file__).parents[1] / "templates" / "tox.ini.j2"
+        )
+        section = template_path.read_text().split("[testenv:format]")[1]
+        section = section.split("[testenv:")[0]
+
+        commands = []
+        for line in section.splitlines():
+            line = line.strip()
+            if line.startswith("ruff "):
+                tokens = line.split()[1:]
+                commands.append(tuple(t for t in tokens if not t.endswith("/")))
+
+        assert tuple(commands) == RUFF_COMMANDS

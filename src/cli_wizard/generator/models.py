@@ -91,7 +91,10 @@ class Operation:
 
     @property
     def _base_operation_id(self) -> str:
-        """Get the base operation ID without module path (e.g., 'server.get_greetings' -> 'get_greetings')."""
+        """Get the base operation ID without the module path.
+
+        For example 'server.get_greetings' becomes 'get_greetings'.
+        """
         if "." in self.operation_id:
             return self.operation_id.rsplit(".", 1)[-1]
         return self.operation_id

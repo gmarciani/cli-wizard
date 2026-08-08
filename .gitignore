@@ -57,3 +57,6 @@ dmypy.json
 
 # Sphinx documentation
 docs/_build/
+
+# Design specs and implementation plans (working documents, not deliverables)
+docs/superpowers/

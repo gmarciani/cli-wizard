@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Firstname Lastname
+# Copyright (c) None, Firstname Lastname
 # Licensed under the MIT License
 
 # AUTO-GENERATED FILE - DO NOT EDIT
@@ -11,7 +11,7 @@ from typing import Any
 
 import requests
 
-from .constants import DEFAULT_BASE_URL, DEFAULT_TIMEOUT, DEFAULT_CA_FILE
+from .constants import DEFAULT_BASE_URL, DEFAULT_CA_FILE, DEFAULT_TIMEOUT
 from .logging import log_debug
 
 
@@ -43,17 +43,16 @@ class ApiClient:
         self.session.headers["Content-Type"] = "application/json"
         self.session.headers["Accept"] = "application/json"
         if self.access_token:
-            self.session.headers["Authorization"] = f"Bearer {self.access_token}"
+            auth_header = f"Bearer {self.access_token}"
+            self.session.headers["Authorization"] = auth_header
 
     def _setup_ssl(self) -> None:
         """Set up SSL verification with custom CA file if provided."""
         if not self.verify_ssl:
             self.session.verify = False
         elif self.ca_file:
-            ca_path = (
-                Path(self.ca_file) if isinstance(self.ca_file, str) else self.ca_file
-            )
-            if ca_path and ca_path.exists():
+            ca_path = Path(self.ca_file)
+            if isinstance(self.ca_file, str) and ca_path.exists():
                 self.session.verify = str(ca_path)
 
     def _url(self, path: str) -> str:
@@ -86,7 +85,11 @@ class ApiClient:
         if response.text:
             log_debug(f"Response Body: {response.text[:1000]}")
 
-    def get(self, path: str, params: dict[str, Any] | None = None) -> requests.Response:
+    def get(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+    ) -> requests.Response:
         """Make a GET request."""
         url = self._url(path)
         self._log_request("GET", url, params=params)

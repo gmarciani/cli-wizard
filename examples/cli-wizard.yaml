@@ -33,6 +33,11 @@ AuthorEmail: "firstname.lastname@gmail.com"
 # Type: str
 GithubUser: "gmarciani"
 
+# Include .github folder with workflows, issue templates, etc.
+# Type: bool
+# Default: false
+IncludeGithubWorkflows: true
+
 # Minimum Python version
 # Type: str
 PythonVersion: "3.12"

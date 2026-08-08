@@ -9,7 +9,7 @@
 [![Build status](https://img.shields.io/github/actions/workflow/status/gmarciani/cli-wizard/test.yaml?branch=main)](https://github.com/gmarciani/cli-wizard/actions)
 [![Tests](https://img.shields.io/github/actions/workflow/status/gmarciani/cli-wizard/test.yaml?branch=main&label=tests)](https://github.com/gmarciani/cli-wizard/actions)
 [![Coverage](https://img.shields.io/codecov/c/github/gmarciani/cli-wizard)](https://codecov.io/gh/gmarciani/cli-wizard)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Downloads](https://img.shields.io/pypi/dm/cli-wizard.svg)](https://pypi.org/project/cli-wizard)
 
 </div>

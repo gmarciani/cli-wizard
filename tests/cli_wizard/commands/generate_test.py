@@ -6,11 +6,13 @@
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 from click.testing import CliRunner
 
 from cli_wizard.cli import main
+from cli_wizard.generator.generator import RuffNotFoundError
 
 
 def create_test_files(temp_dir: Path, cli_name: str = "test-cli") -> tuple[Path, Path]:
@@ -31,7 +33,10 @@ def create_test_files(temp_dir: Path, cli_name: str = "test-cli") -> tuple[Path,
     }
 
     config = {
-        "PackageName": cli_name,
+        # Let the schema derive CommandName (kebab-case) and PackageName
+        # (snake_case) from ProjectName. Setting PackageName directly to a
+        # kebab-case name produces an invalid Python package.
+        "ProjectName": cli_name,
         "DefaultBaseUrl": "https://api.example.com",
         "ExcludeTags": [],
         "IncludeTags": [],
@@ -187,7 +192,13 @@ class TestGenerateCommand:
 
             openapi_path = temp_path / "openapi.json"
             openapi_path.write_text(
-                '{"openapi": "3.0.0", "info": {"title": "Test", "version": "1.0"}, "paths": {}}'
+                json.dumps(
+                    {
+                        "openapi": "3.0.0",
+                        "info": {"title": "Test", "version": "1.0"},
+                        "paths": {},
+                    }
+                )
             )
 
             config_path = temp_path / "cli-wizard.yaml"
@@ -466,3 +477,35 @@ class TestGenerateCommand:
                 "Invalid configuration" in result.output
                 or "Could not load config" in result.output
             )
+
+    def test_existing_output_survives_missing_ruff(self):
+        """Test that a missing ruff does not delete the previous output."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            openapi_path, config_path = create_test_files(temp_path)
+
+            output_dir = temp_path / "output"
+            output_dir.mkdir()
+            marker = output_dir / "marker.txt"
+            marker.write_text("keep me")
+
+            with patch(
+                "cli_wizard.commands.generate.resolve_ruff",
+                side_effect=RuffNotFoundError("ruff not found"),
+            ):
+                result = runner.invoke(
+                    main,
+                    [
+                        "generate",
+                        str(output_dir),
+                        "--api",
+                        str(openapi_path),
+                        "--configuration",
+                        str(config_path),
+                    ],
+                )
+
+            assert result.exit_code == 1
+            assert marker.exists(), "previous output was deleted despite the abort"
+            assert marker.read_text() == "keep me"

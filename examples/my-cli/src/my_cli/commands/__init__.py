@@ -1,6 +1,12 @@
 # AUTO-GENERATED FILE - DO NOT EDIT
 # Generated from OpenAPI specification by cli-wizard
 
-"""commands."""
+"""Command groups."""
 
-__all__ = []
+from .private import private
+from .public import public
+
+__all__ = [
+    "private",
+    "public",
+]

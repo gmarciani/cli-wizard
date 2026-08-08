@@ -4,10 +4,10 @@
 """Tests for generator models."""
 
 from cli_wizard.generator.models import (
+    CommandGroup,
+    Operation,
     Parameter,
     RequestBodyProperty,
-    Operation,
-    CommandGroup,
 )
 
 

@@ -12,8 +12,9 @@ This schema is the single source of truth for:
 The schema parameters are used directly as Jinja2 template variables.
 """
 
+import keyword
 import re
-from typing import Literal, Any, get_type_hints, get_origin, get_args
+from typing import Any, Literal, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.fields import FieldInfo
@@ -29,11 +30,15 @@ class Config(BaseModel):
     )
     CommandName: str | None = Field(
         default=None,
-        description="CLI command name (kebab-case, derived from ProjectName if not set)",
+        description=(
+            "CLI command name (kebab-case, derived from ProjectName if not set)"
+        ),
     )
     PackageName: str | None = Field(
         default=None,
-        description="Python package name (snake_case, derived from ProjectName if not set)",
+        description=(
+            "Python package name (snake_case, derived from ProjectName if not set)"
+        ),
     )
     Description: str = Field(
         default="A CLI application",
@@ -95,7 +100,10 @@ class Config(BaseModel):
     )
     IncludeOperations: list[str] = Field(
         default_factory=list,
-        description="Operation IDs to include (if empty, all non-excluded operations are included)",
+        description=(
+            "Operation IDs to include (if empty, all non-excluded operations "
+            "are included)"
+        ),
     )
     ExcludeOperations: list[str] = Field(
         default_factory=list,
@@ -158,7 +166,10 @@ class Config(BaseModel):
     )
     LogColorStyle: Literal["full", "level"] = Field(
         default="level",
-        description="Log color style: 'full' colors entire line, 'level' colors only the level prefix",
+        description=(
+            "Log color style: 'full' colors entire line, 'level' colors only "
+            "the level prefix"
+        ),
     )
     LogColorDebug: str = Field(
         default="#808080",
@@ -208,7 +219,9 @@ class Config(BaseModel):
     )
     CaFile: str | None = Field(
         default=None,
-        description="CA certificate file for SSL verification (relative to config or absolute)",
+        description=(
+            "CA certificate file for SSL verification (relative to config or absolute)"
+        ),
     )
     RetryMaxAttempts: int = Field(
         default=3,
@@ -254,6 +267,23 @@ class Config(BaseModel):
                     re.sub(r"[^a-zA-Z0-9]+", "_", project_name).strip("_").lower()
                 )
         return data
+
+    @field_validator("PackageName")
+    @classmethod
+    def validate_package_name(cls, v: str | None) -> str | None:
+        """Validate that PackageName is usable as a Python package name.
+
+        The generated project imports itself by this name, so anything that
+        is not a valid identifier produces source code that does not parse.
+        """
+        if v is None:
+            return v
+        if not v.isidentifier() or keyword.iskeyword(v):
+            raise ValueError(
+                f"'{v}' is not a valid Python package name. It must be a valid "
+                "Python identifier, for example 'my_cli' rather than 'my-cli'."
+            )
+        return v
 
     @field_validator(
         "SplashColor",
