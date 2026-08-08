@@ -19,7 +19,9 @@ from my_cli.cli import _hex_to_rgb, _show_splash, main
 from my_cli.client import ApiClient
 from my_cli.logging import (
     _format_message,
+    _get_file_handler,
     _get_timestamp,
+    _log_to_file,
     _should_log,
     is_debug_enabled,
     log,
@@ -1108,8 +1110,6 @@ class TestLogging:
 
     def test_get_file_handler_size_rotation(self):
         """Test file handler with size rotation."""
-        from my_cli.logging import _get_file_handler
-
         with tempfile.TemporaryDirectory() as tmpdir:
             log_file = Path(tmpdir) / "test.log"
             with patch("my_cli.logging.LOG_FILE", log_file):
@@ -1125,8 +1125,6 @@ class TestLogging:
 
     def test_get_file_handler_days_rotation(self):
         """Test file handler with days rotation."""
-        from my_cli.logging import _get_file_handler
-
         with tempfile.TemporaryDirectory() as tmpdir:
             log_file = Path(tmpdir) / "test.log"
             with patch("my_cli.logging.LOG_FILE", log_file):
@@ -1142,8 +1140,6 @@ class TestLogging:
 
     def test_get_file_handler_none(self):
         """Test file handler when LOG_FILE is None."""
-        from my_cli.logging import _get_file_handler
-
         with patch("my_cli.logging.LOG_FILE", None):
             with patch("my_cli.logging._file_handler", None):
                 handler = _get_file_handler()
@@ -1151,8 +1147,6 @@ class TestLogging:
 
     def test_log_to_file_io_error(self):
         """Test logging to file handles IO errors gracefully."""
-        from my_cli.logging import _log_to_file
-
         with tempfile.TemporaryDirectory() as tmpdir:
             log_file = Path(tmpdir) / "readonly" / "test.log"
             with patch("my_cli.logging.LOG_FILE", log_file):

@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 import click
 
-from .constants import (
+from my_cli.constants import (
     LOG_COLOR_STYLE,
     LOG_COLORS,
     LOG_FILE,

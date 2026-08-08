@@ -4,7 +4,7 @@
 """Command groups."""
 
 {% for tag, group in groups.items() %}
-from .{{ group.module_name }} import {{ group.module_name }}
+from {{ PackageName }}.commands.{{ group.module_name }} import {{ group.module_name }}
 {% endfor %}
 
 __all__ = [

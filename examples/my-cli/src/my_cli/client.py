@@ -11,8 +11,8 @@ from typing import Any
 
 import requests
 
-from .constants import DEFAULT_BASE_URL, DEFAULT_CA_FILE, DEFAULT_TIMEOUT
-from .logging import log_debug
+from my_cli.constants import DEFAULT_BASE_URL, DEFAULT_CA_FILE, DEFAULT_TIMEOUT
+from my_cli.logging import log_debug
 
 
 class ApiClient:
