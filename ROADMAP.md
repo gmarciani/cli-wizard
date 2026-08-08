@@ -14,7 +14,7 @@ Story numbers are stable identifiers assigned when the story is written. Priorit
 |---|---|---|---|
 | **S1**  | ✅ | [B] `generate` deletes the output directory without asking | Confirm before destroying an existing directory, as `bootstrap` already does |
 | **S2**  | ✅ | [B] Circular `#[Param]` references hang forever | Bound the expansion and fail loudly instead of looping |
-| **S3**  |    | [B] `config set` bricks the tool with no way back | Validate on write, degrade on read, make `reset` always work |
+| **S3**  | ✅ | [B] `config set` bricks the tool with no way back | Validate on write, degrade on read, make `reset` always work |
 | **S4**  | ✅ | [B] `bootstrap` writes YAML it cannot read back | Escape scalars so quotes and backslashes survive the round trip |
 | **S18** |    | [B] Prompted values reach the templates unescaped | Escape config values for TOML and Python instead of pasting them in |
 | **S5**  |    | [B] The README documents a CLI that does not exist | Correct the command reference to the flags the tool actually has |
@@ -65,12 +65,15 @@ Story numbers are stable identifiers assigned when the story is written. Priorit
 4. config reset  (recovery!) -> exit 1, ValidationError
 ```
 
-Three routes reach this state: an unknown key, `config unset` on a non-optional field, and a value of the wrong type (`config set JsonIndent abc`).
+Three routes reach this state: an unknown key, `config unset` on a non-optional field, and a value of the wrong type (`config set JsonIndent abc`). The second is worse than a `ValidationError`: `derive_names_from_project` read `ProjectName` with `data.get("ProjectName", "My Project")`, which returns `None` for a key that is present but null, and fed it to `re.sub` — a `TypeError` that no `except` clause anywhere was positioned to catch.
+
+`set` also wrote back the entire merged dump, all ~45 fields, so the first `config set` froze the derived `CommandName`, `PackageName`, `RepositoryUrl` and `CopyrightYear` into the file. A later `config set ProjectName` then changed nothing else, exited 0, and silently generated projects carrying the old names.
 
 **Acceptance criteria**
 - `config set` rejects unknown keys with a clear message and a non-zero exit, writing nothing.
 - `config set` validates and coerces the value against the schema before saving; an invalid value is rejected without modifying the stored config.
-- `config unset` refuses fields that are not optional in the schema.
+- `config unset` removes the key so the schema default applies again; it cannot produce a config the schema rejects, and unsetting a key that was never set is a no-op.
+- `config set` persists only the keys that were explicitly set, so derived values keep tracking the fields they derive from.
 - `load_config` treats an invalid or corrupt config file the same way it treats unreadable YAML: warn and fall back to schema defaults.
 - `config reset` succeeds regardless of the state of the existing file, and does not read it first.
 - Regression tests cover all three corruption routes and confirm `reset` recovers from each.

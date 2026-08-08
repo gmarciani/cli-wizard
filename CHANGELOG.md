@@ -2,6 +2,12 @@
 
 ## 2.1.0
 
+### Breaking Changes
+
+- `config unset <key>` now removes the key so the schema default applies again, instead of writing `null` into it. Writing `null` was how a non-optional field such as `ProjectName` ended up holding a value the schema rejects, which locked every `config` subcommand out of the file. The command no longer refuses any key, because removing one can never produce an invalid config.
+- `config set` now writes only the keys that were explicitly set, instead of the entire merged configuration. Config files written by earlier versions contain every field and stay valid, but their derived values remain frozen at whatever they were when the file was first written; run `cli-wizard config reset` and set your values again to pick up the new behaviour.
+- `config get` and `config unset` now exit non-zero on an unknown key, matching `config set`. They previously logged an error and exited 0.
+
 ### Changes
 
 - Pinned all dependency version constraints (`~=`) to the minor version instead of the patch version.
@@ -32,6 +38,10 @@
 - Fixed `Copyright (c) None` appearing in generated file headers and the LICENSE, and `Homepage = "None"` in the generated `pyproject.toml`.
 - Fixed `bootstrap` writing a `cli-wizard.yaml` it could not read back: string values were wrapped in double quotes with nothing inside them escaped, so a value containing a quote or a backslash — a description with a quotation mark, any Windows-style path — produced a file that failed to parse, and `bootstrap` broke reloading its own output. Values are now escaped when written, and every value accepted at a prompt survives the round trip unchanged.
 - Fixed a circular `#[Param]` reference in the configuration hanging `generate` and `bootstrap` forever, growing the value until memory ran out. Expansion now terminates on any input and reports the offending parameter and value as an invalid configuration. References to parameters that do not exist are still left as written.
+- Fixed `config set` accepting any key and value without validation, which wrote a configuration file that the schema then rejected on every subsequent read. `show`, `get`, `set`, `unset` and `reset` all exited with a traceback, so the documented recovery path was itself unusable and only deleting `~/.cli_wizard/cli-wizard.yaml` by hand restored the tool. Values are now validated and coerced before being written, unknown keys are rejected, and an unreadable or invalid file falls back to schema defaults with a warning rather than raising.
+- Fixed `config set` freezing derived values into the configuration file. Setting any key wrote back all ~45 fields, so `CommandName`, `PackageName`, `RepositoryUrl` and `CopyrightYear` stopped tracking `ProjectName` from that point on, and a later `ProjectName` change silently generated projects carrying the old names.
+- Fixed a `TypeError` when the configuration contained an explicit `ProjectName: null`. Name derivation defaulted only a missing key, not a null one, and passed `None` to `re.sub`.
+- Fixed list-valued configuration fields being unsettable from the command line. `IncludeTags`, `ExcludeTags`, `IncludeOperations` and `ExcludeOperations` now accept a comma-separated value, and the mapping fields `TagMapping` and `CommandMapping` are rejected with a message pointing at the configuration file instead of corrupting it.
 
 
 ## 2.0.0
