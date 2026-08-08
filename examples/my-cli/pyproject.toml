@@ -46,8 +46,8 @@ dev = [
 my-cli = "my_cli.cli:main"
 
 [project.urls]
-Homepage = "None"
-Repository = "None"
+Homepage = "https://github.com/gmarciani/my-cli"
+Repository = "https://github.com/gmarciani/my-cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]

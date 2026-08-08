@@ -1,4 +1,4 @@
-# Copyright (c) None, Firstname Lastname
+# Copyright (c) 2026, Firstname Lastname
 # Licensed under the MIT License
 
 # AUTO-GENERATED FILE - DO NOT EDIT

@@ -28,6 +28,7 @@
 - Fixed the generated GitHub test workflow pointing at the wrong package, which made it fail on the first push of a new project.
 - Fixed generated `tox -e lint` failing on any line longer than 79 characters despite the code being formatted to a wider width.
 - Fixed `PackageName` accepting values that are not valid Python identifiers, which produced a project that could not be imported.
+- Fixed `Copyright (c) None` appearing in generated file headers and the LICENSE, and `Homepage = "None"` in the generated `pyproject.toml`.
 
 
 ## 2.0.0

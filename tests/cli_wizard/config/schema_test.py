@@ -3,6 +3,8 @@
 
 """Tests for configuration schema."""
 
+from datetime import date
+
 import pytest
 from pydantic import ValidationError
 
@@ -47,6 +49,24 @@ class TestConfigSchema:
     def test_empty_package_name_falls_back_to_derivation(self):
         """Test that an empty PackageName is derived from ProjectName."""
         assert Config(PackageName="", ProjectName="My CLI").PackageName == "my_cli"
+
+    def test_copyright_year_defaults_to_current_year(self):
+        """Test that CopyrightYear defaults to the current year."""
+        assert Config().CopyrightYear == date.today().year
+
+    def test_copyright_year_explicit_value_kept(self):
+        """Test that an explicit CopyrightYear is preserved."""
+        assert Config(CopyrightYear=2019).CopyrightYear == 2019
+
+    def test_repository_url_derived_from_github_user_and_command(self):
+        """Test that RepositoryUrl is derived when not set."""
+        config = Config(ProjectName="My Cli", GithubUser="someone")
+        assert config.RepositoryUrl == "https://github.com/someone/my-cli"
+
+    def test_repository_url_explicit_value_kept(self):
+        """Test that an explicit RepositoryUrl is preserved."""
+        config = Config(GithubUser="someone", RepositoryUrl="https://example.com/x")
+        assert config.RepositoryUrl == "https://example.com/x"
 
     def test_extra_fields_forbidden(self):
         """Test that extra fields are not allowed."""
