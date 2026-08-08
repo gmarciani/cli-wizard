@@ -6,6 +6,8 @@ A single prioritized list of **stories**, ordered by severity: data loss and unr
 
 Every story is tagged by type in its title: **[F]** feature · **[B]** bug fix · **[O]** operational.
 
+Story numbers are stable identifiers assigned when the story is written. Priority is given by the order of the table below, not by the number.
+
 ## Overview
 
 | # | Status | Story | Summary |
@@ -13,7 +15,8 @@ Every story is tagged by type in its title: **[F]** feature · **[B]** bug fix �
 | **S1**  | ✅ | [B] `generate` deletes the output directory without asking | Confirm before destroying an existing directory, as `bootstrap` already does |
 | **S2**  | ✅ | [B] Circular `#[Param]` references hang forever | Bound the expansion and fail loudly instead of looping |
 | **S3**  |    | [B] `config set` bricks the tool with no way back | Validate on write, degrade on read, make `reset` always work |
-| **S4**  |    | [B] `bootstrap` writes YAML it cannot read back | Escape scalars so quotes and backslashes survive the round trip |
+| **S4**  | ✅ | [B] `bootstrap` writes YAML it cannot read back | Escape scalars so quotes and backslashes survive the round trip |
+| **S18** |    | [B] Prompted values reach the templates unescaped | Escape config values for TOML and Python instead of pasting them in |
 | **S5**  |    | [B] The README documents a CLI that does not exist | Correct the command reference to the flags the tool actually has |
 | **S6**  |    | [B] `$ref` parameters crash the parser | Resolve component references before reading parameter fields |
 | **S7**  |    | [B] Path-level parameters are silently dropped | Merge path-level `parameters` into every operation on that path |
@@ -88,6 +91,22 @@ A description containing a quotation mark or any Windows-style path is enough. A
 - `null`, booleans, numbers, lists, and dicts keep their current YAML rendering.
 - The unreachable branches are removed.
 - Regression tests assert round-trip equality for a set of hostile string values.
+
+### S18 — [B] Prompted values reach the templates unescaped
+Config values are interpolated into the generated project verbatim: `templates/pyproject.toml.j2:8` writes `description = "{{ Description }}"`, `templates/src/{{ PackageName }}/cli.py.j2:53` writes `help="{{ Description }}"`, and `templates/tests/{{ PackageName }}/cli_test.py.j2:56` writes `assert "{{ Description }}" in result.output`. A description containing a quotation mark therefore produces a `pyproject.toml` that is not valid TOML and a `cli.py` that is not valid Python:
+
+```
+description = "My "cool" CLI"   -> TOML parse error at line 8, column 20
+help="My "cool" CLI",           -> SyntaxError: invalid syntax (cli.py:50)
+```
+
+Generation aborts when ruff cannot parse its own output, so `bootstrap` still fails end to end on the value S4 taught `cli-wizard.yaml` to carry — the same defect one file further along. `AuthorName` and `AuthorEmail` reach `pyproject.toml` by the same route. Found while implementing S4.
+
+**Acceptance criteria**
+- Every value accepted at a bootstrap prompt yields a generated project that parses: valid TOML, valid Python, and clean under ruff.
+- Values interpolated into TOML and into Python string literals are escaped for the target syntax rather than pasted in, wherever they reach a template — not only `Description`.
+- Values rendered into Markdown and comments stay readable, not escaped into noise.
+- Regression tests generate a project from a set of hostile values and assert the output parses.
 
 ### S5 — [B] The README documents a CLI that does not exist
 The `## Commands` section of `README.md` documents four options for `generate` — `--openapi/-o`, `--config/-c`, `--output/-d`, `--working-dir/-w` — none of which the command accepts. The real signature is `generate [OPTIONS] PATH` with `--configuration/-c` and `--api/-a`; the required positional `PATH` is not mentioned at all. Every invocation copied from that section fails. `bootstrap` and `config`, both shipped and both listed in `--help`, are absent from the section entirely.
