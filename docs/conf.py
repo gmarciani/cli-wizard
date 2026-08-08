@@ -12,8 +12,9 @@ project = "CLI Wizard"
 copyright = "2026, Giacomo Marciani"
 author = "Giacomo Marciani"
 
-# Get version from package
-from cli_wizard.constants import __version__
+# Get version from package. This import must stay below the sys.path.insert
+# above, so E402 is expected here.
+from cli_wizard.constants import __version__  # noqa: E402
 
 release = __version__
 
