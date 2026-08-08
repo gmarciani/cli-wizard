@@ -33,6 +33,12 @@
   ~1.18 to ~2.3, pre-commit from ~4.0 to ~4.6, pytest from ~9.0 to ~9.1,
   pytest-cov from ~7.0 to ~7.1, tox from ~4.32 to ~4.58, and types-requests from
   ~2.32 to ~2.33. Ruff ~0.16.2 replaces autoflake, black and flake8.
+- Pinned the dependencies of the generated `tox.ini`, which left mypy, pytest,
+  pytest-cov, types-PyYAML and types-requests unversioned. `tox -e test` and
+  `tox -e lint` therefore resolved whatever was newest at the time they ran,
+  which could differ from the versions the generated `pyproject.toml` pinned.
+  Every dependency shared between cli-wizard and the generated code now carries
+  the same version everywhere it is declared.
 - Upgraded the pre-commit hooks: `pre-commit-hooks` from v5.0.0 to v6.0.0 and
   `mirrors-mypy` from v1.15.0 to v2.3.0, which had lagged four majors behind the
   mypy pinned in the generated `pyproject.toml`. `ruff-pre-commit` v0.16.2

@@ -4,17 +4,17 @@ isolated_build = True
 
 [testenv]
 deps =
-    pytest
-    pytest-cov
+    pytest~=9.1
+    pytest-cov~=7.1
 commands =
     pytest tests/ -v --cov={{ PackageName }} --cov-report=term
 
 [testenv:lint]
 deps =
-    mypy
+    mypy~=2.3
     ruff~=0.16.2
-    types-PyYAML
-    types-requests
+    types-PyYAML~=6.0
+    types-requests~=2.33
 commands =
     ruff check src/ tests/
     ruff format --check src/ tests/
