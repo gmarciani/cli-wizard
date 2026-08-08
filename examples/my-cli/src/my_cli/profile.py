@@ -10,8 +10,8 @@ from typing import Any
 
 import yaml
 
-from .constants import PROFILE_DEFAULTS, PROFILE_FILE
-from .logging import log_debug, log_error, log_info, log_warning
+from my_cli.constants import PROFILE_DEFAULTS, PROFILE_FILE
+from my_cli.logging import log_debug, log_error, log_info, log_warning
 
 _current_profile: dict[str, Any] = {}
 _profile_name: str = "default"

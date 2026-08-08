@@ -10,8 +10,8 @@ from typing import Any
 
 import yaml
 
-from .constants import PROFILE_FILE, PROFILE_DEFAULTS
-from .logging import log_error, log_info, log_warning, log_debug
+from {{ PackageName }}.constants import PROFILE_FILE, PROFILE_DEFAULTS
+from {{ PackageName }}.logging import log_error, log_info, log_warning, log_debug
 
 
 _current_profile: dict[str, Any] = {}

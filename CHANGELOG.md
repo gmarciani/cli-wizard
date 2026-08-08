@@ -18,7 +18,7 @@
 - Upgraded types-requests from ~2.32 to ~2.33.
 - Increased test coverage from 71% to 98%, with new tests for the `bootstrap` command and previously untested code paths in `generate`, `CliGenerator`, and `constants`.
 - Generated projects are formatted and linted with Ruff instead of Black and flake8, and ship a `tox -e format` environment that reproduces exactly how the code was generated.
-- Generated code uses a line length of 88.
+- Generated code uses a line length of 88, absolute imports throughout, and no imports nested inside functions.
 - Ruff is bundled with cli-wizard, so generated code is formatted without installing anything else.
 
 ### Bug Fixes

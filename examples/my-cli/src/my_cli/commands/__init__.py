@@ -3,8 +3,8 @@
 
 """Command groups."""
 
-from .private import private
-from .public import public
+from my_cli.commands.private import private
+from my_cli.commands.public import public
 
 __all__ = [
     "private",

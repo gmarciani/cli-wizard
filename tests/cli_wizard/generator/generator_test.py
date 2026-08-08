@@ -3,6 +3,7 @@
 
 """Tests for CLI generator."""
 
+import ast
 import subprocess
 import tempfile
 from pathlib import Path
@@ -551,3 +552,31 @@ class TestCliGenerator:
                 commands.append(tuple(t for t in tokens if not t.endswith("/")))
 
         assert tuple(commands) == RUFF_COMMANDS
+
+    def test_generated_code_uses_absolute_non_lazy_imports(self):
+        """Test that generated code avoids relative and function-level imports."""
+        groups = self._sample_groups()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate(groups, output_dir, "test-cli", "test_cli")
+
+            for py_file in sorted(output_dir.rglob("*.py")):
+                tree = ast.parse(py_file.read_text())
+
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ImportFrom):
+                        assert node.level == 0, (
+                            f"{py_file.name}:{node.lineno} uses a relative import"
+                        )
+
+                # Imports must live at module level, not inside functions.
+                for node in ast.walk(tree):
+                    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        continue
+                    for inner in ast.walk(node):
+                        assert not isinstance(inner, (ast.Import, ast.ImportFrom)), (
+                            f"{py_file.name}:{getattr(inner, 'lineno', '?')} "
+                            f"has a lazy import inside {node.name}"
+                        )
