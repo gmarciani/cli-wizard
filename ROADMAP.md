@@ -11,7 +11,7 @@ Every story is tagged by type in its title: **[F]** feature · **[B]** bug fix �
 | # | Status | Story | Summary |
 |---|---|---|---|
 | **S1**  | ✅ | [B] `generate` deletes the output directory without asking | Confirm before destroying an existing directory, as `bootstrap` already does |
-| **S2**  |    | [B] Circular `#[Param]` references hang forever | Bound the expansion and fail loudly instead of looping |
+| **S2**  | ✅ | [B] Circular `#[Param]` references hang forever | Bound the expansion and fail loudly instead of looping |
 | **S3**  |    | [B] `config set` bricks the tool with no way back | Validate on write, degrade on read, make `reset` always work |
 | **S4**  |    | [B] `bootstrap` writes YAML it cannot read back | Escape scalars so quotes and backslashes survive the round trip |
 | **S5**  |    | [B] The README documents a CLI that does not exist | Correct the command reference to the flags the tool actually has |

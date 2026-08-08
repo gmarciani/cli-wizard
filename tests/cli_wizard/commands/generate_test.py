@@ -8,10 +8,12 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 import yaml
 from click.testing import CliRunner
 
 from cli_wizard.cli import main
+from cli_wizard.commands.generate import _expand_config_references
 from cli_wizard.generator.generator import RuffNotFoundError
 
 
@@ -614,3 +616,91 @@ class TestGenerateCommand:
             assert result.exit_code == 1
             assert marker.exists(), "previous output was deleted despite the abort"
             assert marker.read_text() == "keep me"
+
+    def test_generate_circular_config_reference(self):
+        """Test generate with a config value that references itself."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            openapi_path, _ = create_test_files(temp_path)
+
+            config_path = temp_path / "cli-wizard.yaml"
+            config_path.write_text(
+                "PackageName: test\n"
+                "DefaultBaseUrl: https://api.example.com\n"
+                'MainDir: "#[MainDir]/x"\n'
+            )
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    str(temp_path / "output"),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
+                ],
+            )
+            assert result.exit_code == 1
+            assert "MainDir" in result.output
+
+
+class TestExpandConfigReferences:
+    """Tests for _expand_config_references helper."""
+
+    def test_simple_reference(self):
+        config = {"A": "x", "B": "#[A]-y"}
+        result = _expand_config_references(config)
+        assert result["B"] == "x-y"
+
+    def test_unresolved_reference_left_as_is(self):
+        config = {"B": "#[Missing]-y"}
+        result = _expand_config_references(config)
+        assert result["B"] == "#[Missing]-y"
+
+    def test_nested_dict_and_list_expansion(self):
+        config = {
+            "A": "x",
+            "nested": {"key": "#[A]-nested"},
+            "items": ["#[A]-1", "#[A]-2"],
+        }
+        result = _expand_config_references(config)
+        assert result["nested"]["key"] == "x-nested"
+        assert result["items"] == ["x-1", "x-2"]
+
+    def test_non_string_value_unchanged(self):
+        config = {"Count": 5}
+        result = _expand_config_references(config)
+        assert result["Count"] == 5
+
+    def test_nested_reference_chain_resolves(self):
+        config = {
+            "CommandName": "mycli",
+            "MainDir": "${HOME}/.#[CommandName]",
+            "ProfileFile": "#[MainDir]/profiles.yaml",
+        }
+        result = _expand_config_references(config)
+        assert result["MainDir"] == "${HOME}/.mycli"
+        assert result["ProfileFile"] == "${HOME}/.mycli/profiles.yaml"
+
+    @pytest.mark.parametrize(
+        "config",
+        [
+            pytest.param({"A": "#[A]/x"}, id="self_reference"),
+            pytest.param({"A": "#[B]", "B": "#[A]"}, id="mutual_cycle"),
+            pytest.param({"A": "#[B]", "B": "#[C]", "C": "#[A]"}, id="indirect_cycle"),
+            pytest.param(
+                {"A": "#[A]", "nested": {"key": "#[A]"}}, id="cycle_reached_from_nested"
+            ),
+        ],
+    )
+    def test_circular_reference_raises(self, config):
+        with pytest.raises(ValueError, match="[Cc]ircular"):
+            _expand_config_references(config)
+
+    def test_circular_reference_error_names_offending_value(self):
+        with pytest.raises(ValueError) as excinfo:
+            _expand_config_references({"MainDir": "#[MainDir]/x"})
+        assert "MainDir" in str(excinfo.value)
+        assert "#[MainDir]/x" in str(excinfo.value)
