@@ -210,7 +210,12 @@ def _load_cli_config(config_path: Path) -> dict:
         raise SystemExit(1)
 
     # Expand #[Param] references
-    return _expand_config_references(config)
+    try:
+        return _expand_config_references(config)
+    except ValueError as e:
+        click.secho("✗ Invalid configuration:", fg="red", err=True)
+        click.secho(f"  • {e}", fg="red", err=True)
+        raise SystemExit(1)
 
 
 def _expand_config_references(config: dict[str, Any]) -> dict[str, Any]:
@@ -218,32 +223,41 @@ def _expand_config_references(config: dict[str, Any]) -> dict[str, Any]:
 
     Supports referencing other config parameters using #[ParamName] syntax.
     Environment variables using ${VAR} syntax are left as-is for runtime expansion.
-    Recursively expands until no more references remain.
+    References to unknown or non-string parameters are left as-is. A parameter
+    that references itself, directly or through other parameters, raises a
+    ValueError rather than expanding forever.
     """
+    pattern = re.compile(r"#\[(\w+)\]")
+    resolved: dict[str, str] = {}
 
-    def expand_value(value: Any, config: dict[str, Any]) -> Any:
+    def resolve(name: str, chain: tuple[str, ...]) -> str:
+        """Resolve a top-level parameter, refusing to expand it into itself."""
+        if name in chain:
+            path = " -> ".join(chain + (name,))
+            raise ValueError(
+                f"Circular #[Param] reference in configuration: {path} "
+                f'(value of {name!r}: "{config[name]}")'
+            )
+        if name not in resolved:
+            resolved[name] = substitute(config[name], chain + (name,))
+        return resolved[name]
+
+    def substitute(value: str, chain: tuple[str, ...]) -> str:
+        def replace(match: re.Match[str]) -> str:
+            param_name = match.group(1)
+            if isinstance(config.get(param_name), str):
+                return resolve(param_name, chain)
+            return match.group(0)
+
+        return pattern.sub(replace, value)
+
+    def expand_value(value: Any) -> Any:
         if isinstance(value, str):
-            # Keep expanding until no more #[Param] references
-            pattern = r"#\[(\w+)\]"
-            prev_value: str | None = None
-            while prev_value != value:
-                prev_value = value
-                matches = re.findall(pattern, value)
-                for param_name in matches:
-                    if param_name in config:
-                        replacement = config[param_name]
-                        if isinstance(replacement, str):
-                            value = value.replace(f"#[{param_name}]", replacement)
-            return value
+            return substitute(value, ())
         elif isinstance(value, dict):
-            return {k: expand_value(v, config) for k, v in value.items()}
+            return {k: expand_value(v) for k, v in value.items()}
         elif isinstance(value, list):
-            return [expand_value(item, config) for item in value]
+            return [expand_value(item) for item in value]
         return value
 
-    # First pass: expand all values
-    expanded: dict[str, Any] = expand_value(config, config)
-
-    # Second pass: re-expand with updated config to handle nested references
-    result: dict[str, Any] = expand_value(expanded, expanded)
-    return result
+    return {key: expand_value(value) for key, value in config.items()}
