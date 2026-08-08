@@ -30,6 +30,7 @@
 - Fixed generated `tox -e lint` failing on any line longer than 79 characters despite the code being formatted to a wider width.
 - Fixed `PackageName` accepting values that are not valid Python identifiers, which produced a project that could not be imported.
 - Fixed `Copyright (c) None` appearing in generated file headers and the LICENSE, and `Homepage = "None"` in the generated `pyproject.toml`.
+- Fixed `bootstrap` writing a `cli-wizard.yaml` it could not read back: string values were wrapped in double quotes with nothing inside them escaped, so a value containing a quote or a backslash — a description with a quotation mark, any Windows-style path — produced a file that failed to parse, and `bootstrap` broke reloading its own output. Values are now escaped when written, and every value accepted at a prompt survives the round trip unchanged.
 - Fixed a circular `#[Param]` reference in the configuration hanging `generate` and `bootstrap` forever, growing the value until memory ran out. Expansion now terminates on any input and reports the offending parameter and value as an invalid configuration. References to parameters that do not exist are still left as written.
 
 

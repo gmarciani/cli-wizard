@@ -22,6 +22,10 @@ from cli_wizard.generator import CliGenerator
 logger = logging.getLogger(__name__)
 
 
+# Width beyond which PyYAML would wrap a scalar onto a second line
+YAML_NO_WRAP_WIDTH = 2**31 - 1
+
+
 # Parameters prompted during bootstrap (in order)
 BOOTSTRAP_PARAMS: list[str] = [
     "CommandName",
@@ -254,13 +258,17 @@ def _yaml_value(value: Any) -> str:
     elif isinstance(value, bool):
         return "true" if value else "false"
     elif isinstance(value, str):
-        # Quote strings that might be ambiguous
-        if value == "" or value in ("true", "false", "null", "yes", "no"):
-            return f'"{value}"'
-        # Quote strings with special characters
-        if any(c in value for c in ":#{}[]&*!|>'\"%@`"):
-            return f'"{value}"'
-        return f'"{value}"'
+        # Always double-quoted, and escaped by PyYAML rather than by hand, so
+        # that quotes, backslashes and control characters survive the round
+        # trip through the file. The template writes one value per line, so
+        # line wrapping is disabled.
+        return yaml.safe_dump(
+            value,
+            default_style='"',
+            default_flow_style=True,
+            allow_unicode=True,
+            width=YAML_NO_WRAP_WIDTH,
+        ).strip()
     elif isinstance(value, (int, float)):
         return str(value)
     elif isinstance(value, list):

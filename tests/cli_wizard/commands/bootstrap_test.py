@@ -4,12 +4,14 @@
 """Tests for bootstrap command."""
 
 import pytest
+import yaml
 from click.testing import CliRunner
 
 from cli_wizard.cli import main
 from cli_wizard.commands.bootstrap import (
     BOOTSTRAP_PARAMS,
     _expand_config_references,
+    _generate_config_file,
     _get_default_for_param,
     _load_cli_config,
     _load_existing_config,
@@ -17,6 +19,24 @@ from cli_wizard.commands.bootstrap import (
 )
 
 DEFAULT_ANSWERS = "\n" * len(BOOTSTRAP_PARAMS)
+
+# Values a prompt accepts that YAML would misread if written unescaped
+HOSTILE_STRINGS = [
+    pytest.param('My "cool" CLI', id="double_quotes"),
+    pytest.param("C:\\path\\to", id="backslashes"),
+    pytest.param('mix of \\ and "', id="backslash_and_quote"),
+    pytest.param("key: value", id="colon"),
+    pytest.param("  padded  ", id="surrounding_whitespace"),
+    pytest.param("# not a comment", id="hash"),
+    pytest.param("'single quoted'", id="single_quotes"),
+    pytest.param("tab\tseparated", id="tab"),
+    pytest.param("first\nsecond", id="newline"),
+    pytest.param("{braces} [brackets] &anchor *alias", id="yaml_indicators"),
+    pytest.param("ünïcode ✓", id="unicode"),
+    pytest.param("x" * 200, id="long_value"),
+    pytest.param("", id="empty"),
+    pytest.param("true", id="ambiguous_boolean"),
+]
 
 
 class TestBootstrapCommand:
@@ -304,6 +324,27 @@ class TestYamlValue:
 
     def test_fallback_repr(self):
         assert _yaml_value((1, 2)) == str((1, 2))
+
+    @pytest.mark.parametrize("value", HOSTILE_STRINGS)
+    def test_string_round_trips_through_yaml(self, value):
+        assert yaml.safe_load(f"Key: {_yaml_value(value)}") == {"Key": value}
+
+    def test_string_is_written_on_a_single_line(self):
+        assert "\n" not in _yaml_value("first\nsecond " + "x" * 200)
+
+
+class TestGenerateConfigFile:
+    """Tests for _generate_config_file helper."""
+
+    @pytest.mark.parametrize("value", HOSTILE_STRINGS)
+    def test_prompted_values_round_trip(self, tmp_path, value):
+        config_path = tmp_path / "cli-wizard.yaml"
+        prompted = {param: value for param in BOOTSTRAP_PARAMS}
+
+        _generate_config_file(config_path, prompted)
+
+        loaded = yaml.safe_load(config_path.read_text())
+        assert {param: loaded[param] for param in BOOTSTRAP_PARAMS} == prompted
 
 
 class TestExpandConfigReferences:
