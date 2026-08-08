@@ -4,6 +4,7 @@
 """Tests for CLI generator."""
 
 import ast
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -12,6 +13,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
+import cli_wizard
 from cli_wizard.generator.generator import (
     RUFF_COMMANDS,
     CliGenerator,
@@ -580,3 +582,78 @@ class TestCliGenerator:
                             f"{py_file.name}:{getattr(inner, 'lineno', '?')} "
                             f"has a lazy import inside {node.name}"
                         )
+
+
+def _parse_pyproject_pins(text):
+    """Collect ``name -> specifier`` from every dependency array in a pyproject."""
+    pins = {}
+    pattern = r"^(?:dependencies|dev|docs) = \[(.*?)^]"
+    for block in re.findall(pattern, text, re.S | re.M):
+        for entry in re.findall(r'"([^"]+)"', block):
+            name, specifier = re.match(r"([A-Za-z0-9_.-]+)(.*)", entry).groups()
+            pins[name.lower()] = specifier
+    return pins
+
+
+def _parse_tox_pins(text):
+    """Collect ``name -> specifier`` from every ``deps`` entry in a tox.ini."""
+    pins = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("deps ="):
+            line = line[len("deps =") :].strip()
+        match = re.fullmatch(r"([A-Za-z0-9_.-]+)((?:~=|==|>=|<).*)?", line)
+        if match and match.group(2):
+            pins[match.group(1).lower()] = match.group(2)
+    return pins
+
+
+TEMPLATES_DIR = Path(cli_wizard.__file__).parent / "templates"
+REPO_ROOT = Path(__file__).parents[3]
+
+
+class TestDependencyPins:
+    """Common dependencies must be pinned identically everywhere they appear."""
+
+    def test_cli_wizard_and_generated_pyproject_agree(self):
+        """Test that shared deps use the same specifier in both pyprojects."""
+        ours = _parse_pyproject_pins((REPO_ROOT / "pyproject.toml").read_text())
+        theirs = _parse_pyproject_pins(
+            (TEMPLATES_DIR / "pyproject.toml.j2").read_text()
+        )
+
+        shared = sorted(set(ours) & set(theirs))
+        assert shared, "expected the two pyprojects to share dependencies"
+
+        mismatched = {n: (ours[n], theirs[n]) for n in shared if ours[n] != theirs[n]}
+        assert not mismatched, f"pins differ between pyprojects: {mismatched}"
+
+    def test_generated_tox_agrees_with_generated_pyproject(self):
+        """Test that the generated tox envs pin what the generated pyproject pins."""
+        pyproject = _parse_pyproject_pins(
+            (TEMPLATES_DIR / "pyproject.toml.j2").read_text()
+        )
+        tox = _parse_tox_pins((TEMPLATES_DIR / "tox.ini.j2").read_text())
+
+        assert tox, "expected the generated tox.ini to pin its dependencies"
+
+        mismatched = {
+            name: (specifier, pyproject[name])
+            for name, specifier in tox.items()
+            if name in pyproject and specifier != pyproject[name]
+        }
+        assert not mismatched, (
+            f"generated tox.ini disagrees with pyproject: {mismatched}"
+        )
+
+    def test_generated_tox_leaves_no_dependency_unpinned(self):
+        """Test that every generated tox dep carries a version specifier."""
+        text = (TEMPLATES_DIR / "tox.ini.j2").read_text()
+
+        unpinned = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if line.startswith(" ") and re.fullmatch(r"[A-Za-z0-9_.-]+", stripped):
+                unpinned.append(stripped)
+
+        assert not unpinned, f"unpinned deps in generated tox.ini: {unpinned}"
