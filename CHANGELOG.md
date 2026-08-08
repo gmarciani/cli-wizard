@@ -11,22 +11,41 @@
 ### Changes
 
 - Pinned all dependency version constraints (`~=`) to the minor version instead of the patch version.
-- Upgraded click from ~8.3.1 to ~8.4.
-- Upgraded pydantic from ~2.12.5 to ~2.13.
-- Upgraded requests from ~2.32.5 to ~2.34.
-- Upgraded build from ~1.4 to ~1.5.
-- Upgraded mypy from ~1.19 to ~2.2.
-- Upgraded pre-commit from ~4.5 to ~4.6.
-- Upgraded pytest from ~9.0 to ~9.1.
-- Upgraded pytest-cov from ~7.0 to ~7.1.
-- Upgraded tox from ~4.34 to ~4.56.
-- Upgraded twine from ~6.2 to >=6.2,<8.0.
-- Upgraded types-requests from ~2.32 to ~2.33.
 - Increased test coverage from 71% to 98%, with new tests for the `bootstrap` command and previously untested code paths in `generate`, `CliGenerator`, and `constants`.
 - Generated projects are formatted and linted with Ruff instead of Black and flake8, and ship a `tox -e format` environment that reproduces exactly how the code was generated.
 - Generated code uses a line length of 88, absolute imports throughout, and no imports nested inside functions.
 - Ruff is bundled with cli-wizard, so generated code is formatted without installing anything else.
 - `generate` now asks for confirmation before deleting a non-empty output directory, naming the directory and stating that its entire contents will be removed. Declining leaves the directory untouched and exits non-zero. A new `--force`/`-f` flag skips the prompt, matching the flag `bootstrap` already provides. Empty and non-existent output directories proceed without prompting.
+
+**Dependencies in cli-wizard**
+
+- Upgraded click from ~8.3.1 to ~8.4.
+- Upgraded pydantic from ~2.12.5 to ~2.13.
+- Upgraded requests from ~2.32.5 to ~2.34.
+- Added ruff ~0.16.2 as a runtime dependency.
+
+**Dependencies in generated code**
+
+- Upgraded click from ~8.1 to ~8.4.
+- Upgraded pydantic from ~2.10 to ~2.13.
+- Upgraded requests from ~2.32 to ~2.34.
+- Upgraded the development dependencies: build from ~1.3 to ~1.5, mypy from
+  ~1.18 to ~2.3, pre-commit from ~4.0 to ~4.6, pytest from ~9.0 to ~9.1,
+  pytest-cov from ~7.0 to ~7.1, tox from ~4.32 to ~4.58, and types-requests from
+  ~2.32 to ~2.33. Ruff ~0.16.2 replaces autoflake, black and flake8.
+- Upgraded the pre-commit hooks: `pre-commit-hooks` from v5.0.0 to v6.0.0 and
+  `mirrors-mypy` from v1.15.0 to v2.3.0, which had lagged four majors behind the
+  mypy pinned in the generated `pyproject.toml`. `ruff-pre-commit` v0.16.2
+  replaces the black and flake8 hooks.
+- Upgraded the GitHub Actions used by the generated workflows:
+  `actions/checkout` from v4 to v7, `actions/setup-python` from v4 (v5 in
+  `release.yaml`) to v7, `actions/upload-pages-artifact` from v3 to v5,
+  `actions/deploy-pages` from v4 to v5, `actions/labeler` from v5 to v7,
+  `github/codeql-action` from v3 to v4, and `codecov/codecov-action` from v5 to
+  v7.
+- Pinned `b4b4r07/github-labeler` in the generated `sync-labels.yaml` to v0.2.1.
+  It tracked `@master`, so every run executed whatever that branch happened to
+  point at.
 
 ### Bug Fixes
 

@@ -18,9 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Sync Labels
-        uses: b4b4r07/github-labeler@master
+        uses: b4b4r07/github-labeler@v0.2.1
         with:
           config: .github/labels.yaml
         env:

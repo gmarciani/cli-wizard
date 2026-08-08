@@ -27,17 +27,17 @@ dependencies = [
     "pydantic~=2.13",
     "PyYAML~=6.0",
     "requests~=2.34",
-    "ruff~=0.16.1",
+    "ruff~=0.16.2",
 ]
 
 [project.optional-dependencies]
 dev = [
     "build~=1.5",
-    "mypy~=2.2",
+    "mypy~=2.3",
     "pre-commit~=4.6",
     "pytest~=9.1",
     "pytest-cov~=7.1",
-    "tox~=4.56",
+    "tox~=4.58",
     "twine>=6.2,<8.0",
     "types-PyYAML~=6.0",
     "types-requests~=2.33",

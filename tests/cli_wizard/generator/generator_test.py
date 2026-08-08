@@ -464,7 +464,7 @@ class TestCliGenerator:
             # Rendering must not join lines or otherwise break the YAML.
             parsed = yaml.safe_load(content)
             steps = parsed["jobs"]["test"]["steps"]
-            assert {"uses": "actions/checkout@v4"} in steps
+            assert {"uses": "actions/checkout@v7"} in steps
             assert any(s.get("name") == "Lint with ruff" for s in steps)
 
     def _sample_groups(self) -> dict:
