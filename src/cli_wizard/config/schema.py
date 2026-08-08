@@ -14,6 +14,7 @@ The schema parameters are used directly as Jinja2 template variables.
 
 import keyword
 import re
+from datetime import date
 from typing import Any, Literal, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -255,7 +256,13 @@ class Config(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def derive_names_from_project(cls, data: Any) -> Any:
-        """Derive CommandName and PackageName from ProjectName when not set."""
+        """Derive optional fields that have a sensible value from the others.
+
+        These derivations live here rather than in the bootstrap prompts so
+        that ``generate`` gets them too. Leaving them unset previously
+        rendered "Copyright (c) None" and 'Homepage = "None"' into generated
+        projects.
+        """
         if isinstance(data, dict):
             project_name = data.get("ProjectName", "My Project")
             if not data.get("CommandName"):
@@ -265,6 +272,15 @@ class Config(BaseModel):
             if not data.get("PackageName"):
                 data["PackageName"] = (
                     re.sub(r"[^a-zA-Z0-9]+", "_", project_name).strip("_").lower()
+                )
+            if not data.get("CopyrightYear"):
+                data["CopyrightYear"] = date.today().year
+            if not data.get("RepositoryUrl"):
+                github_user = data.get("GithubUser") or cls.get_field_default(
+                    "GithubUser"
+                )
+                data["RepositoryUrl"] = (
+                    f"https://github.com/{github_user}/{data['CommandName']}"
                 )
         return data
 
