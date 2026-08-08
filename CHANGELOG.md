@@ -49,6 +49,10 @@
 
 ### Bug Fixes
 
+- Fixed `pre-commit run --all-files` failing on an E402 in `docs/conf.py`. The
+  import has to follow the `sys.path.insert` that makes the package importable,
+  so it is now marked `# noqa: E402`. `tox -e lint` never caught this because it
+  only scans `src/cli_wizard` and `tests/`, while pre-commit scans every file.
 - Fixed `IncludeGithubWorkflows` generation, which always failed with a `TemplateNotFound` error due to a filename mismatch between the `changelog-enforcer.yaml` workflow template and its reference in the generator.
 - Fixed generated code shipping unformatted, which produced hundreds of lines of formatting-only diff every time a CLI was regenerated.
 - Fixed the generated GitHub test workflow pointing at the wrong package, which made it fail on the first push of a new project.
