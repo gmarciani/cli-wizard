@@ -264,7 +264,10 @@ class Config(BaseModel):
         projects.
         """
         if isinstance(data, dict):
-            project_name = data.get("ProjectName", "My Project")
+            # An explicit null must fall back too, not just a missing key: a
+            # config carrying "ProjectName: null" would otherwise reach re.sub
+            # as None and raise TypeError instead of a ValidationError.
+            project_name = data.get("ProjectName") or "My Project"
             if not data.get("CommandName"):
                 data["CommandName"] = (
                     re.sub(r"[^a-zA-Z0-9]+", "-", project_name).strip("-").lower()
@@ -340,6 +343,32 @@ class Config(BaseModel):
             if field_info.default_factory is not None:
                 return field_info.default_factory()  # type: ignore[call-arg]
         return None
+
+    @classmethod
+    def parse_cli_value(cls, field_name: str, raw: str) -> Any:
+        """Convert a raw CLI string argument into a value for ``field_name``.
+
+        Click arguments always arrive as strings. List fields accept a
+        comma-separated string; mapping fields have no sensible
+        single-argument form. Scalars are left for Pydantic to coerce.
+
+        Raises:
+            ValueError: if the field is unknown or cannot be set from the CLI.
+        """
+        field_info = cls.get_field_info(field_name)
+        if field_info is None:
+            raise ValueError(f"'{field_name}' is not a configuration key")
+
+        origin = get_origin(field_info.annotation)
+        if origin is list:
+            # An empty string clears the list; there is no other way to do it.
+            return [item.strip() for item in raw.split(",") if item.strip()]
+        if origin is dict:
+            raise ValueError(
+                f"'{field_name}' is a mapping and cannot be set from the command "
+                "line. Edit the configuration file directly."
+            )
+        return raw
 
     @classmethod
     def get_all_fields_metadata(cls) -> list[dict[str, Any]]:

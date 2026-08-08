@@ -274,3 +274,58 @@ class TestConfigSchema:
         assert config.PackageName == "my_cli"
         assert config.ExcludeTags == ["internal"]
         assert config.LogRotationSize == 50
+
+
+class TestParseCliValue:
+    """Tests for Config.parse_cli_value."""
+
+    @pytest.mark.parametrize(
+        "field_name,raw",
+        [
+            ("ProjectName", "My Project"),
+            ("JsonIndent", "4"),
+            ("OutputColors", "false"),
+            ("CommandName", "my-cli"),
+            ("LogFile", "/var/log/my-cli.log"),
+        ],
+    )
+    def test_scalars_pass_through_untouched(self, field_name, raw):
+        """Scalars are left for Pydantic to coerce."""
+        assert Config.parse_cli_value(field_name, raw) == raw
+
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("users", ["users"]),
+            ("users,admin", ["users", "admin"]),
+            ("users, admin", ["users", "admin"]),
+            ("users,,admin", ["users", "admin"]),
+            ("users,", ["users"]),
+            ("  users  ", ["users"]),
+            ("", []),
+            (",", []),
+        ],
+    )
+    def test_list_fields_split_on_commas(self, raw, expected):
+        """List fields accept a comma-separated string."""
+        assert Config.parse_cli_value("IncludeTags", raw) == expected
+
+    @pytest.mark.parametrize("field_name", ["TagMapping", "CommandMapping"])
+    def test_mapping_fields_are_rejected(self, field_name):
+        """Mappings have no single-argument form and are rejected outright."""
+        with pytest.raises(ValueError, match="mapping and cannot be set"):
+            Config.parse_cli_value(field_name, "a=b")
+
+    def test_unknown_field_is_rejected(self):
+        """An unknown field name is an error, not a silent pass-through."""
+        with pytest.raises(ValueError, match="not a configuration key"):
+            Config.parse_cli_value("NotAField", "value")
+
+
+class TestDeriveNamesFromProject:
+    """Tests for derivation robustness."""
+
+    def test_explicit_null_project_name_is_a_validation_error(self):
+        """A null ProjectName must not reach re.sub and raise TypeError."""
+        with pytest.raises(ValidationError):
+            Config(ProjectName=None)
