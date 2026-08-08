@@ -3,31 +3,33 @@
 
 """Generate command for CLI Wizard."""
 
+import logging
 import re
+import shutil
+from pathlib import Path
 from typing import Any
 
 import click
-import logging
-import shutil
-from pathlib import Path
-
 import yaml
 from pydantic import ValidationError
 
 from cli_wizard.config.schema import Config
 from cli_wizard.constants import CONFIG_FILE_NAME
-from cli_wizard.generator import OpenApiParser, CliGenerator
+from cli_wizard.generator import CliGenerator, OpenApiParser
+from cli_wizard.generator.generator import RuffNotFoundError, resolve_ruff
 
 logger = logging.getLogger(__name__)
 
 
-@click.command(help="""Generate the CLI from config and OpenAPI spec.
+@click.command(
+    help="""Generate the CLI from config and OpenAPI spec.
 
 PATH is the output directory where the CLI project will be generated.
 It can be a relative or absolute path.
 
 If --api is provided, API commands will be generated from the OpenAPI spec.
-Otherwise, a functional CLI is generated without API commands.""")
+Otherwise, a functional CLI is generated without API commands."""
+)
 @click.argument(
     "path",
     type=click.Path(file_okay=False, resolve_path=True),
@@ -115,6 +117,13 @@ def generate(
             "ℹ️  No OpenAPI spec provided, generating CLI without API commands",
             fg="cyan",
         )
+
+    # Verify the formatter before deleting the previous output
+    try:
+        resolve_ruff()
+    except RuffNotFoundError as e:
+        click.secho(f"✗ {e}", fg="red", err=True)
+        raise SystemExit(1)
 
     # Clean up output directory before generating
     if output_path.exists():

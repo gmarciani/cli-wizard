@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Firstname Lastname
+# Copyright (c) None, Firstname Lastname
 # Licensed under the MIT License
 
 # AUTO-GENERATED FILE - DO NOT EDIT
@@ -6,29 +6,30 @@
 
 """Main CLI entry point."""
 
-import os
-import sys
 from pathlib import Path
 
 import click
 
+from my_cli.commands.config import config
+from my_cli.commands.private import private
+from my_cli.commands.public import public
 from my_cli.constants import (
-    __version__,
-    DEFAULT_BASE_URL,
-    DEFAULT_CA_FILE,
+    SPLASH_COLOR,
     SPLASH_ENABLED,
     SPLASH_FILE,
-    SPLASH_COLOR,
+    __version__,
 )
 from my_cli.logging import set_debug
 from my_cli.profile import load_profile
-from my_cli.commands.config import config
 
 
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """Convert hex color to RGB tuple."""
     hex_color = hex_color.lstrip("#")
-    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    return (r, g, b)
 
 
 def _show_splash() -> None:
@@ -46,9 +47,12 @@ def _show_splash() -> None:
 _show_splash()
 
 
-@click.group(invoke_without_command=True, help="A CLI application")
+@click.group(
+    invoke_without_command=True,
+    help="A CLI application",
+)
 @click.version_option(version=__version__)
-@click.option("--profile", "-p", default="default", help="Profile name to use.")
+@click.option("--profile", "-p", default="default", help="Profile name.")
 @click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
 @click.option("--base-url", "-u", envvar="API_BASE_URL", help="API base URL.")
 @click.option(
@@ -92,6 +96,8 @@ def main(
 
 
 main.add_command(config)
+main.add_command(private)
+main.add_command(public)
 
 
 if __name__ == "__main__":

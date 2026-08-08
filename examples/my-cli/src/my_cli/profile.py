@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Firstname Lastname
+# Copyright (c) None, Firstname Lastname
 # Licensed under the MIT License
 
 # AUTO-GENERATED FILE - DO NOT EDIT
@@ -6,13 +6,12 @@
 
 """Profile management for the generated CLI."""
 
-from pathlib import Path
 from typing import Any
 
 import yaml
 
-from .constants import PROFILE_FILE
-from .logging import log_error, log_info, log_warning, log_debug
+from .constants import PROFILE_DEFAULTS, PROFILE_FILE
+from .logging import log_debug, log_error, log_info, log_warning
 
 _current_profile: dict[str, Any] = {}
 _profile_name: str = "default"
@@ -31,9 +30,8 @@ def load_profile(profile_name: str = "default") -> dict[str, Any]:
     _profile_name = profile_name
 
     if not PROFILE_FILE.exists():
-        log_warning(
-            f"Profile file not found: {PROFILE_FILE}. Creating default profile file."
-        )
+        msg = f"Profile file not found: {PROFILE_FILE}. Creating default."
+        log_warning(msg)
         _create_default_profile_file()
         _current_profile = {}
         return _current_profile
@@ -60,7 +58,7 @@ def _create_default_profile_file() -> None:
     """Create a default profile file with empty settings."""
     try:
         PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        default_content = {"default": {}}
+        default_content: dict[str, dict[str, Any]] = {"default": {}}
         with open(PROFILE_FILE, "w") as f:
             yaml.safe_dump(default_content, f, default_flow_style=False)
         log_info(f"Created default profile file: {PROFILE_FILE}")
@@ -86,6 +84,9 @@ def get_profile_value(key: str, default: Any = None) -> Any:
         default: Default value if key not found
 
     Returns:
-        The value from the profile, or default if not found
+        The value from the profile, the profile default,
+        or the provided default if not found
     """
-    return _current_profile.get(key, default)
+    if key in _current_profile:
+        return _current_profile[key]
+    return PROFILE_DEFAULTS.get(key, default)

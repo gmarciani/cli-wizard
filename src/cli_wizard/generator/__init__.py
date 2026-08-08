@@ -3,14 +3,14 @@
 
 """Generator package for CLI Wizard."""
 
-from cli_wizard.generator.parser import OpenApiParser
 from cli_wizard.generator.generator import CliGenerator
 from cli_wizard.generator.models import (
+    CommandGroup,
+    Operation,
     Parameter,
     RequestBodyProperty,
-    Operation,
-    CommandGroup,
 )
+from cli_wizard.generator.parser import OpenApiParser
 
 __all__ = [
     "OpenApiParser",

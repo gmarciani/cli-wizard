@@ -11,17 +11,17 @@ commands =
 
 [testenv:lint]
 deps =
-    flake8
     mypy
+    ruff~=0.16.1
     types-PyYAML
     types-requests
 commands =
-    flake8 src/ tests/
+    ruff check src/ tests/
+    ruff format --check src/ tests/
     mypy src/
 
 [testenv:format]
-deps =
-    black
-    autoflake
+deps = ruff~=0.16.1
 commands =
-    black --check src/ tests/
+    ruff check --fix src/ tests/
+    ruff format src/ tests/

@@ -6,6 +6,7 @@
 import logging
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,46 @@ def _build_url_path(op: Operation) -> str:
 
 
 logger = logging.getLogger(__name__)
+
+
+# Ruff invocations applied to generated code, as (args...) without the binary
+# or the target path. The generated tox.ini [testenv:format] must run the same
+# commands; test_format_recipe_matches_tox_template enforces that.
+RUFF_COMMANDS: tuple[tuple[str, ...], ...] = (
+    ("check", "--fix"),
+    ("format",),
+)
+
+
+class RuffNotFoundError(RuntimeError):
+    """Raised when the ruff formatter cannot be located."""
+
+
+def resolve_ruff() -> list[str]:
+    """Return the command prefix used to invoke ruff.
+
+    cli-wizard depends on ruff, so the copy installed alongside it is tried
+    first. That copy has the pinned version, while a ruff found on PATH could
+    be any version and would format differently - the exact instability this
+    formatting step exists to prevent. PATH is only a fallback for unusual
+    installations.
+    """
+    probe = subprocess.run(
+        [sys.executable, "-m", "ruff", "--version"],
+        capture_output=True,
+    )
+    if probe.returncode == 0:
+        return [sys.executable, "-m", "ruff"]
+
+    ruff_path = shutil.which("ruff")
+    if ruff_path:
+        return [ruff_path]
+
+    raise RuffNotFoundError(
+        "ruff is required to generate formatter-stable code but could not be "
+        "run. It is a dependency of cli-wizard, so this usually means the "
+        "installation is broken; reinstalling cli-wizard should fix it."
+    )
 
 
 class CliGenerator:
@@ -92,6 +133,10 @@ class CliGenerator:
         """Generate a complete CLI project."""
         self.package_name = package_name
         self.cli_name = cli_name
+
+        # Fail before creating anything if the formatter is unavailable
+        resolve_ruff()
+
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Create project structure
@@ -153,8 +198,8 @@ class CliGenerator:
         for tag, group in groups.items():
             self._generate_command_group(group, commands_dir)
 
-        # Format generated Python files with Black
-        self._format_python_files(output_dir)
+        # Organise imports and format generated Python files with ruff
+        self._format_generated_code(output_dir)
 
     def _generate_pyproject(
         self, output_dir: Path, cli_name: str, package_name: str
@@ -414,7 +459,6 @@ class CliGenerator:
             ),
             (".github/workflows/release.yaml", workflows_dir / "release.yaml"),
             (".github/workflows/sync-labels.yaml", workflows_dir / "sync-labels.yaml"),
-            (".github/workflows/test.yaml", workflows_dir / "test.yaml"),
         ]
         for template_name, output_path in static_files:
             # Use get_template to read static files through Jinja loader
@@ -423,6 +467,12 @@ class CliGenerator:
                 source = loader.get_source(self.env, template_name)[0]
                 with open(output_path, "w") as f:
                     f.write(source)
+
+        # test.yaml is rendered because it references the generated package name
+        template = self.env.get_template(".github/workflows/test.yaml.j2")
+        content = template.render(**self._template_context())
+        with open(workflows_dir / "test.yaml", "w") as f:
+            f.write(content)
 
     def _generate_tests(self, tests_dir: Path) -> None:
         """Generate test files."""
@@ -433,15 +483,36 @@ class CliGenerator:
             f.write(content)
 
     @staticmethod
-    def _format_python_files(output_dir: Path) -> None:
-        """Format generated Python files with Black if available."""
-        try:
-            subprocess.run(
-                ["black", "--quiet", "--line-length=100", str(output_dir)],
-                check=True,
+    def _format_generated_code(output_dir: Path) -> None:
+        """Organise imports and format generated Python files with ruff.
+
+        Line length is read from the generated pyproject.toml, so no
+        --line-length flag is passed here.
+        """
+        ruff = resolve_ruff()
+        for args in RUFF_COMMANDS:
+            # --no-cache is a generator-side detail, not part of the shared
+            # recipe: without it ruff writes a .ruff_cache directory into the
+            # project it is formatting, polluting the output and giving it
+            # non-deterministic contents.
+            subcommand, *rest = args
+            result = subprocess.run(
+                [*ruff, subcommand, "--no-cache", *rest, str(output_dir)],
                 capture_output=True,
             )
-        except FileNotFoundError:
-            logger.debug("Black not found, skipping formatting")
-        except subprocess.CalledProcessError as e:
-            logger.warning("Black formatting failed: %s", e.stderr.decode())
+            # Ruff exits 1 for "violations remain", which is a code-quality
+            # signal and must not abort generation. Exit 2 and above means
+            # ruff could not do its job - unparseable code, bad config, IO
+            # failure - and the output cannot be trusted.
+            if result.returncode >= 2:
+                details = (
+                    result.stderr.decode().strip() or result.stdout.decode().strip()
+                )
+                raise RuntimeError(
+                    f"ruff {' '.join(args)} failed on generated code: {details}"
+                )
+            if result.returncode == 1:
+                logger.warning(
+                    "ruff %s reported unresolved violations in generated code",
+                    " ".join(args),
+                )

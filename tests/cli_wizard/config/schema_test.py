@@ -23,17 +23,36 @@ class TestConfigSchema:
     def test_custom_values(self):
         """Test configuration with custom values."""
         config = Config(
-            PackageName="my-cli",
+            PackageName="my_cli",
             DefaultBaseUrl="https://api.example.com",
         )
-        assert config.PackageName == "my-cli"
+        assert config.PackageName == "my_cli"
         assert config.DefaultBaseUrl == "https://api.example.com"
+
+    @pytest.mark.parametrize(
+        "package_name",
+        ["my-cli", "my cli", "2cli", "my.cli", "class"],
+    )
+    def test_invalid_package_name_rejected(self, package_name):
+        """Test that PackageName must be a valid Python package name."""
+        with pytest.raises(ValidationError) as exc_info:
+            Config(PackageName=package_name)
+        assert "not a valid Python package name" in str(exc_info.value)
+
+    @pytest.mark.parametrize("package_name", ["my_cli", "mycli", "my_cli2", "_cli"])
+    def test_valid_package_name_accepted(self, package_name):
+        """Test that valid Python identifiers are accepted as PackageName."""
+        assert Config(PackageName=package_name).PackageName == package_name
+
+    def test_empty_package_name_falls_back_to_derivation(self):
+        """Test that an empty PackageName is derived from ProjectName."""
+        assert Config(PackageName="", ProjectName="My CLI").PackageName == "my_cli"
 
     def test_extra_fields_forbidden(self):
         """Test that extra fields are not allowed."""
         with pytest.raises(ValidationError) as exc_info:
             Config(
-                PackageName="my-cli",
+                PackageName="my_cli",
                 DefaultBaseUrl="https://api.example.com",
                 UnknownField="value",
             )
@@ -42,7 +61,7 @@ class TestConfigSchema:
     def test_valid_hex_color(self):
         """Test valid hex color codes."""
         config = Config(
-            PackageName="my-cli",
+            PackageName="my_cli",
             DefaultBaseUrl="https://api.example.com",
             SplashColor="#FF0000",
             LogColorDebug="#00FF00",
@@ -54,7 +73,7 @@ class TestConfigSchema:
         """Test invalid hex color codes."""
         with pytest.raises(ValidationError) as exc_info:
             Config(
-                PackageName="my-cli",
+                PackageName="my_cli",
                 DefaultBaseUrl="https://api.example.com",
                 SplashColor="red",
             )
@@ -64,7 +83,7 @@ class TestConfigSchema:
         """Test invalid short hex color codes."""
         with pytest.raises(ValidationError) as exc_info:
             Config(
-                PackageName="my-cli",
+                PackageName="my_cli",
                 DefaultBaseUrl="https://api.example.com",
                 SplashColor="#FFF",
             )
@@ -73,7 +92,7 @@ class TestConfigSchema:
     def test_hex_color_normalized_to_uppercase(self):
         """Test that hex colors are normalized to uppercase."""
         config = Config(
-            PackageName="my-cli",
+            PackageName="my_cli",
             DefaultBaseUrl="https://api.example.com",
             SplashColor="#aabbcc",
         )
@@ -82,7 +101,7 @@ class TestConfigSchema:
     def test_default_values(self):
         """Test default values are set correctly."""
         config = Config(
-            PackageName="my-cli",
+            PackageName="my_cli",
             DefaultBaseUrl="https://api.example.com",
         )
         assert config.MainDir == "${HOME}/.#[CommandName]"
@@ -100,7 +119,7 @@ class TestConfigSchema:
     def test_log_level_validation(self):
         """Test log level validation."""
         config = Config(
-            PackageName="my-cli",
+            PackageName="my_cli",
             DefaultBaseUrl="https://api.example.com",
             LogLevel="DEBUG",
         )
@@ -108,7 +127,7 @@ class TestConfigSchema:
 
         with pytest.raises(ValidationError):
             Config(
-                PackageName="my-cli",
+                PackageName="my_cli",
                 DefaultBaseUrl="https://api.example.com",
                 LogLevel="INVALID",
             )
@@ -117,7 +136,7 @@ class TestConfigSchema:
         """Test output format validation."""
         for fmt in ["json", "table", "yaml"]:
             config = Config(
-                PackageName="my-cli",
+                PackageName="my_cli",
                 DefaultBaseUrl="https://api.example.com",
                 OutputFormat=fmt,
             )
@@ -125,7 +144,7 @@ class TestConfigSchema:
 
         with pytest.raises(ValidationError):
             Config(
-                PackageName="my-cli",
+                PackageName="my_cli",
                 DefaultBaseUrl="https://api.example.com",
                 OutputFormat="xml",
             )
@@ -134,7 +153,7 @@ class TestConfigSchema:
         """Test timeout must be positive."""
         with pytest.raises(ValidationError):
             Config(
-                PackageName="my-cli",
+                PackageName="my_cli",
                 DefaultBaseUrl="https://api.example.com",
                 Timeout=0,
             )
@@ -142,7 +161,7 @@ class TestConfigSchema:
     def test_json_indent_validation(self):
         """Test JSON indent must be non-negative."""
         config = Config(
-            PackageName="my-cli",
+            PackageName="my_cli",
             DefaultBaseUrl="https://api.example.com",
             JsonIndent=0,
         )
@@ -150,7 +169,7 @@ class TestConfigSchema:
 
         with pytest.raises(ValidationError):
             Config(
-                PackageName="my-cli",
+                PackageName="my_cli",
                 DefaultBaseUrl="https://api.example.com",
                 JsonIndent=-1,
             )
@@ -159,7 +178,7 @@ class TestConfigSchema:
         """Test log rotation type validation."""
         for rotation_type in ["size", "days"]:
             config = Config(
-                PackageName="my-cli",
+                PackageName="my_cli",
                 DefaultBaseUrl="https://api.example.com",
                 LogRotationType=rotation_type,
             )
@@ -169,7 +188,7 @@ class TestConfigSchema:
         """Test table style validation."""
         for style in ["ascii", "rounded", "minimal", "markdown"]:
             config = Config(
-                PackageName="my-cli",
+                PackageName="my_cli",
                 DefaultBaseUrl="https://api.example.com",
                 TableStyle=style,
             )
@@ -179,7 +198,7 @@ class TestConfigSchema:
         """Test log color style validation."""
         for style in ["full", "level"]:
             config = Config(
-                PackageName="my-cli",
+                PackageName="my_cli",
                 DefaultBaseUrl="https://api.example.com",
                 LogColorStyle=style,
             )
@@ -189,7 +208,7 @@ class TestConfigSchema:
         """Test log timezone validation."""
         for tz in ["UTC", "Local"]:
             config = Config(
-                PackageName="my-cli",
+                PackageName="my_cli",
                 DefaultBaseUrl="https://api.example.com",
                 LogTimezone=tz,
             )
@@ -198,7 +217,7 @@ class TestConfigSchema:
     def test_full_config(self):
         """Test full configuration with all fields."""
         config = Config(
-            PackageName="my-cli",
+            PackageName="my_cli",
             DefaultBaseUrl="https://api.example.com",
             MainDir="/home/user/.my-cli",
             ProfileFile="/home/user/.my-cli/profiles.yaml",
@@ -232,6 +251,6 @@ class TestConfigSchema:
             RetryMaxAttempts=5,
             RetryBackoffFactor=1.0,
         )
-        assert config.PackageName == "my-cli"
+        assert config.PackageName == "my_cli"
         assert config.ExcludeTags == ["internal"]
         assert config.LogRotationSize == 50

@@ -146,7 +146,7 @@ class TestBootstrapCommand:
         assert "my-existing-cli" in config_path.read_text()
 
     def test_bootstrap_default_configuration_path(self, tmp_path, monkeypatch):
-        """Test bootstrap writes to ./cli-wizard.yaml when --configuration is omitted."""
+        """Test bootstrap writes to ./cli-wizard.yaml without --configuration."""
         runner = CliRunner()
         monkeypatch.chdir(tmp_path)
         target_dir = tmp_path / "my-cli"
@@ -341,10 +341,10 @@ class TestLoadCliConfig:
     def test_valid_config(self, tmp_path):
         config_path = tmp_path / "cli-wizard.yaml"
         config_path.write_text(
-            "PackageName: my-cli\nDefaultBaseUrl: https://api.example.com\n"
+            "PackageName: my_cli\nDefaultBaseUrl: https://api.example.com\n"
         )
         config = _load_cli_config(config_path)
-        assert config["PackageName"] == "my-cli"
+        assert config["PackageName"] == "my_cli"
 
     def test_invalid_yaml_exits(self, tmp_path):
         config_path = tmp_path / "cli-wizard.yaml"
@@ -355,7 +355,7 @@ class TestLoadCliConfig:
     def test_validation_error_exits(self, tmp_path):
         config_path = tmp_path / "cli-wizard.yaml"
         config_path.write_text(
-            "PackageName: my-cli\n"
+            "PackageName: my_cli\n"
             "DefaultBaseUrl: https://api.example.com\n"
             "OutputFormat: xml\n"
         )

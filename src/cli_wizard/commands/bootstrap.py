@@ -6,8 +6,8 @@
 import getpass
 import logging
 import re
-from pathlib import Path
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 import click
@@ -115,7 +115,8 @@ You will be guided through a step by step procedure to generate
 a basic CLI and an extensible configuration file to evolve it.
 No OpenAPI file is required.
 
-PATH is the directory where the project will be created. It can be a relative or absolute path."""
+PATH is the directory where the project will be created.
+It can be a relative or absolute path."""
 )
 @click.argument(
     "path",

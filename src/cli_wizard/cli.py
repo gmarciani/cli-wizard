@@ -3,12 +3,14 @@
 
 """Main CLI module for CLI Wizard."""
 
-import click
 import logging
-from cli_wizard.constants import __version__
+
+import click
+
 from cli_wizard.commands.bootstrap import bootstrap
 from cli_wizard.commands.config import config
 from cli_wizard.commands.generate import generate
+from cli_wizard.constants import __version__
 
 
 @click.group(help="CLI Wizard - Generate modern CLI from OpenAPI.")

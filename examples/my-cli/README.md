@@ -1,4 +1,4 @@
-# my-cli
+# My Cli
 
 A CLI application
 

@@ -31,14 +31,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "autoflake~=2.3",
-    "black~=26.5",
     "build~=1.5",
-    "flake8~=7.3",
     "mypy~=2.2",
     "pre-commit~=4.6",
     "pytest~=9.1",
     "pytest-cov~=7.1",
+    "ruff~=0.16.1",
     "tox~=4.56",
     "types-PyYAML~=6.0",
     "types-requests~=2.33",
@@ -48,8 +46,8 @@ dev = [
 my-cli = "my_cli.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/gmarciani/my-cli"
-Repository = "https://github.com/gmarciani/my-cli"
+Homepage = "None"
+Repository = "None"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -61,9 +59,12 @@ my_cli = ["resources/*"]
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ['py312']
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -71,5 +72,13 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 
+[[tool.mypy.overrides]]
+module = ["click.*", "requests.*"]
+ignore_missing_imports = true
+
 [tool.coverage.run]
 omit = ["*/__init__.py"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

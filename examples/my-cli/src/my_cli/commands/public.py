@@ -1,0 +1,135 @@
+# AUTO-GENERATED FILE - DO NOT EDIT
+# Generated from OpenAPI specification by cli-wizard
+
+"""Public commands."""
+
+import json
+import os
+from pathlib import Path
+from typing import Any
+
+import click
+
+from my_cli.client import ApiClient
+from my_cli.constants import (
+    DEFAULT_BASE_URL,
+    DEFAULT_CA_FILE,
+)
+from my_cli.logging import (
+    log_debug,
+    log_error,
+    set_debug,
+)
+from my_cli.profile import get_profile_value, load_profile
+
+
+def _get_client(
+    base_url: str | None,
+    no_verify_ssl: bool,
+    ca_file: Path | None,
+    debug: bool = False,
+) -> ApiClient:
+    """Create an API client with the given options."""
+    effective_base_url = base_url or os.environ.get("API_BASE_URL") or DEFAULT_BASE_URL
+    effective_ca_file = (
+        None if no_verify_ssl else (str(ca_file) if ca_file else DEFAULT_CA_FILE)
+    )
+    access_token = get_profile_value("accessToken")
+    return ApiClient(
+        base_url=effective_base_url,
+        access_token=access_token,
+        ca_file=effective_ca_file,
+        verify_ssl=not no_verify_ssl,
+        debug=debug,
+    )
+
+
+@click.group(
+    name="public",
+    help="Public commands",
+)
+@click.option(
+    "--debug",
+    "-d",
+    is_flag=True,
+    help="Enable debug output.",
+)
+@click.pass_context
+def public(ctx: click.Context, debug: bool) -> None:
+    """Public command group."""
+    ctx.ensure_object(dict)
+    set_debug(debug)
+    ctx.obj["debug"] = debug
+
+
+@public.command(
+    name="get-public-greetings",
+    help="Get a public greeting message",
+)
+@click.option(
+    "--profile",
+    "-p",
+    default="default",
+    help="Profile name to use.",
+)
+@click.option(
+    "--debug",
+    "-d",
+    is_flag=True,
+    help="Enable debug output.",
+)
+@click.option(
+    "--base-url",
+    "-u",
+    envvar="API_BASE_URL",
+    help="API base URL.",
+)
+@click.option(
+    "--no-verify-ssl",
+    is_flag=True,
+    default=False,
+    help="Disable SSL certificate verification.",
+)
+@click.option(
+    "--ca-file",
+    type=click.Path(
+        exists=True,
+        dir_okay=False,
+        path_type=Path,
+    ),
+    help="CA certificate file for SSL verification.",
+)
+def get_public_greetings(
+    profile: str,
+    debug: bool,
+    base_url: str | None,
+    no_verify_ssl: bool,
+    ca_file: Path | None,
+) -> None:
+    """get_public_greetings command."""
+    # Enable debug logging if --debug flag is set
+    set_debug(debug)
+
+    # Load profile
+    load_profile(profile)
+    # Log command execution start
+    cmd_params: dict[str, Any] = {}
+    cmd_name = "public get-public-greetings"
+    log_debug(f"Executing command '{cmd_name}' with params: {cmd_params}")
+
+    client = _get_client(base_url, no_verify_ssl, ca_file, debug)
+
+    try:
+        response = client.get("/public/greetings")
+        response.raise_for_status()
+        if response.text:
+            output = json.dumps(response.json(), indent=2)
+            log_debug(f"Command '{cmd_name}' completed with output: {output[:500]}")
+            click.echo(output)
+        else:
+            log_debug("Command '%s' completed successfully" % cmd_name)
+            click.echo("Success")
+    except Exception as e:
+        log_error(f"Command '{cmd_name}' failed: {e}")
+        click.secho(f"Error: {e}", fg="red", err=True)
+        raise SystemExit(1)

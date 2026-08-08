@@ -4,24 +4,30 @@
 
 ### Changes
 
-- Pinned all dependency version constraints (`~=`) to the minor version instead of the patch version
-- Upgraded click from ~8.3.1 to ~8.4
-- Upgraded pydantic from ~2.12.5 to ~2.13
-- Upgraded requests from ~2.32.5 to ~2.34
-- Upgraded black from ~26.1 to ~26.5
-- Upgraded build from ~1.4 to ~1.5
-- Upgraded mypy from ~1.19 to ~2.2
-- Upgraded pre-commit from ~4.5 to ~4.6
-- Upgraded pytest from ~9.0 to ~9.1
-- Upgraded pytest-cov from ~7.0 to ~7.1
-- Upgraded tox from ~4.34 to ~4.56
-- Upgraded twine from ~6.2 to >=6.2,<8.0
-- Upgraded types-requests from ~2.32 to ~2.33
-- Increased test coverage from 71% to 98%, with new tests for the `bootstrap` command and previously untested code paths in `generate`, `CliGenerator`, and `constants`
+- Pinned all dependency version constraints (`~=`) to the minor version instead of the patch version.
+- Upgraded click from ~8.3.1 to ~8.4.
+- Upgraded pydantic from ~2.12.5 to ~2.13.
+- Upgraded requests from ~2.32.5 to ~2.34.
+- Upgraded build from ~1.4 to ~1.5.
+- Upgraded mypy from ~1.19 to ~2.2.
+- Upgraded pre-commit from ~4.5 to ~4.6.
+- Upgraded pytest from ~9.0 to ~9.1.
+- Upgraded pytest-cov from ~7.0 to ~7.1.
+- Upgraded tox from ~4.34 to ~4.56.
+- Upgraded twine from ~6.2 to >=6.2,<8.0.
+- Upgraded types-requests from ~2.32 to ~2.33.
+- Increased test coverage from 71% to 98%, with new tests for the `bootstrap` command and previously untested code paths in `generate`, `CliGenerator`, and `constants`.
+- Generated projects are formatted and linted with Ruff instead of Black and flake8, and ship a `tox -e format` environment that reproduces exactly how the code was generated.
+- Generated code uses a line length of 88.
+- Ruff is bundled with cli-wizard, so generated code is formatted without installing anything else.
 
 ### Bug Fixes
 
-- Fixed `IncludeGithubWorkflows` generation, which always failed with a `TemplateNotFound` error due to a filename mismatch between the `changelog-enforcer.yaml` workflow template and its reference in the generator
+- Fixed `IncludeGithubWorkflows` generation, which always failed with a `TemplateNotFound` error due to a filename mismatch between the `changelog-enforcer.yaml` workflow template and its reference in the generator.
+- Fixed generated code shipping unformatted, which produced hundreds of lines of formatting-only diff every time a CLI was regenerated.
+- Fixed the generated GitHub test workflow pointing at the wrong package, which made it fail on the first push of a new project.
+- Fixed generated `tox -e lint` failing on any line longer than 79 characters despite the code being formatted to a wider width.
+- Fixed `PackageName` accepting values that are not valid Python identifiers, which produced a project that could not be imported.
 
 
 ## 2.0.0

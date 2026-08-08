@@ -3,8 +3,9 @@
 
 """Common utilities for CLI Wizard commands."""
 
-import click
 import logging
+
+import click
 
 logger = logging.getLogger(__name__)
 

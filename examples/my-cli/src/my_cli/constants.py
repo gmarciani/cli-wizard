@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Firstname Lastname
+# Copyright (c) None, Firstname Lastname
 # Licensed under the MIT License
 
 # AUTO-GENERATED FILE - DO NOT EDIT
@@ -26,7 +26,7 @@ MAIN_DIR = Path(os.path.expandvars("${HOME}/.my-cli"))
 # Profile configuration
 PROFILE_FILE = Path(os.path.expandvars("${HOME}/.my-cli/profiles.yaml"))
 
-DEFAULT_BASE_URL = "http://localhost:8080"
+DEFAULT_BASE_URL = "http://localhost:3000"
 DEFAULT_TIMEOUT = 30
 DEFAULT_CA_FILE = None
 
@@ -35,12 +35,26 @@ SPLASH_ENABLED = False
 SPLASH_FILE = None
 SPLASH_COLOR = None
 
+# Profile defaults (generated from cli-wizard configuration)
+PROFILE_DEFAULTS: dict[str, object] = {
+    "baseUrl": "http://localhost:3000",
+    "timeout": 30,
+    "outputFormat": "json",
+    "outputColors": True,
+    "jsonIndent": 2,
+    "tableStyle": "rounded",
+    "logLevel": "INFO",
+    "retryMaxAttempts": 3,
+    "retryBackoffFactor": 0.5,
+    "accessToken": None,
+}
+
 # Log configuration
 LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 LOG_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
 LOG_TIMEZONE = "UTC"
-LOG_FILE = Path(os.path.expandvars("${HOME}/.my-cli/my-cli.log"))
+LOG_FILE = None
 LOG_ROTATION_TYPE = "days"
 LOG_ROTATION_SIZE_MB = 10
 LOG_ROTATION_DAYS = 30

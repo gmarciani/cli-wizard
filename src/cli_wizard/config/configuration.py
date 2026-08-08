@@ -3,12 +3,13 @@
 
 """Configuration utilities for CLI Wizard."""
 
-import yaml
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
-from cli_wizard.constants import CONFIG_FILE_NAME
+import yaml
+
 from cli_wizard.config.schema import Config
+from cli_wizard.constants import CONFIG_FILE_NAME
 
 
 def get_config_path() -> Path:
