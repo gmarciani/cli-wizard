@@ -49,12 +49,19 @@ Otherwise, a functional CLI is generated without API commands."""
     default=None,
     help="Path to OpenAPI spec file in YAML or JSON format (optional)",
 )
+@click.option(
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Skip confirmation prompt if output directory exists and is not empty",
+)
 @click.pass_context
 def generate(
     ctx: click.Context,
     path: str,
     configuration: str,
     api: str | None,
+    force: bool,
 ) -> None:
     """Generate command implementation."""
     debug = ctx.obj.get("debug", False) if ctx.obj else False
@@ -141,6 +148,15 @@ def generate(
         except OSError:
             # Current directory may already be deleted
             pass
+
+        # Confirm before destroying a directory that holds work
+        if not force and any(output_path.iterdir()):
+            click.confirm(
+                f"⚠️  Output directory '{output_path}' is not empty. "
+                "Its entire contents will be deleted. Continue?",
+                abort=True,
+            )
+
         click.secho("🧹 Cleaning output directory: ", fg="cyan", nl=False)
         click.echo(output_path)
         shutil.rmtree(output_path)
