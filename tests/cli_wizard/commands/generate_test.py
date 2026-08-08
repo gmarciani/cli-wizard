@@ -373,6 +373,7 @@ class TestGenerateCommand:
                 [
                     "generate",
                     str(output_dir),
+                    "--force",
                     "--api",
                     str(openapi_path),
                     "--configuration",
@@ -382,6 +383,110 @@ class TestGenerateCommand:
             assert result.exit_code == 0
             assert "Cleaning output directory" in result.output
             assert not (output_dir / "stale-file.txt").exists()
+
+    def test_generate_confirms_before_deleting_non_empty_output(self):
+        """Test generate asks before deleting a non-empty output directory."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            openapi_path, config_path = create_test_files(temp_path)
+            output_dir = temp_path / "output"
+            output_dir.mkdir()
+            (output_dir / "stale-file.txt").write_text("stale")
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    str(output_dir),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
+                ],
+                input="y\n",
+            )
+            assert result.exit_code == 0
+            assert str(output_dir) in result.output
+            assert "entire contents will be deleted" in result.output
+            assert not (output_dir / "stale-file.txt").exists()
+
+    def test_generate_declined_confirmation_leaves_output_untouched(self):
+        """Test declining the confirmation aborts without deleting anything."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            openapi_path, config_path = create_test_files(temp_path)
+            output_dir = temp_path / "output"
+            output_dir.mkdir()
+            marker = output_dir / "marker.txt"
+            marker.write_text("keep me")
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    str(output_dir),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
+                ],
+                input="n\n",
+            )
+            assert result.exit_code != 0
+            assert marker.exists(), "output was deleted despite declining"
+            assert marker.read_text() == "keep me"
+
+    def test_generate_non_empty_output_aborts_without_confirmation(self):
+        """Test generate aborts when it cannot prompt and --force is absent."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            openapi_path, config_path = create_test_files(temp_path)
+            output_dir = temp_path / "output"
+            output_dir.mkdir()
+            marker = output_dir / "marker.txt"
+            marker.write_text("keep me")
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    str(output_dir),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
+                ],
+                input="",
+            )
+            assert result.exit_code != 0
+            assert marker.exists(), "output was deleted without confirmation"
+
+    def test_generate_empty_output_directory_does_not_prompt(self):
+        """Test an existing but empty output directory proceeds without asking."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            openapi_path, config_path = create_test_files(temp_path)
+            output_dir = temp_path / "output"
+            output_dir.mkdir()
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    str(output_dir),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
+                ],
+                input="",
+            )
+            assert result.exit_code == 0
+            assert "entire contents will be deleted" not in result.output
 
     def test_generate_output_dir_is_cwd_fails(self):
         """Test generate refuses to clean the output directory when it is cwd."""

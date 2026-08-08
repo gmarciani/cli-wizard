@@ -20,6 +20,7 @@
 - Generated projects are formatted and linted with Ruff instead of Black and flake8, and ship a `tox -e format` environment that reproduces exactly how the code was generated.
 - Generated code uses a line length of 88, absolute imports throughout, and no imports nested inside functions.
 - Ruff is bundled with cli-wizard, so generated code is formatted without installing anything else.
+- `generate` now asks for confirmation before deleting a non-empty output directory, naming the directory and stating that its entire contents will be removed. Declining leaves the directory untouched and exits non-zero. A new `--force`/`-f` flag skips the prompt, matching the flag `bootstrap` already provides. Empty and non-existent output directories proceed without prompting.
 
 ### Bug Fixes
 
