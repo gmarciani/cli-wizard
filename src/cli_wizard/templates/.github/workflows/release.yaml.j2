@@ -18,12 +18,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ '{{' }} github.event.inputs.tag || github.ref }}
 
       - name: Install Python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
+          python-version: '{{ PythonVersion }}'
 
       - name: Install dependencies
         run: |
@@ -37,6 +37,6 @@ jobs:
       - name: Publish to Test PyPI
         env:
           TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+          TWINE_PASSWORD: ${{ '{{' }} secrets.PYPI_API_TOKEN }}
         run: |
           python -m twine upload --repository pypi dist/*

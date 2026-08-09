@@ -8,11 +8,15 @@ on:
   workflow_dispatch:
 
 jobs:
+  # One job per supported interpreter. setup-python pins the version, so a
+  # missing interpreter fails the job rather than being silently skipped the
+  # way tox does locally.
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.14']
+        python-version: ['3.12', '3.13', '3.14']
 
     steps:
     - uses: actions/checkout@v7
@@ -22,13 +26,31 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Install tox
+      run: |
+        python -m pip install --upgrade pip
+        pip install tox
+
+    - name: Run tests on Python ${{ matrix.python-version }}
+      run: tox -e py$(echo "${{ matrix.python-version }}" | tr -d '.')
+
+  # Version-independent checks and the coverage upload, run once rather than
+  # once per interpreter.
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.12'
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -e .[dev]
-
-    - name: Run tests
-      run: tox -r -e test
 
     - name: Run linting
       run: tox -e lint

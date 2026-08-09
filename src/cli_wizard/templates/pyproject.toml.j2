@@ -16,9 +16,9 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
+{% for version in PythonVersions %}
+    "Programming Language :: Python :: {{ version }}",
+{% endfor %}
 ]
 requires-python = ">={{ PythonVersion }}"
 dependencies = [
@@ -61,7 +61,7 @@ version = {file = "VERSION"}
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "{{ RuffTargetVersion }}"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

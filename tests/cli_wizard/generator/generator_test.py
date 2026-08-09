@@ -7,6 +7,7 @@ import ast
 import re
 import subprocess
 import tempfile
+import tomllib
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,6 +15,12 @@ import pytest
 import yaml
 
 import cli_wizard
+from cli_wizard.config.schema import (
+    SUPPORTED_PYTHON_VERSIONS,
+    Config,
+    python_versions_from,
+    tox_env_name,
+)
 from cli_wizard.generator.generator import (
     RUFF_COMMANDS,
     CliGenerator,
@@ -657,3 +664,117 @@ class TestDependencyPins:
                 unpinned.append(stripped)
 
         assert not unpinned, f"unpinned deps in generated tox.ini: {unpinned}"
+
+
+class TestGeneratedPythonVersions:
+    """A generated project's version matrix must follow its PythonVersion."""
+
+    @staticmethod
+    def _generate(python_version, temp_dir):
+        config = Config(
+            ProjectName="Test Cli",
+            PythonVersion=python_version,
+            IncludeGithubWorkflows=True,
+        )
+        output_dir = Path(temp_dir) / "test-cli"
+        generator = CliGenerator(config=config.model_dump())
+        generator.generate({}, output_dir, "test-cli", "test_cli")
+        return output_dir
+
+    @pytest.mark.parametrize("minimum", SUPPORTED_PYTHON_VERSIONS)
+    def test_declarations_agree_with_python_version(self, minimum):
+        """Test that every version declaration follows the configured minimum."""
+        expected = python_versions_from(minimum)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = self._generate(minimum, temp_dir)
+
+            pyproject = tomllib.loads(
+                (output_dir / "pyproject.toml").read_text(encoding="utf-8")
+            )
+            assert pyproject["project"]["requires-python"] == f">={minimum}"
+            assert [
+                c.rsplit(" :: ", 1)[1]
+                for c in pyproject["project"]["classifiers"]
+                if c.startswith("Programming Language :: Python :: 3.")
+            ] == expected
+            assert pyproject["tool"]["ruff"]["target-version"] == tox_env_name(minimum)
+            assert pyproject["tool"]["mypy"]["python_version"] == minimum
+
+            tox_ini = (output_dir / "tox.ini").read_text(encoding="utf-8")
+            envlist = re.search(r"^envlist = (.+)$", tox_ini, re.M).group(1)
+            assert [e.strip() for e in envlist.split(",")] == [
+                tox_env_name(v) for v in expected
+            ]
+
+            workflow = yaml.safe_load(
+                (output_dir / ".github" / "workflows" / "test.yaml").read_text(
+                    encoding="utf-8"
+                )
+            )
+            matrix = workflow["jobs"]["test"]["strategy"]["matrix"]["python-version"]
+            assert [str(v) for v in matrix] == expected
+
+    def test_single_version_workflows_use_the_declared_minimum(self):
+        """Test that docs, release and pr-validation pin the project's minimum.
+
+        These were static files hardcoding 3.12, so a project with a higher
+        minimum got CI whose pip install failed against its own
+        requires-python.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = self._generate("3.13", temp_dir)
+            workflows = output_dir / ".github" / "workflows"
+
+            docs = yaml.safe_load((workflows / "docs.yaml").read_text())
+            assert docs["jobs"]["build"]["steps"][1]["with"]["python-version"] == "3.13"
+
+            release = yaml.safe_load((workflows / "release.yaml").read_text())
+            steps = release["jobs"]["publish"]["steps"]
+            setup = next(s for s in steps if "setup-python" in s.get("uses", ""))
+            assert setup["with"]["python-version"] == "3.13"
+
+            validation = yaml.safe_load((workflows / "pr-validation.yaml").read_text())
+            matrix = validation["jobs"]["validate"]["strategy"]["matrix"]
+            assert [str(v) for v in matrix["python-version"]] == ["3.13"]
+
+    def test_no_superseded_version_leaks_into_the_project(self):
+        """Test that raising the minimum removes the older version everywhere."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = self._generate("3.13", temp_dir)
+
+            offenders = []
+            for path in sorted(output_dir.rglob("*")):
+                if not path.is_file():
+                    continue
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except (UnicodeDecodeError, OSError):
+                    continue
+                if "3.12" in text or "py312" in text:
+                    offenders.append(str(path.relative_to(output_dir)))
+
+            assert not offenders, f"3.12 leaked into a 3.13 project: {offenders}"
+
+    def test_github_expressions_survive_rendering_in_all_workflows(self):
+        """Test that ${{ }} expressions are not eaten by Jinja in any workflow.
+
+        docs, release and pr-validation became templates, so their GitHub
+        expressions now pass through the same delimiter collision that
+        test.yaml already had to escape.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = self._generate("3.12", temp_dir)
+            workflows = output_dir / ".github" / "workflows"
+
+            expected = {
+                "docs.yaml": "${{ steps.deployment.outputs.page_url }}",
+                "release.yaml": "${{ secrets.PYPI_API_TOKEN }}",
+                "pr-validation.yaml": "${{ matrix.python-version }}",
+            }
+            for name, expression in expected.items():
+                content = (workflows / name).read_text(encoding="utf-8")
+                assert expression in content, f"{name} lost {expression}"
+                assert "{{" not in content.replace("${{", ""), (
+                    f"{name} has an unrendered Jinja delimiter"
+                )

@@ -20,6 +20,39 @@ from typing import Any, Literal, get_args, get_origin, get_type_hints
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.fields import FieldInfo
 
+# Every Python version cli-wizard runs on and can generate for, oldest first.
+# This is the single source of truth: it drives cli-wizard's own tox envlist,
+# its CI matrix and its classifiers, and — via python_versions_from() — the
+# same four things in every generated project. Adding a version here means
+# adding it to tox.ini and .github/workflows/test.yaml too; the tests in
+# tests/cli_wizard/config/schema_test.py fail if they disagree.
+SUPPORTED_PYTHON_VERSIONS: tuple[str, ...] = ("3.12", "3.13", "3.14")
+
+
+def python_versions_from(minimum: str) -> list[str]:
+    """Return the supported versions at or above ``minimum``, oldest first.
+
+    A generated project declaring ``PythonVersion: "3.13"`` must not claim
+    3.12 support in its classifiers, tox envlist or CI matrix, so all four are
+    derived from this rather than hardcoded.
+    """
+    if minimum not in SUPPORTED_PYTHON_VERSIONS:
+        raise ValueError(
+            f"Unsupported Python version: {minimum}. "
+            f"Supported versions are {', '.join(SUPPORTED_PYTHON_VERSIONS)}."
+        )
+    return list(SUPPORTED_PYTHON_VERSIONS[SUPPORTED_PYTHON_VERSIONS.index(minimum) :])
+
+
+def tox_env_name(version: str) -> str:
+    """Convert a ``3.12``-style version to its ``py312`` tox environment name."""
+    return "py" + version.replace(".", "")
+
+
+def ruff_target_version(version: str) -> str:
+    """Convert a ``3.12``-style version to ruff's ``py312`` target-version."""
+    return "py" + version.replace(".", "")
+
 
 class Config(BaseModel):
     """CLI Wizard configuration schema."""
@@ -67,7 +100,9 @@ class Config(BaseModel):
     # Python settings (prompted during bootstrap)
     PythonVersion: str = Field(
         default="3.12",
-        description="Minimum Python version",
+        description=(
+            f"Minimum Python version, one of {', '.join(SUPPORTED_PYTHON_VERSIONS)}"
+        ),
     )
 
     # API settings (prompted during bootstrap)
@@ -286,6 +321,22 @@ class Config(BaseModel):
                     f"https://github.com/{github_user}/{data['CommandName']}"
                 )
         return data
+
+    @field_validator("PythonVersion")
+    @classmethod
+    def validate_python_version(cls, v: str) -> str:
+        """Validate that PythonVersion is one cli-wizard can generate for.
+
+        An unsupported value used to flow straight into requires-python and
+        the mypy config, producing a project that claims support cli-wizard
+        never tested and cannot express in its version matrix.
+        """
+        if v not in SUPPORTED_PYTHON_VERSIONS:
+            raise ValueError(
+                f"Unsupported Python version: {v}. Supported versions are "
+                f"{', '.join(SUPPORTED_PYTHON_VERSIONS)}."
+            )
+        return v
 
     @field_validator("PackageName")
     @classmethod

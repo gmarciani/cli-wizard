@@ -16,6 +16,18 @@
 - Generated code uses a line length of 88, absolute imports throughout, and no imports nested inside functions.
 - Ruff is bundled with cli-wizard, so generated code is formatted without installing anything else.
 - `generate` now asks for confirmation before deleting a non-empty output directory, naming the directory and stating that its entire contents will be removed. Declining leaves the directory untouched and exits non-zero. A new `--force`/`-f` flag skips the prompt, matching the flag `bootstrap` already provides. Empty and non-existent output directories proceed without prompting.
+- Python 3.12, 3.13 and 3.14 support is now verified rather than only declared.
+  cli-wizard's `tox` gained `py312`, `py313` and `py314` environments — it
+  previously ran the suite on a single interpreter — and its CI runs one job per
+  version. 3.13 was never executed anywhere before: CI tested 3.14 in one
+  workflow and 3.12 in another, while the classifiers claimed all three.
+- Generated projects derive their supported versions from `PythonVersion`
+  instead of hardcoding 3.12 to 3.14. That one value now drives the classifiers,
+  the `tox` envlist, ruff's `target-version` and the CI matrix, alongside
+  `requires-python`. A project generated with `PythonVersion: "3.13"` no longer
+  claims 3.12 support anywhere. `PythonVersion` is validated against the
+  supported set, so an unsupported value is rejected instead of producing a
+  project that claims support cli-wizard never tested.
 
 **Dependencies in cli-wizard**
 
@@ -55,6 +67,12 @@
 
 ### Bug Fixes
 
+- Fixed the generated `docs`, `release` and `pr-validation` workflows pinning
+  Python 3.12 regardless of the project's `PythonVersion`. They were copied
+  byte-for-byte rather than rendered, so a project with a higher minimum got CI
+  that installed 3.12 and then failed `pip install -e .` against its own
+  `requires-python`. All three are now templates that follow the declared
+  minimum.
 - Fixed `pre-commit run --all-files` failing on an E402 in `docs/conf.py`. The
   import has to follow the `sys.path.insert` that makes the package importable,
   so it is now marked `# noqa: E402`. `tox -e lint` never caught this because it
