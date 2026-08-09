@@ -51,20 +51,25 @@
 
 ### Bug Fixes
 
+#### cli-wizard
+
 - Fixed `config set` writing values the schema then rejected, which made every `config` subcommand fail until the file was deleted by hand. Values are validated before being written, and an unreadable file falls back to defaults with a warning.
 - Fixed `config set` freezing derived values, so `CommandName`, `PackageName`, `RepositoryUrl` and `CopyrightYear` stopped tracking `ProjectName`.
 - Fixed `config unset` writing `null` instead of removing the key, which left non-optional fields holding a value the schema rejects.
 - Fixed `config get` and `config unset` exiting 0 on an unknown key.
 - Fixed `IncludeTags`, `ExcludeTags`, `IncludeOperations` and `ExcludeOperations` being unsettable from the command line; they now accept a comma-separated value.
 - Fixed a `TypeError` when the configuration contained an explicit `ProjectName: null`.
+- Fixed `PackageName` accepting values that are not valid Python identifiers, which produced a project that could not be imported.
 - Fixed a circular `#[Param]` reference hanging `generate` and `bootstrap` until memory ran out; it is now reported as an invalid configuration.
 - Fixed `bootstrap` writing a `cli-wizard.yaml` it could not read back, because values containing a quote or a backslash were left unescaped.
-- Fixed `PackageName` accepting values that are not valid Python identifiers, which produced a project that could not be imported.
-- Fixed `Copyright (c) None` in generated file headers and the LICENSE, and `Homepage = "None"` in the generated `pyproject.toml`.
 - Fixed `IncludeGithubWorkflows` always failing with a `TemplateNotFound` error.
-- Fixed generated code shipping unformatted, which produced hundreds of lines of formatting-only diff on every regeneration.
-- Fixed the generated test workflow pointing at the wrong package, which made it fail on a new project's first push.
-- Fixed generated `tox -e lint` failing on any line longer than 79 characters.
+
+#### Generated code
+
+- Fixed code shipping unformatted, which produced hundreds of lines of formatting-only diff on every regeneration.
+- Fixed `tox -e lint` failing on any line longer than 79 characters.
+- Fixed the test workflow pointing at the wrong package, which made it fail on a new project's first push.
+- Fixed `Copyright (c) None` in file headers and the LICENSE, and `Homepage = "None"` in `pyproject.toml`.
 
 
 ## 2.0.0
