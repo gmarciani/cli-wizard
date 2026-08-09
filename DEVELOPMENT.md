@@ -33,11 +33,9 @@ tox -e py312       # Run the suite on a single version
 tox -e py312,py313,py314
 ```
 
-Interpreters you do not have installed are skipped with a `SKIPPED` line rather
-than failing, so a missing version is easy to miss locally. CI installs one
-version per job and runs exactly that environment, so nothing is skipped there.
-To run the whole matrix locally, install the missing versions first — with
-pyenv:
+tox does not install interpreters, it only discovers them, and it fails rather
+than skipping when one is missing. Install the versions you do not have first —
+with pyenv:
 
 ```shell
 pyenv install 3.12 3.13 3.14
@@ -46,9 +44,9 @@ pyenv install 3.12 3.13 3.14
 The supported range is declared once, in `SUPPORTED_PYTHON_VERSIONS` in
 [src/cli_wizard/config/schema.py](src/cli_wizard/config/schema.py). It drives
 cli-wizard's classifiers, tox envlist and CI matrix, and — through a generated
-project's `PythonVersion` — the same four things in everything cli-wizard
-generates. Tests fail if any of them disagree, so adding a version means
-updating `tox.ini` and `.github/workflows/test.yaml` alongside the constant.
+project's `PythonVersion` — the same in everything cli-wizard generates. Tests
+fail if any of them disagree, so adding a version means updating `tox.ini` and
+`.github/workflows/test.yaml` alongside the constant.
 
 ## Documentation
 

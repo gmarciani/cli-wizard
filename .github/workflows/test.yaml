@@ -8,9 +8,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  # One job per supported interpreter. setup-python pins the version, so a
-  # missing interpreter fails the job rather than being silently skipped the
-  # way tox does locally.
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -34,8 +31,6 @@ jobs:
     - name: Run tests on Python ${{ matrix.python-version }}
       run: tox -e py$(echo "${{ matrix.python-version }}" | tr -d '.')
 
-  # Version-independent checks and the coverage upload, run once rather than
-  # once per interpreter.
   quality:
     runs-on: ubuntu-latest
 
@@ -45,7 +40,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.12'
+        python-version: '3.14'
 
     - name: Install dependencies
       run: |

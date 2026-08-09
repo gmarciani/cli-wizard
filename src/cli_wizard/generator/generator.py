@@ -12,12 +12,7 @@ from typing import Any
 
 from jinja2 import Environment, PackageLoader
 
-from cli_wizard.config.schema import (
-    Config,
-    python_versions_from,
-    ruff_target_version,
-    tox_env_name,
-)
+from cli_wizard.config.schema import Config, python_versions_from
 from cli_wizard.generator.models import CommandGroup, Operation
 
 
@@ -119,14 +114,13 @@ class CliGenerator:
         # Runtime-only profile parameters (not derived from wizard config)
         profile_defaults["accessToken"] = None
 
-        # Derived from PythonVersion so the generated classifiers, tox envlist,
-        # ruff target-version and CI matrix cannot disagree with each other or
-        # with requires-python. Falls back to the schema default because the
-        # generator also accepts raw dicts that never went through Config.
+        # Derived from PythonVersion so the generated classifiers, tox envlist
+        # and CI matrix cannot disagree with requires-python. Falls back to the
+        # schema default because the generator also accepts raw dicts that
+        # never went through Config.
         minimum_python = self.config.get("PythonVersion") or Config.get_field_default(
             "PythonVersion"
         )
-        python_versions = python_versions_from(minimum_python)
 
         context = {
             **self.config,  # Spread all config values at top level
@@ -134,9 +128,7 @@ class CliGenerator:
             "cli_name": self.cli_name,
             "package_name": self.package_name,
             "profile_defaults": profile_defaults,
-            "PythonVersions": python_versions,
-            "PythonToxEnvs": [tox_env_name(v) for v in python_versions],
-            "RuffTargetVersion": ruff_target_version(minimum_python),
+            "PythonVersions": python_versions_from(minimum_python),
         }
         context.update(extra)
         return context

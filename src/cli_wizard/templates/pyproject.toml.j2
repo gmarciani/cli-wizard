@@ -61,7 +61,7 @@ version = {file = "VERSION"}
 
 [tool.ruff]
 line-length = 88
-target-version = "{{ RuffTargetVersion }}"
+target-version = "py{{ PythonVersion | replace(".", "") }}"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
