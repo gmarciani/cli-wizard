@@ -23,10 +23,26 @@
 - Upgraded click from ~8.1 to ~8.4.
 - Upgraded pydantic from ~2.10 to ~2.13.
 - Upgraded requests from ~2.32 to ~2.34.
-- Upgraded the development dependencies: build ~1.5, mypy ~2.3, pre-commit ~4.6, pytest ~9.1, pytest-cov ~7.1, tox ~4.58 and types-requests ~2.33. Ruff ~0.16.2 replaces autoflake, black and flake8.
-- Upgraded the pre-commit hooks: `pre-commit-hooks` v6.0.0 and `mirrors-mypy` v2.3.0, with `ruff-pre-commit` v0.16.2 replacing the black and flake8 hooks.
-- Upgraded the GitHub Actions: `checkout` v7, `setup-python` v7, `upload-pages-artifact` v5, `deploy-pages` v5, `labeler` v7, `codeql-action` v4 and `codecov-action` v7. `b4b4r07/github-labeler` is pinned to v0.2.1 instead of tracking `@master`.
-- Every dependency is pinned to the same version everywhere it is declared. The generated `tox.ini` previously left mypy, pytest, pytest-cov and the type stubs unversioned, so `tox` could resolve versions the generated `pyproject.toml` did not pin.
+- Upgraded build from ~1.3 to ~1.5.
+- Upgraded mypy from ~1.18 to ~2.3.
+- Upgraded pre-commit from ~4.0 to ~4.6.
+- Upgraded pytest from ~9.0 to ~9.1.
+- Upgraded pytest-cov from ~7.0 to ~7.1.
+- Upgraded tox from ~4.32 to ~4.58.
+- Upgraded types-requests from ~2.32 to ~2.33.
+- Added ruff ~0.16.2, replacing autoflake, black and flake8.
+- Upgraded the `pre-commit-hooks` hook from v5.0.0 to v6.0.0.
+- Upgraded the `mirrors-mypy` hook from v1.15.0 to v2.3.0.
+- Added the `ruff-pre-commit` v0.16.2 hook, replacing the black and flake8 hooks.
+- Upgraded `actions/checkout` from v4 to v7.
+- Upgraded `actions/setup-python` from v4 (v5 in `release.yaml`) to v7.
+- Upgraded `actions/upload-pages-artifact` from v3 to v5.
+- Upgraded `actions/deploy-pages` from v4 to v5.
+- Upgraded `actions/labeler` from v5 to v7.
+- Upgraded `github/codeql-action` from v3 to v4.
+- Upgraded `codecov/codecov-action` from v5 to v7.
+- Pinned `b4b4r07/github-labeler` to v0.2.1 instead of tracking `@master`.
+- Pinned mypy, pytest, pytest-cov and the type stubs in the generated `tox.ini`, which left them unversioned. Every dependency now carries the same version everywhere it is declared.
 
 ### Bug Fixes
 
