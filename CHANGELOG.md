@@ -16,8 +16,8 @@
 - Generated code uses a line length of 88, absolute imports throughout, and no imports nested inside functions.
 - Ruff is bundled with cli-wizard, so generated code is formatted without installing anything else.
 - `generate` now asks for confirmation before deleting a non-empty output directory, naming the directory and stating that its entire contents will be removed. Declining leaves the directory untouched and exits non-zero. A new `--force`/`-f` flag skips the prompt, matching the flag `bootstrap` already provides. Empty and non-existent output directories proceed without prompting.
-- Python 3.12, 3.13 and 3.14 support is now tested on every version, not just declared.
-- Generated projects follow their `PythonVersion` everywhere: classifiers, `tox` envlist and CI matrix. Setting it to `3.13` no longer produces a project claiming 3.12 support. Unsupported values are rejected.
+- Supports Python 3.12, 3.13 and 3.14.
+- Generated projects support Python 3.12, 3.13 and 3.14. Raising `PythonVersion` narrows that range: setting it to `3.13` produces a project supporting only 3.13 and 3.14. Values outside the supported range are rejected.
 
 **Dependencies in cli-wizard**
 
