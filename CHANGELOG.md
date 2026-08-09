@@ -4,21 +4,26 @@
 
 ### Changes
 
-- Supports Python 3.12, 3.13 and 3.14.
-- Generated projects support Python 3.12, 3.13 and 3.14. Raising `PythonVersion` narrows that range; values outside it are rejected.
-- Generated projects are formatted and linted with Ruff instead of Black and flake8, and ship a `tox -e format` environment.
-- Generated code uses a line length of 88 and absolute, module-level imports.
-- Ruff ships with cli-wizard, so generated code is formatted without installing anything else.
-- `generate` asks for confirmation before deleting a non-empty output directory. A new `--force`/`-f` flag skips the prompt.
+#### cli-wizard
 
-**Dependencies in cli-wizard**
+- Supports Python 3.12, 3.13 and 3.14.
+- `generate` asks for confirmation before deleting a non-empty output directory. A new `--force`/`-f` flag skips the prompt.
+- Ruff is bundled, so generated code is formatted without installing anything else.
+
+**Dependencies**
 
 - Upgraded click from ~8.3.1 to ~8.4.
 - Upgraded pydantic from ~2.12.5 to ~2.13.
 - Upgraded requests from ~2.32.5 to ~2.34.
 - Added ruff ~0.16.2 as a runtime dependency.
 
-**Dependencies in generated code**
+#### Generated code
+
+- Supports Python 3.12, 3.13 and 3.14. Raising `PythonVersion` narrows that range; values outside it are rejected.
+- Formatted and linted with Ruff instead of Black and flake8, with a `tox -e format` environment.
+- Uses a line length of 88 and absolute, module-level imports.
+
+**Dependencies**
 
 - Upgraded click from ~8.1 to ~8.4.
 - Upgraded pydantic from ~2.10 to ~2.13.
