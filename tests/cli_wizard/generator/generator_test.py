@@ -19,6 +19,7 @@ from cli_wizard.config.schema import (
     SUPPORTED_PYTHON_VERSIONS,
     Config,
     python_versions_from,
+    ruff_target_version,
     tox_env_name,
 )
 from cli_wizard.generator.generator import (
@@ -698,7 +699,11 @@ class TestGeneratedPythonVersions:
                 for c in pyproject["project"]["classifiers"]
                 if c.startswith("Programming Language :: Python :: 3.")
             ] == expected
-            assert pyproject["tool"]["ruff"]["target-version"] == tox_env_name(minimum)
+            # Ruff must target the minimum: it emits syntax valid for the
+            # target, and PEP 758 syntax at py314 is a SyntaxError on 3.12.
+            assert pyproject["tool"]["ruff"]["target-version"] == (
+                ruff_target_version(minimum)
+            )
             assert pyproject["tool"]["mypy"]["python_version"] == minimum
 
             tox_ini = (output_dir / "tox.ini").read_text(encoding="utf-8")

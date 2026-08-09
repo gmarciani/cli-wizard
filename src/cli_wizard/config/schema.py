@@ -20,12 +20,8 @@ from typing import Any, Literal, get_args, get_origin, get_type_hints
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.fields import FieldInfo
 
-# Every Python version cli-wizard runs on and can generate for, oldest first.
-# This is the single source of truth: it drives cli-wizard's own tox envlist,
-# its CI matrix and its classifiers, and — via python_versions_from() — the
-# same four things in every generated project. Adding a version here means
-# adding it to tox.ini and .github/workflows/test.yaml too; the tests in
-# tests/cli_wizard/config/schema_test.py fail if they disagree.
+# Supported Python versions, oldest first. Adding one means updating tox.ini
+# and .github/workflows/test.yaml too; the tests fail if they disagree.
 SUPPORTED_PYTHON_VERSIONS: tuple[str, ...] = ("3.12", "3.13", "3.14")
 
 
