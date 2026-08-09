@@ -12,6 +12,12 @@ from typing import Any
 
 from jinja2 import Environment, PackageLoader
 
+from cli_wizard.config.schema import (
+    Config,
+    python_versions_from,
+    ruff_target_version,
+    tox_env_name,
+)
 from cli_wizard.generator.models import CommandGroup, Operation
 
 
@@ -113,12 +119,24 @@ class CliGenerator:
         # Runtime-only profile parameters (not derived from wizard config)
         profile_defaults["accessToken"] = None
 
+        # Derived from PythonVersion so the generated classifiers, tox envlist,
+        # ruff target-version and CI matrix cannot disagree with each other or
+        # with requires-python. Falls back to the schema default because the
+        # generator also accepts raw dicts that never went through Config.
+        minimum_python = self.config.get("PythonVersion") or Config.get_field_default(
+            "PythonVersion"
+        )
+        python_versions = python_versions_from(minimum_python)
+
         context = {
             **self.config,  # Spread all config values at top level
             "config": self.config,  # Also include as nested dict for compatibility
             "cli_name": self.cli_name,
             "package_name": self.package_name,
             "profile_defaults": profile_defaults,
+            "PythonVersions": python_versions,
+            "PythonToxEnvs": [tox_env_name(v) for v in python_versions],
+            "RuffTargetVersion": ruff_target_version(minimum_python),
         }
         context.update(extra)
         return context
@@ -431,6 +449,16 @@ class CliGenerator:
                 ".github/ISSUE_TEMPLATE/feature-request.yml.j2",
                 issue_template_dir / "feature-request.yml",
             ),
+            # These three pin a single interpreter, which must be the project's
+            # declared minimum. Hardcoding 3.12 gave a project with a higher
+            # PythonVersion a CI job whose pip install fails against its own
+            # requires-python.
+            (".github/workflows/docs.yaml.j2", workflows_dir / "docs.yaml"),
+            (
+                ".github/workflows/pr-validation.yaml.j2",
+                workflows_dir / "pr-validation.yaml",
+            ),
+            (".github/workflows/release.yaml.j2", workflows_dir / "release.yaml"),
         ]
         for template_name, output_path in templated_files:
             template = self.env.get_template(template_name)
@@ -451,13 +479,7 @@ class CliGenerator:
                 workflows_dir / "changelog-enforcer.yaml",
             ),
             (".github/workflows/codeql.yaml", workflows_dir / "codeql.yaml"),
-            (".github/workflows/docs.yaml", workflows_dir / "docs.yaml"),
             (".github/workflows/labeler.yaml", workflows_dir / "labeler.yaml"),
-            (
-                ".github/workflows/pr-validation.yaml",
-                workflows_dir / "pr-validation.yaml",
-            ),
-            (".github/workflows/release.yaml", workflows_dir / "release.yaml"),
             (".github/workflows/sync-labels.yaml", workflows_dir / "sync-labels.yaml"),
         ]
         for template_name, output_path in static_files:

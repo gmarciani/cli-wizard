@@ -1,6 +1,9 @@
 [tox]
-envlist = py312,py313,py314
+envlist = {{ PythonToxEnvs | join(",") }}
 isolated_build = True
+# Contributors rarely have every supported interpreter installed. CI pins one
+# version per job, so nothing is skipped there.
+skip_missing_interpreters = true
 
 [testenv]
 deps =

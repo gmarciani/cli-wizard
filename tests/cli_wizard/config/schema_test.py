@@ -3,12 +3,23 @@
 
 """Tests for configuration schema."""
 
+import re
+import tomllib
 from datetime import date
+from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
-from cli_wizard.config.schema import Config
+from cli_wizard.config.schema import (
+    SUPPORTED_PYTHON_VERSIONS,
+    Config,
+    python_versions_from,
+    tox_env_name,
+)
+
+REPO_ROOT = Path(__file__).parents[3]
 
 
 class TestConfigSchema:
@@ -329,3 +340,76 @@ class TestDeriveNamesFromProject:
         """A null ProjectName must not reach re.sub and raise TypeError."""
         with pytest.raises(ValidationError):
             Config(ProjectName=None)
+
+
+class TestSupportedPythonVersions:
+    """The declared version matrix must agree everywhere it appears."""
+
+    def test_python_versions_from_returns_tail_of_supported(self):
+        """Test that derivation drops versions below the given minimum."""
+        assert python_versions_from("3.12") == ["3.12", "3.13", "3.14"]
+        assert python_versions_from("3.13") == ["3.13", "3.14"]
+        assert python_versions_from(SUPPORTED_PYTHON_VERSIONS[-1]) == [
+            SUPPORTED_PYTHON_VERSIONS[-1]
+        ]
+
+    @pytest.mark.parametrize("version", ["3.11", "3.15", "4.0", "", "python3.12"])
+    def test_python_versions_from_rejects_unsupported(self, version):
+        """Test that an unsupported minimum raises rather than silently passing."""
+        with pytest.raises(ValueError, match="Unsupported Python version"):
+            python_versions_from(version)
+
+    @pytest.mark.parametrize("version", ["3.11", "3.15", "4.0", "nonsense"])
+    def test_config_rejects_unsupported_python_version(self, version):
+        """Test that Config validation rejects a version cli-wizard cannot target."""
+        with pytest.raises(ValidationError, match="Unsupported Python version"):
+            Config(PythonVersion=version)
+
+    @pytest.mark.parametrize("version", SUPPORTED_PYTHON_VERSIONS)
+    def test_config_accepts_every_supported_version(self, version):
+        """Test that every advertised version is actually accepted."""
+        assert Config(PythonVersion=version).PythonVersion == version
+
+    def test_default_python_version_is_the_oldest_supported(self):
+        """Test that the default minimum is the oldest version we support."""
+        assert Config().PythonVersion == SUPPORTED_PYTHON_VERSIONS[0]
+
+    def test_cli_wizard_requires_python_matches_oldest_supported(self):
+        """Test that cli-wizard's own requires-python matches the matrix."""
+        pyproject = tomllib.loads(
+            (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        )
+        assert (
+            pyproject["project"]["requires-python"]
+            == f">={SUPPORTED_PYTHON_VERSIONS[0]}"
+        )
+
+    def test_cli_wizard_classifiers_match_supported_versions(self):
+        """Test that cli-wizard's classifiers claim exactly what it supports."""
+        pyproject = tomllib.loads(
+            (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        )
+        claimed = [
+            c.rsplit(" :: ", 1)[1]
+            for c in pyproject["project"]["classifiers"]
+            if c.startswith("Programming Language :: Python :: 3.")
+        ]
+        assert claimed == list(SUPPORTED_PYTHON_VERSIONS)
+
+    def test_cli_wizard_tox_envlist_covers_supported_versions(self):
+        """Test that tox runs the suite on every supported interpreter."""
+        tox_ini = (REPO_ROOT / "tox.ini").read_text(encoding="utf-8")
+        envlist = re.search(r"^envlist = (.+)$", tox_ini, re.M).group(1)
+        envs = [e.strip() for e in envlist.split(",")]
+        expected = [tox_env_name(v) for v in SUPPORTED_PYTHON_VERSIONS]
+        assert [e for e in envs if e.startswith("py3")] == expected
+
+    def test_cli_wizard_ci_matrix_covers_supported_versions(self):
+        """Test that CI executes the suite on every supported interpreter."""
+        workflow = yaml.safe_load(
+            (REPO_ROOT / ".github" / "workflows" / "test.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        matrix = workflow["jobs"]["test"]["strategy"]["matrix"]["python-version"]
+        assert [str(v) for v in matrix] == list(SUPPORTED_PYTHON_VERSIONS)
