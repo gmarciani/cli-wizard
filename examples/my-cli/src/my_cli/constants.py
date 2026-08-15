@@ -7,19 +7,31 @@
 """Constants for the generated CLI."""
 
 import os
+import re
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+
+_HOME_VAR = re.compile(r"\$\{HOME\}|\$HOME\b")
 
 try:
     __version__ = version("my_cli")
 except PackageNotFoundError:
     __version__ = "0.0.0"
 
+
+def _expand_path(raw: str) -> Path:
+    """Expand a configured path, resolving home through Path.home()."""
+    # os.path.expandvars leaves ${HOME} in place when HOME is unset, as on
+    # Windows, yielding a relative path under the current directory.
+    resolved = _HOME_VAR.sub(lambda _: str(Path.home()), raw)
+    return Path(os.path.expandvars(resolved)).expanduser()
+
+
 # Main directory for CLI data (config, cache, etc.)
-MAIN_DIR = Path(os.path.expandvars("${HOME}/.my-cli"))
+MAIN_DIR = _expand_path("${HOME}/.my-cli")
 
 # Profile configuration
-PROFILE_FILE = Path(os.path.expandvars("${HOME}/.my-cli/profiles.yaml"))
+PROFILE_FILE = _expand_path("${HOME}/.my-cli/profiles.yaml")
 
 DEFAULT_BASE_URL = "http://localhost:3000"
 DEFAULT_TIMEOUT = 30

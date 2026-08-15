@@ -7,21 +7,32 @@
 """Constants for the generated CLI."""
 
 import os
+import re
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+
+_HOME_VAR = re.compile(r"\$\{HOME\}|\$HOME\b")
 
 try:
     __version__ = version("{{ PackageName }}")
 except PackageNotFoundError:
     __version__ = "0.0.0"
 
+
+def _expand_path(raw: str) -> Path:
+    """Expand a configured path, resolving home through Path.home()."""
+    # os.path.expandvars leaves ${HOME} in place when HOME is unset, as on
+    # Windows, yielding a relative path under the current directory.
+    resolved = _HOME_VAR.sub(lambda _: str(Path.home()), raw)
+    return Path(os.path.expandvars(resolved)).expanduser()
+
 # Main directory for CLI data (config, cache, etc.)
-MAIN_DIR = Path(os.path.expandvars("{{ MainDir }}"))
+MAIN_DIR = _expand_path("{{ MainDir }}")
 
 # Profile configuration
-PROFILE_FILE = Path(os.path.expandvars(
+PROFILE_FILE = _expand_path(
     "{{ ProfileFile | default(MainDir ~ '/profiles.yaml') }}"
-))
+)
 
 DEFAULT_BASE_URL = "{{ DefaultBaseUrl | default('http://localhost:8080') }}"
 DEFAULT_TIMEOUT = {{ Timeout | default(30) }}
@@ -65,7 +76,7 @@ LOG_FORMAT = "{{ LogFormat | default('%(asctime)s [%(levelname)s] %(message)s') 
 LOG_TIMESTAMP_FORMAT = "{{ LogTimestampFormat | default('%Y-%m-%dT%H:%M:%S') }}"
 LOG_TIMEZONE = "{{ LogTimezone | default('UTC') }}"
 {% if LogFile %}
-LOG_FILE = Path(os.path.expandvars("{{ LogFile }}"))
+LOG_FILE = _expand_path("{{ LogFile }}")
 {% else %}
 LOG_FILE = None
 {% endif %}

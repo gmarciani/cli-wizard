@@ -5,6 +5,8 @@
 
 import ast
 import configparser
+import importlib.util
+import os
 import re
 import subprocess
 import tempfile
@@ -1070,3 +1072,41 @@ class TestGeneratedPythonVersions:
                 assert "{{" not in content.replace("${{", ""), (
                     f"{name} has an unrendered Jinja delimiter"
                 )
+
+
+class TestGeneratedPathExpansion:
+    """Regression tests for #43: generated paths must not depend on $HOME."""
+
+    @pytest.mark.parametrize(
+        "constant,param",
+        [
+            ("MAIN_DIR", "MainDir"),
+            ("PROFILE_FILE", "ProfileFile"),
+            ("LOG_FILE", "LogFile"),
+        ],
+    )
+    def test_home_resolves_without_the_home_variable(self, constant, param):
+        """Test a ${HOME} path resolves under the home directory when HOME is unset."""
+        config = {
+            "CommandName": "test-cli",
+            "PackageName": "test_cli",
+            "Description": "A test CLI",
+            "AuthorName": "Test Author",
+            "AuthorEmail": "test@example.com",
+            "PythonVersion": "3.12",
+            "RepositoryUrl": "https://github.com/test/test-cli",
+            param: "${HOME}/.test-cli",
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            CliGenerator(config=config).generate({}, output_dir, "test-cli", "test_cli")
+
+            spec = importlib.util.spec_from_file_location(
+                "generated_constants", output_dir / "src" / "test_cli" / "constants.py"
+            )
+            module = importlib.util.module_from_spec(spec)
+            with patch.dict(os.environ, {}, clear=True):
+                spec.loader.exec_module(module)
+
+            assert getattr(module, constant) == Path.home() / ".test-cli"
