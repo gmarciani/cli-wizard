@@ -4,6 +4,7 @@
 """Tests for CLI generator."""
 
 import ast
+import configparser
 import re
 import subprocess
 import tempfile
@@ -912,6 +913,33 @@ class TestGeneratedToxContract:
                 measured.update(re.findall(r"--cov=([\w.]+)", path.read_text()))
 
         assert measured == {"test_cli"}, f"unexpected coverage targets: {measured}"
+
+
+class TestGeneratedToxEnvlist:
+    """A bare ``tox`` must lint and type check, not just run the tests."""
+
+    def test_default_environments_run_ruff_and_mypy(self):
+        """Test that the linters are in the envlist, not merely declared.
+
+        Asserting on the commands rather than on environment names: ruff and
+        mypy have already moved between environments once.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=Config(ProjectName="Test Cli").model_dump())
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+            tox = configparser.ConfigParser()
+            tox.read_string((output_dir / "tox.ini").read_text(encoding="utf-8"))
+
+        commands = "".join(
+            tox[section].get("commands", "")
+            for env in tox["tox"]["envlist"].split(",")
+            if tox.has_section(section := f"testenv:{env.strip()}")
+        )
+
+        assert "ruff check" in commands, commands
+        assert "ruff format --check" in commands, commands
+        assert "mypy" in commands, commands
 
 
 class TestGeneratedPythonVersions:
