@@ -605,6 +605,31 @@ class TestCliGenerator:
                             f"has a lazy import inside {node.name}"
                         )
 
+    def test_generated_cli_shows_the_splash_from_the_callback(self):
+        """Test that the splash screen is not an import-time side effect."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            tree = ast.parse((output_dir / "src" / "test_cli" / "cli.py").read_text())
+            main = next(
+                node
+                for node in tree.body
+                if isinstance(node, ast.FunctionDef) and node.name == "main"
+            )
+
+            def calls(nodes):
+                """Collect the calls made as statements in nodes."""
+                return {
+                    ast.unparse(node.value)
+                    for node in nodes
+                    if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+                }
+
+            assert "_show_splash()" not in calls(tree.body)
+            assert "_show_splash()" in calls(ast.walk(main))
+
 
 def _parse_pyproject_pins(text):
     """Collect ``name -> specifier`` from every dependency array in a pyproject."""

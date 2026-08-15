@@ -31,6 +31,7 @@
 - Fixed that workflow and `DEVELOPMENT.md` calling `tox -e test`, `type` and `coverage`, which `tox.ini` never defined.
 - Fixed `DEVELOPMENT.md` documenting `make setup`, a target the generated `Makefile` never defined.
 - Fixed the docs workflow installing a `[docs]` extra the generated `pyproject.toml` does not declare.
+- Fixed the splash screen printing at import time, which put it in `--help` and `--version` output and corrupted the shell completion stream. It now prints from the CLI callback.
 
 
 ## 2.1.0
