@@ -21,6 +21,7 @@ from {{ PackageName }}.logging import (
     set_debug,
 )
 from {{ PackageName }}.profile import load_profile, get_profile_value
+from {{ PackageName }}.redaction import redact, redact_text
 
 
 def _get_client(
@@ -186,7 +187,7 @@ def {{ op.function_name }}(
     cmd_name = "{{ group.cli_name }} {{ op.command_name }}"
     log_debug(
         f"Executing command '{cmd_name}'"
-        f" with params: {cmd_params}"
+        f" with params: {redact(cmd_params)}"
     )
 
     client = _get_client(base_url, no_verify_ssl, ca_file, debug)
@@ -254,7 +255,7 @@ def {{ op.function_name }}(
             output = json.dumps(response.json(), indent=2)
             log_debug(
                 f"Command '{cmd_name}' completed"
-                f" with output: {output[:500]}"
+                f" with output: {redact_text(output)[:500]}"
             )
             click.echo(output)
         else:

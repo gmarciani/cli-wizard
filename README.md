@@ -33,7 +33,7 @@ Generate modern CLIs from OpenAPI specifications.
 - Automatic command grouping based on OpenAPI tags
 - Automatic help generation for all commands
 - Clean, colored terminal output
-- `--debug` flag for verbose logging
+- `--debug` flag for verbose logging, with credentials redacted from the output
 - Built-in API client with configurable base URL and timeout
 - SSL/TLS support with custom CA certificate bundles
 - `--ca-file` option to specify custom CA certificates at runtime

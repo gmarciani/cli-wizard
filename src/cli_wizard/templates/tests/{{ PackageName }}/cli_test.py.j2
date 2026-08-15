@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
+import pytest
 from click.testing import CliRunner
 
 from {{ PackageName }}.cli import main, _hex_to_rgb, _show_splash
@@ -40,6 +41,7 @@ from {{ PackageName }}.logging import (
     _get_file_handler,
     _log_to_file,
 )
+from {{ PackageName }}.redaction import REDACTED, redact, redact_text
 from {{ PackageName }} import constants
 
 
@@ -827,6 +829,93 @@ class TestApiClient:
                 json_data={"name": "test"},
             )
             assert mock_log.call_count >= 3
+
+    def test_client_debug_redacts_the_request(self):
+        """Test a request credential never reaches debug output."""
+        client = ApiClient(debug=True, access_token="eyJTOKEN")
+        with patch("{{ PackageName }}.client.log_debug") as mock_log:
+            client._log_request(
+                "POST",
+                "https://api.example.com/login",
+                json_data={"email": "a@b.com", "password": "hunter2"},
+            )
+        logged = " ".join(str(call) for call in mock_log.call_args_list)
+        assert "hunter2" not in logged
+        assert "eyJTOKEN" not in logged
+        assert "a@b.com" in logged
+
+    def test_client_debug_redacts_the_response(self):
+        """Test a response credential never reaches debug output.
+
+        The credential sits past the 1000-character truncation point, so
+        this also pins that redaction happens before truncation.
+        """
+        client = ApiClient(debug=True)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.reason = "OK"
+        mock_response.headers = {"Set-Cookie": "session=abcd"}
+        mock_response.text = json.dumps(
+            {"padding": "x" * 2000, "access_token": "eyJTOKEN"}
+        )
+        with patch("{{ PackageName }}.client.log_debug") as mock_log:
+            client._log_response(mock_response)
+        logged = " ".join(str(call) for call in mock_log.call_args_list)
+        assert "eyJTOKEN" not in logged
+        assert "session=abcd" not in logged
+
+
+# =============================================================================
+# Redaction Tests
+# =============================================================================
+
+class TestRedaction:
+    """Tests for credential redaction in debug output."""
+
+    @pytest.mark.parametrize(
+        "name", ["password", "Password", "accessToken", "client_secret", "api_key"]
+    )
+    def test_redact_replaces_credential_values(self, name):
+        """Test credential-looking fields are replaced with the marker."""
+        assert redact({name: "value"}) == {name: REDACTED}
+
+    @pytest.mark.parametrize("name", ["email", "name", "limit", "id"])
+    def test_redact_keeps_ordinary_values(self, name):
+        """Test ordinary fields are left readable."""
+        assert redact({name: "value"}) == {name: "value"}
+
+    def test_redact_walks_nested_structures(self):
+        """Test credentials nested in sub-objects are redacted."""
+        result = redact({"users": [{"name": "a", "token": "t"}]})
+        assert result == {"users": [{"name": "a", "token": REDACTED}]}
+
+    def test_redact_leaves_the_payload_untouched(self):
+        """Test redaction does not mutate its input."""
+        payload = {"password": "hunter2"}
+        redact(payload)
+        assert payload == {"password": "hunter2"}
+
+    @pytest.mark.parametrize(
+        "header", ["Authorization", "Cookie", "Set-Cookie", "X-Api-Key"]
+    )
+    def test_redact_masks_credential_headers(self, header):
+        """Test headers carrying a credential are masked."""
+        assert redact({header: "Bearer eyJ"}) == {header: REDACTED}
+
+    def test_redact_text_redacts_json_payloads(self):
+        """Test JSON payloads are redacted structurally."""
+        result = redact_text('{"access_token": "eyJ", "id": 7}')
+        assert json.loads(result) == {"access_token": REDACTED, "id": 7}
+
+    def test_redact_text_redacts_non_json_payloads(self):
+        """Test form-encoded payloads are redacted by pattern."""
+        result = redact_text("access_token=eyJ&expires_in=3600")
+        assert "eyJ" not in result
+        assert "expires_in=3600" in result
+
+    def test_redact_text_leaves_ordinary_text_intact(self):
+        """Test text without credentials passes through unchanged."""
+        assert redact_text("<html>Not Found</html>") == "<html>Not Found</html>"
 
 
 # =============================================================================

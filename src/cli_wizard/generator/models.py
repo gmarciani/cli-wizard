@@ -19,6 +19,9 @@ class Parameter:
     description: str = ""
     default: Any = None
     enum: list[str] = field(default_factory=list)
+    # Signals that the value is a credential, read by _sensitive_field_names
+    spec_format: str = ""
+    write_only: bool = False
 
     @property
     def cli_name(self) -> str:
@@ -51,6 +54,9 @@ class RequestBodyProperty:
     prop_type: str
     required: bool
     description: str = ""
+    # Signals that the value is a credential, read by _sensitive_field_names
+    spec_format: str = ""
+    write_only: bool = False
 
     @property
     def cli_name(self) -> str:

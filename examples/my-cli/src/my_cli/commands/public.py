@@ -21,6 +21,7 @@ from my_cli.logging import (
     set_debug,
 )
 from my_cli.profile import get_profile_value, load_profile
+from my_cli.redaction import redact, redact_text
 
 
 def _get_client(
@@ -115,7 +116,7 @@ def get_public_greetings(
     # Log command execution start
     cmd_params: dict[str, Any] = {}
     cmd_name = "public get-public-greetings"
-    log_debug(f"Executing command '{cmd_name}' with params: {cmd_params}")
+    log_debug(f"Executing command '{cmd_name}' with params: {redact(cmd_params)}")
 
     client = _get_client(base_url, no_verify_ssl, ca_file, debug)
 
@@ -124,7 +125,10 @@ def get_public_greetings(
         response.raise_for_status()
         if response.text:
             output = json.dumps(response.json(), indent=2)
-            log_debug(f"Command '{cmd_name}' completed with output: {output[:500]}")
+            log_debug(
+                f"Command '{cmd_name}' completed"
+                f" with output: {redact_text(output)[:500]}"
+            )
             click.echo(output)
         else:
             log_debug("Command '%s' completed successfully" % cmd_name)

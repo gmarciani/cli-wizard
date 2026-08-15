@@ -148,6 +148,8 @@ class OpenApiParser:
             description=param.get("description", ""),
             default=schema.get("default"),
             enum=schema.get("enum", []),
+            spec_format=schema.get("format", ""),
+            write_only=schema.get("writeOnly", False),
         )
 
     def _parse_request_body(self, body: dict[str, Any]) -> list[RequestBodyProperty]:
@@ -173,6 +175,8 @@ class OpenApiParser:
                     prop_type=prop_schema.get("type", "string"),
                     required=prop_name in required_props,
                     description=prop_schema.get("description", ""),
+                    spec_format=prop_schema.get("format", ""),
+                    write_only=prop_schema.get("writeOnly", False),
                 )
             )
 
