@@ -24,6 +24,7 @@
 
 #### Generated code
 
+- Fixed `tox` running the tests only, because ruff and mypy were left out of the default `envlist`.
 - Fixed the PR validation workflow measuring coverage of `cli_wizard` instead of the generated package.
 - Fixed that workflow and `DEVELOPMENT.md` calling `tox -e test`, `type` and `coverage`, which `tox.ini` never defined.
 - Fixed `DEVELOPMENT.md` documenting `make setup`, a target the generated `Makefile` never defined.
