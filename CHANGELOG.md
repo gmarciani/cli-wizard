@@ -24,6 +24,7 @@
 
 #### Generated code
 
+- Fixed `${HOME}` in `MainDir`, `ProfileFile` and `LogFile` staying literal wherever `HOME` is unset. Home now resolves through `Path.home()`.
 - Fixed `--version` reporting `0.0.0` when installed from a wheel; the version now comes from the installed package metadata instead of a `VERSION` file next to the source.
 - Fixed `tox` running the tests only, because ruff and mypy were left out of the default `envlist`.
 - Fixed the PR validation workflow measuring coverage of `cli_wizard` instead of the generated package.
