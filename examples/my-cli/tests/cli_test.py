@@ -6,6 +6,8 @@
 
 """Tests for the CLI."""
 
+import importlib
+import importlib.metadata
 import json
 import os
 import tempfile
@@ -1170,6 +1172,20 @@ class TestConstants:
         """Test version constant exists."""
         assert hasattr(constants, "__version__")
         assert isinstance(constants.__version__, str)
+
+    def test_version_fallback_when_package_not_found(self, monkeypatch):
+        """Test version falls back to '0.0.0' when metadata is unavailable."""
+
+        def fake_version(name):
+            raise importlib.metadata.PackageNotFoundError(name)
+
+        monkeypatch.setattr(importlib.metadata, "version", fake_version)
+        try:
+            importlib.reload(constants)
+            assert constants.__version__ == "0.0.0"
+        finally:
+            monkeypatch.undo()
+            importlib.reload(constants)
 
     def test_main_dir_exists(self):
         """Test main directory constant exists."""

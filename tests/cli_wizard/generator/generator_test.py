@@ -208,6 +208,17 @@ class TestCliGenerator:
             assert "https://api.example.com" in content
             assert "60" in content
 
+    def test_generated_version_is_read_from_package_metadata(self):
+        """Test the generated version comes from metadata, not a VERSION file."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            content = (output_dir / "src" / "test_cli" / "constants.py").read_text()
+            assert 'version("test_cli")' in content
+            assert "VERSION" not in content
+
     def test_generate_multiple_groups(self):
         """Test generating multiple command groups."""
         groups = {
