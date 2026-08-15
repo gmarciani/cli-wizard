@@ -16,6 +16,49 @@ from my_cli.constants import DEFAULT_BASE_URL, DEFAULT_CA_FILE, DEFAULT_TIMEOUT
 from my_cli.logging import log_debug
 from my_cli.redaction import redact, redact_text
 
+# Longest error body reproduced in a message, before truncation.
+MAX_ERROR_BODY_CHARS = 2000
+
+
+def format_error(error: Exception) -> str:
+    """Describe a failed request, including the error body the API sent.
+
+    ``raise_for_status`` reports the status line alone, discarding the body -
+    which is where the API names the fields it rejected.
+    """
+    response = error.response if isinstance(error, requests.HTTPError) else None
+    if response is None:
+        return str(error)
+    # Redact before truncating, as the debug log does: this message also
+    # reaches LogFile, and a cut credential is still a credential.
+    body = redact_text(response.text or "").strip()
+    try:
+        details = "\n".join(_messages(redact(response.json()))) or body
+    except ValueError:
+        details = body
+    if len(details) > MAX_ERROR_BODY_CHARS:
+        details = f"{details[:MAX_ERROR_BODY_CHARS]}... (truncated)"
+    status = f"{response.status_code} {response.reason or ''}".strip()
+    if not details:
+        return status
+    return "\n".join([status, *(f"  {line}" for line in details.splitlines())])
+
+
+def _messages(payload: Any) -> list[str]:
+    """Flatten a decoded error payload into one line per reported problem."""
+    if isinstance(payload, list):
+        return [line for item in payload for line in _messages(item)]
+    if isinstance(payload, dict):
+        for key in ("detail", "message", "error"):
+            if key in payload:
+                return _messages(payload[key])
+        if "msg" in payload:
+            # Validation errors locate the field, after the request part.
+            field = ".".join(str(part) for part in payload.get("loc", [])[1:])
+            return [f"{field}: {payload['msg']}" if field else str(payload["msg"])]
+        return []
+    return [str(payload)]
+
 
 def encode_path_param(value: Any) -> str:
     """Encode a value for interpolation into a single URL path segment.

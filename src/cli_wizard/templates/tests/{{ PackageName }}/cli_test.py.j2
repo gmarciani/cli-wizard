@@ -15,10 +15,16 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
+import requests
 from click.testing import CliRunner
 
 from {{ PackageName }}.cli import main, _hex_to_rgb, _show_splash
-from {{ PackageName }}.client import ApiClient, encode_path_param
+from {{ PackageName }}.client import (
+    MAX_ERROR_BODY_CHARS,
+    ApiClient,
+    encode_path_param,
+    format_error,
+)
 from {{ PackageName }}.profile import (
     load_profile,
     get_profile,
@@ -976,6 +982,91 @@ class TestRedaction:
     def test_redact_text_leaves_ordinary_text_intact(self):
         """Test text without credentials passes through unchanged."""
         assert redact_text("<html>Not Found</html>") == "<html>Not Found</html>"
+
+
+# =============================================================================
+# Error Formatting Tests
+# =============================================================================
+
+def _http_error(status_code: int, reason: str, body: str) -> requests.HTTPError:
+    """Build the error raised for a response carrying an error body."""
+    response = requests.Response()
+    response.status_code = status_code
+    response.reason = reason
+    response._content = body.encode()
+    return requests.HTTPError(response=response)
+
+
+class TestFormatError:
+    """Tests for error messages built from a failed request."""
+
+    @pytest.mark.parametrize(
+        "body,expected",
+        [
+            (
+                json.dumps(
+                    {
+                        "detail": [
+                            {
+                                "loc": ["body", "operations"],
+                                "msg": "Input should be a valid list",
+                            },
+                            {
+                                "loc": ["body", "duration_minutes"],
+                                "msg": "Input should be a valid integer",
+                            },
+                        ]
+                    }
+                ),
+                "  operations: Input should be a valid list\n"
+                "  duration_minutes: Input should be a valid integer",
+            ),
+            (
+                json.dumps(
+                    {
+                        "detail": [
+                            {
+                                "loc": ["body", "items", 0, "name"],
+                                "msg": "Field required",
+                            }
+                        ]
+                    }
+                ),
+                "  items.0.name: Field required",
+            ),
+            (json.dumps({"detail": "Item not found"}), "  Item not found"),
+            (json.dumps({"error": {"message": "Quota exceeded"}}), "  Quota exceeded"),
+            ('{"code": 4001}', '  {"code": 4001}'),
+            ("upstream is down", "  upstream is down"),
+            ('{"access_token": "abc123"}', '  {"access_token": "' + REDACTED + '"}'),
+        ],
+    )
+    def test_error_body_reaches_the_message(self, body, expected):
+        """Test that an error body is reported under the status line."""
+        error = _http_error(422, "Unprocessable Entity", body)
+
+        assert format_error(error) == f"422 Unprocessable Entity\n{expected}"
+
+    def test_empty_body_leaves_the_status_line_alone(self):
+        """Test that a response without a body reports only the status."""
+        error = _http_error(404, "Not Found", "")
+
+        assert format_error(error) == "404 Not Found"
+
+    def test_long_body_is_truncated(self):
+        """Test that an oversized body is cut down before printing."""
+        error = _http_error(500, "Server Error", "x" * (MAX_ERROR_BODY_CHARS * 2))
+
+        message = format_error(error)
+
+        assert message.endswith("... (truncated)")
+        assert len(message) < MAX_ERROR_BODY_CHARS * 2
+
+    def test_a_failure_without_a_response_reports_the_error_itself(self):
+        """Test that a connection failure still reports what went wrong."""
+        assert format_error(requests.ConnectionError("connection refused")) == (
+            "connection refused"
+        )
 
 
 # =============================================================================
