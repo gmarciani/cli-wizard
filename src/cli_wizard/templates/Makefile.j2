@@ -1,7 +1,8 @@
 .PHONY: install test lint format build clean coverage
 
 install:
-	pip install -e ".[dev]"
+	python -m pip install --upgrade pip
+	pip install -e . --group dev
 	pre-commit install
 
 test:

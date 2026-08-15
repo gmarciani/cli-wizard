@@ -595,24 +595,13 @@ class TestCliGenerator:
 def _parse_pyproject_pins(text):
     """Collect ``name -> specifier`` from every dependency array in a pyproject."""
     pins = {}
-    pattern = r"^(?:dependencies|dev|docs) = \[(.*?)^]"
+    pattern = r"^(?:dependencies|test|dev|docs) = \[(.*?)^]"
     for block in re.findall(pattern, text, re.S | re.M):
+        # Drop {include-group = "..."} entries: they name a group, not a package.
+        block = re.sub(r"\{include-group = \"[^\"]+\"\},?", "", block)
         for entry in re.findall(r'"([^"]+)"', block):
             name, specifier = re.match(r"([A-Za-z0-9_.-]+)(.*)", entry).groups()
             pins[name.lower()] = specifier
-    return pins
-
-
-def _parse_tox_pins(text):
-    """Collect ``name -> specifier`` from every ``deps`` entry in a tox.ini."""
-    pins = {}
-    for line in text.splitlines():
-        line = line.strip()
-        if line.startswith("deps ="):
-            line = line[len("deps =") :].strip()
-        match = re.fullmatch(r"([A-Za-z0-9_.-]+)((?:~=|==|>=|<).*)?", line)
-        if match and match.group(2):
-            pins[match.group(1).lower()] = match.group(2)
     return pins
 
 
@@ -636,35 +625,210 @@ class TestDependencyPins:
         mismatched = {n: (ours[n], theirs[n]) for n in shared if ours[n] != theirs[n]}
         assert not mismatched, f"pins differ between pyprojects: {mismatched}"
 
-    def test_generated_tox_agrees_with_generated_pyproject(self):
-        """Test that the generated tox envs pin what the generated pyproject pins."""
-        pyproject = _parse_pyproject_pins(
-            (TEMPLATES_DIR / "pyproject.toml.j2").read_text()
+    @pytest.mark.parametrize(
+        "tox_path",
+        [REPO_ROOT / "tox.ini", TEMPLATES_DIR / "tox.ini.j2"],
+        ids=["cli-wizard", "generated"],
+    )
+    def test_tox_declares_no_dependencies_of_its_own(self, tox_path):
+        """Test that tox reads its versions from pyproject instead of repeating them."""
+        text = tox_path.read_text()
+
+        declared = [
+            line for line in text.splitlines() if line.strip().startswith("deps =")
+        ]
+        assert not declared, (
+            f"{tox_path.name} declares dependencies pyproject.toml already pins: "
+            f"{declared}"
         )
-        tox = _parse_tox_pins((TEMPLATES_DIR / "tox.ini.j2").read_text())
+        assert "dependency_groups =" in text, (
+            f"{tox_path.name} declares no dependency groups"
+        )
 
-        assert tox, "expected the generated tox.ini to pin its dependencies"
 
-        mismatched = {
-            name: (specifier, pyproject[name])
-            for name, specifier in tox.items()
-            if name in pyproject and specifier != pyproject[name]
+# Tooling nobody installing from an index should be offered. cli-wizard also
+# publishes to PyPI (twine), builds docs (sphinx) and bundles ruff as a runtime
+# dependency, so the two lists are not the same.
+CLI_WIZARD_TOOLING = ("build", "mypy", "pre-commit", "pytest", "tox", "twine", "sphinx")
+GENERATED_TOOLING = ("build", "mypy", "pre-commit", "pytest", "ruff", "tox")
+
+
+class TestDevToolingIsNotPublished:
+    """Dev tooling belongs in a PEP 735 group, and nothing local-only is published."""
+
+    @staticmethod
+    def _generated_pyproject(temp_dir):
+        """Render a project and return its parsed pyproject.toml."""
+        output_dir = Path(temp_dir) / "test-cli"
+        generator = CliGenerator(
+            config={
+                "CommandName": "test-cli",
+                "PackageName": "test_cli",
+                "Description": "A test CLI",
+                "PythonVersion": "3.12",
+                "RepositoryUrl": "https://github.com/test/test-cli",
+            }
+        )
+        generator.generate({}, output_dir, "test-cli", "test_cli")
+        return tomllib.loads((output_dir / "pyproject.toml").read_text())
+
+    @staticmethod
+    def _flatten(groups):
+        """Flatten a [dependency-groups] table, dropping include-group markers."""
+        return " ".join(
+            dep for deps in groups.values() for dep in deps if isinstance(dep, str)
+        )
+
+    def test_generated_project_publishes_no_extras(self):
+        """Test that a generated CLI ships no optional dependencies at all."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pyproject = self._generated_pyproject(temp_dir)
+
+        assert "optional-dependencies" not in pyproject["project"]
+
+    def test_generated_project_keeps_its_toolchain_in_a_group(self):
+        """Test that a generated CLI's toolchain is local-only."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pyproject = self._generated_pyproject(temp_dir)
+
+        groups = self._flatten(pyproject["dependency-groups"])
+        published = " ".join(pyproject["project"]["dependencies"])
+        for tool in GENERATED_TOOLING:
+            assert tool in groups, f"{tool} missing from the dependency groups"
+            assert tool not in published, f"{tool} is published"
+
+    @pytest.mark.parametrize(
+        ("pyproject_path", "expected"),
+        [
+            (REPO_ROOT / "pyproject.toml", ["dev", "test", "docs"]),
+            (None, ["dev", "test", "docs"]),
+        ],
+        ids=["cli-wizard", "generated"],
+    )
+    def test_groups_are_declared_in_order(self, pyproject_path, expected, tmp_path):
+        """Test that dependency groups keep the declared order, widest first."""
+        if pyproject_path is None:
+            pyproject = self._generated_pyproject(tmp_path)
+        else:
+            pyproject = tomllib.loads(pyproject_path.read_text())
+
+        assert list(pyproject["dependency-groups"]) == expected
+
+    @pytest.mark.parametrize(
+        "pyproject_path",
+        [REPO_ROOT / "pyproject.toml", None],
+        ids=["cli-wizard", "generated"],
+    )
+    def test_dev_group_includes_every_other_group(self, pyproject_path, tmp_path):
+        """Test that `--group dev` is enough to get the whole toolchain."""
+        if pyproject_path is None:
+            pyproject = self._generated_pyproject(tmp_path)
+        else:
+            pyproject = tomllib.loads(pyproject_path.read_text())
+
+        groups = pyproject["dependency-groups"]
+        included = {
+            dep["include-group"] for dep in groups["dev"] if isinstance(dep, dict)
         }
-        assert not mismatched, (
-            f"generated tox.ini disagrees with pyproject: {mismatched}"
+        assert included == set(groups) - {"dev"}
+
+    def test_generated_dev_group_includes_the_test_group(self):
+        """Test that one ``--group dev`` install is enough to run the suite."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pyproject = self._generated_pyproject(temp_dir)
+
+        groups = pyproject["dependency-groups"]
+        assert {"include-group": "test"} in groups["dev"]
+        assert any("pytest" in dep for dep in groups["test"])
+
+    def test_cli_wizard_keeps_its_own_toolchain_in_a_group(self):
+        """Test that cli-wizard applies to itself what it generates."""
+        pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+
+        assert "optional-dependencies" not in pyproject["project"]
+        assert {"include-group": "test"} in pyproject["dependency-groups"]["dev"]
+
+        groups = self._flatten(pyproject["dependency-groups"])
+        published = " ".join(pyproject["project"]["dependencies"])
+        for tool in CLI_WIZARD_TOOLING:
+            assert tool in groups, f"{tool} missing from the dependency groups"
+            assert tool not in published, f"{tool} is published"
+
+    @pytest.mark.parametrize(
+        "recipe_paths",
+        [
+            (
+                REPO_ROOT / "Makefile",
+                REPO_ROOT / ".github" / "workflows" / "test.yaml",
+                REPO_ROOT / ".github" / "workflows" / "pr-validation.yaml",
+            ),
+            (
+                "Makefile",
+                ".github/workflows/test.yaml",
+                ".github/workflows/pr-validation.yaml",
+            ),
+        ],
+        ids=["cli-wizard", "generated"],
+    )
+    def test_every_install_recipe_is_the_same_command(self, recipe_paths, tmp_path):
+        """Test that one command installs the toolchain, wherever it is installed."""
+        if not isinstance(recipe_paths[0], Path):
+            output_dir = tmp_path / "test-cli"
+            generator = CliGenerator(
+                config={
+                    "CommandName": "test-cli",
+                    "PackageName": "test_cli",
+                    "PythonVersion": "3.12",
+                    "IncludeGithubWorkflows": True,
+                }
+            )
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+            recipe_paths = [output_dir / rel for rel in recipe_paths]
+
+        # Every line that installs the dev toolchain. `--group docs` is a
+        # different job and is deliberately not compared against these.
+        found = set()
+        for path in recipe_paths:
+            for line in path.read_text().splitlines():
+                line = line.strip()
+                if "--group dev" in line:
+                    found.add(line)
+
+        assert found, f"no toolchain install found in {recipe_paths}"
+        assert found == {"pip install -e . --group dev"}, (
+            f"install recipes disagree: {sorted(found)}"
         )
 
-    def test_generated_tox_leaves_no_dependency_unpinned(self):
-        """Test that every generated tox dep carries a version specifier."""
-        text = (TEMPLATES_DIR / "tox.ini.j2").read_text()
+    @pytest.mark.parametrize(
+        "root",
+        [REPO_ROOT, None],
+        ids=["cli-wizard", "generated"],
+    )
+    def test_no_file_installs_an_extra(self, root, tmp_path):
+        """Test that nothing reaches for an extra the project no longer declares.
 
-        unpinned = []
-        for line in text.splitlines():
-            stripped = line.strip()
-            if line.startswith(" ") and re.fullmatch(r"[A-Za-z0-9_.-]+", stripped):
-                unpinned.append(stripped)
+        This sweeps every file rather than a list of the recipes we remember,
+        because the generated docs workflow was missed exactly that way.
+        """
+        if root is None:
+            root = tmp_path / "test-cli"
+            generator = CliGenerator(
+                config=Config(
+                    ProjectName="Test Cli", IncludeGithubWorkflows=True
+                ).model_dump()
+            )
+            generator.generate({}, root, "test-cli", "test_cli")
+            paths = [p for p in root.rglob("*") if p.is_file()]
+        else:
+            workflows = (root / ".github" / "workflows").glob("*.yaml")
+            paths = [root / "Makefile", *workflows]
 
-        assert not unpinned, f"unpinned deps in generated tox.ini: {unpinned}"
+        offenders = [
+            path.name
+            for path in paths
+            if re.search(r"pip install [^\n]*-e [\"']?\.[\"']?\[", path.read_text())
+        ]
+        assert not offenders, f"these install an extra: {offenders}"
 
 
 class TestGeneratedPythonVersions:

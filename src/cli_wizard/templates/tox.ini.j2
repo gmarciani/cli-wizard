@@ -2,26 +2,22 @@
 envlist = py{{ PythonVersions | map("replace", ".", "") | join(",py") }}
 isolated_build = True
 
+# Versions live in [dependency-groups] in pyproject.toml only; `dependency_groups`
+# reads them from there.
 [testenv]
-deps =
-    pytest~=9.1
-    pytest-cov~=7.1
+dependency_groups = test
 commands =
     pytest tests/ -v --cov={{ PackageName }} --cov-report=term
 
 [testenv:lint]
-deps =
-    mypy~=2.3
-    ruff~=0.16.2
-    types-PyYAML~=6.0
-    types-requests~=2.33
+dependency_groups = dev
 commands =
     ruff check src/ tests/
     ruff format --check src/ tests/
     mypy src/
 
 [testenv:format]
-deps = ruff~=0.16.2
+dependency_groups = dev
 commands =
     ruff check --fix src/ tests/
     ruff format src/ tests/

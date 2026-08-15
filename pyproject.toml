@@ -30,17 +30,33 @@ dependencies = [
     "ruff~=0.16.2",
 ]
 
-[project.optional-dependencies]
+[project.scripts]
+cli-wizard = "cli_wizard.cli:main"
+
+[project.urls]
+Homepage = "https://gmarciani.github.io/cli-wizard/"
+Repository = "https://github.com/gmarciani/cli-wizard"
+Issues = "https://github.com/gmarciani/cli-wizard/issues"
+
+# Local-only tooling (PEP 735). Groups are never published, so none of this
+# reaches anyone installing cli-wizard from an index. There are no extras: the
+# built distributions carry no tests, so a published test extra would only
+# install pytest for a consumer with nothing to run it against.
+[dependency-groups]
 dev = [
+    {include-group = "test"},
+    {include-group = "docs"},
     "build~=1.5",
     "mypy~=2.3",
     "pre-commit~=4.6",
-    "pytest~=9.1",
-    "pytest-cov~=7.1",
     "tox~=4.58",
     "twine>=6.2,<8.0",
     "types-PyYAML~=6.0",
     "types-requests~=2.33",
+]
+test = [
+    "pytest~=9.1",
+    "pytest-cov~=7.1",
 ]
 docs = [
     "sphinx~=9.1",
@@ -49,14 +65,6 @@ docs = [
     "sphinx-new-tab-link~=0.8",
     "autodoc_pydantic~=2.2",
 ]
-
-[project.scripts]
-cli-wizard = "cli_wizard.cli:main"
-
-[project.urls]
-Homepage = "https://github.com/gmarciani/cli-wizard"
-Repository = "https://github.com/gmarciani/cli-wizard"
-Issues = "https://github.com/gmarciani/cli-wizard/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,5 +1,15 @@
 # Development
 
+## Prerequisites
+
+- Python 3.12, 3.13 or 3.14 — see [Python versions](#python-versions).
+- [pyenv](https://github.com/pyenv/pyenv), used by `make setup` to create the
+  virtualenv.
+- pip 25.1 or newer. The development toolchain is a
+  [PEP 735](https://peps.python.org/pep-0735/) dependency group rather than an
+  extra, and `pip install --group` landed in 25.1. `make setup` upgrades pip
+  before installing.
+
 ## Setup
 
 Setup development environment:
@@ -7,6 +17,28 @@ Setup development environment:
 ```shell
 make setup
 ```
+
+Every environment that needs the toolchain installs it the same way, whether it
+is your machine or CI:
+
+```shell
+pip install -e . --group dev
+```
+
+cli-wizard publishes no extras at all. The toolchain lives in
+[PEP 735](https://peps.python.org/pep-0735/) `[dependency-groups]`, which is
+local-only metadata that never reaches PyPI:
+
+| Group | Contents | Installed by |
+|---|---|---|
+| `test` | pytest, pytest-cov | `tox -e py3xx`, and `dev` via `include-group` |
+| `dev` | `test`, plus build, mypy, pre-commit, tox, twine, type stubs | `make setup`, CI |
+| `docs` | sphinx and its plugins | `make install-docs` |
+
+`dev` pulls `test` in through `{include-group = "test"}`, so one command gets
+everything and there is no second recipe to keep in sync. Versions are declared
+in those groups once; `tox.ini` reads them through `dependency_groups` instead
+of repeating them.
 
 ## Validate
 Run tests and linters:

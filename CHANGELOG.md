@@ -2,6 +2,25 @@
 
 ## 3.0.0
 
+### Changes
+
+#### cli-wizard
+
+- Publishes no extras: the dev, test and docs toolchains are [PEP 735](https://peps.python.org/pep-0735/) groups, `dev` including the other two.
+- Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.
+
+#### Generated code
+
+- Publishes no extras: the dev, test and docs toolchains are PEP 735 dependency groups, and `dev` includes the other two.
+- Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.
+
+### Bug Fixes
+
+#### Generated code
+
+- Fixed `DEVELOPMENT.md` documenting `make setup`, a target the generated `Makefile` never defined.
+- Fixed the docs workflow installing a `[docs]` extra the generated `pyproject.toml` does not declare.
+
 
 ## 2.1.0
 
