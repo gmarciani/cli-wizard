@@ -732,6 +732,40 @@ class TestDevToolingIsNotPublished:
         }
         assert included == set(groups) - {"dev"}
 
+    def test_generated_project_urls_follow_the_config(self):
+        """Test that Homepage takes HomePageUrl and Repository takes RepositoryUrl."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(
+                config=Config(
+                    ProjectName="Test Cli",
+                    RepositoryUrl="https://github.com/test/test-cli",
+                    HomePageUrl="https://test.github.io/test-cli/",
+                ).model_dump()
+            )
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+            urls = tomllib.loads((output_dir / "pyproject.toml").read_text())
+            urls = urls["project"]["urls"]
+
+        assert urls["Homepage"] == "https://test.github.io/test-cli/"
+        assert urls["Repository"] == "https://github.com/test/test-cli"
+
+    def test_generated_home_page_falls_back_to_the_repository(self):
+        """Test that a project not setting HomePageUrl still gets a usable one."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(
+                config=Config(
+                    ProjectName="Test Cli",
+                    RepositoryUrl="https://github.com/test/test-cli",
+                ).model_dump()
+            )
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+            urls = tomllib.loads((output_dir / "pyproject.toml").read_text())
+            urls = urls["project"]["urls"]
+
+        assert urls["Homepage"] == urls["Repository"]
+
     def test_generated_dev_group_includes_the_test_group(self):
         """Test that one ``--group dev`` install is enough to run the suite."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -831,6 +865,55 @@ class TestDevToolingIsNotPublished:
         assert not offenders, f"these install an extra: {offenders}"
 
 
+class TestGeneratedToxContract:
+    """Whatever a generated project tells you to run has to exist and be correct."""
+
+    @staticmethod
+    def _generate(temp_dir):
+        """Render a project with its workflows and return the output directory."""
+        output_dir = Path(temp_dir) / "test-cli"
+        generator = CliGenerator(
+            config=Config(
+                ProjectName="Test Cli", IncludeGithubWorkflows=True
+            ).model_dump()
+        )
+        generator.generate({}, output_dir, "test-cli", "test_cli")
+        return output_dir
+
+    def test_every_tox_env_referenced_elsewhere_exists(self, tmp_path):
+        """Test that no recipe or doc points at a tox env the project lacks."""
+        output_dir = self._generate(tmp_path)
+
+        tox_ini = (output_dir / "tox.ini").read_text()
+        defined = set(re.findall(r"^\[testenv:([\w-]+)]", tox_ini, re.M))
+        defined.update(re.findall(r"\bpy\d+\b", tox_ini))
+
+        referenced = {}
+        sources = [
+            output_dir / "DEVELOPMENT.md",
+            output_dir / ".github" / "workflows" / "test.yaml",
+            output_dir / ".github" / "workflows" / "pr-validation.yaml",
+        ]
+        for source in sources:
+            for envs in re.findall(r"tox (?:-r )?-e ([\w,.-]+)", source.read_text()):
+                for env in envs.split(","):
+                    referenced.setdefault(env, source.name)
+
+        missing = {env: src for env, src in referenced.items() if env not in defined}
+        assert not missing, f"tox envs referenced but not defined: {missing}"
+
+    def test_coverage_gate_measures_the_generated_package(self, tmp_path):
+        """Test that no recipe measures coverage of cli-wizard's own package."""
+        output_dir = self._generate(tmp_path)
+
+        measured = set()
+        for path in sorted(output_dir.rglob("*")):
+            if path.is_file():
+                measured.update(re.findall(r"--cov=([\w.]+)", path.read_text()))
+
+        assert measured == {"test_cli"}, f"unexpected coverage targets: {measured}"
+
+
 class TestGeneratedPythonVersions:
     """A generated project's version matrix must follow its PythonVersion."""
 
@@ -872,7 +955,8 @@ class TestGeneratedPythonVersions:
 
             tox_ini = (output_dir / "tox.ini").read_text(encoding="utf-8")
             envlist = re.search(r"^envlist = (.+)$", tox_ini, re.M).group(1)
-            assert [e.strip() for e in envlist.split(",")] == [
+            envs = [e.strip() for e in envlist.split(",")]
+            assert [e for e in envs if e.startswith("py3")] == [
                 tox_env_name(v) for v in expected
             ]
 

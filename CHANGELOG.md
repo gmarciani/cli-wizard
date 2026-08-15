@@ -2,6 +2,12 @@
 
 ## 3.0.0
 
+### New Features
+
+#### cli-wizard
+
+- Added the `HomePageUrl` config parameter, which sets `Homepage` in a generated `pyproject.toml` and defaults to `RepositoryUrl`.
+
 ### Changes
 
 #### cli-wizard
@@ -18,6 +24,8 @@
 
 #### Generated code
 
+- Fixed the PR validation workflow measuring coverage of `cli_wizard` instead of the generated package.
+- Fixed that workflow and `DEVELOPMENT.md` calling `tox -e test`, `type` and `coverage`, which `tox.ini` never defined.
 - Fixed `DEVELOPMENT.md` documenting `make setup`, a target the generated `Makefile` never defined.
 - Fixed the docs workflow installing a `[docs]` extra the generated `pyproject.toml` does not declare.
 

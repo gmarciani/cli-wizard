@@ -39,6 +39,7 @@ BOOTSTRAP_PARAMS: list[str] = [
     "Version",
     "CopyrightYear",
     "RepositoryUrl",
+    "HomePageUrl",
 ]
 
 
@@ -87,6 +88,10 @@ def _get_default_for_param(
         github_user = str(values.get("GithubUser", "username"))
         command_name = str(values.get("CommandName", "my-project"))
         return f"https://github.com/{github_user}/{command_name}"
+
+    if param_name == "HomePageUrl":
+        # Default to the repository, which is prompted just before this one
+        return str(values.get("RepositoryUrl", ""))
 
     # Use schema default
     default_value = Config.get_field_default(param_name)
