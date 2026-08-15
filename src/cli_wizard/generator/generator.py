@@ -13,7 +13,12 @@ from typing import Any
 from jinja2 import Environment, PackageLoader
 
 from cli_wizard.config.schema import Config, python_versions_from
-from cli_wizard.generator.models import CommandGroup, Operation
+from cli_wizard.generator.models import (
+    CommandGroup,
+    Operation,
+    Parameter,
+    RequestBodyProperty,
+)
 
 
 def _build_url_path(op: Operation) -> str:
@@ -23,6 +28,26 @@ def _build_url_path(op: Operation) -> str:
         if param.location == "path":
             path = path.replace(f"{{{param.name}}}", f"{{{param.python_name}}}")
     return path
+
+
+def _sensitive_field_names(groups: dict[str, CommandGroup]) -> list[str]:
+    """Collect the wire names the spec marks as credentials.
+
+    Baked into the generated redaction module as one project-wide set, so
+    nothing has to be threaded through the client and every command. A
+    field that is a credential in one operation is one everywhere.
+    """
+    names = set()
+    for group in groups.values():
+        for op in group.operations:
+            spec_fields: list[Parameter | RequestBodyProperty] = [
+                *op.parameters,
+                *op.body_properties,
+            ]
+            for spec_field in spec_fields:
+                if spec_field.spec_format == "password" or spec_field.write_only:
+                    names.add(spec_field.name)
+    return sorted(names)
 
 
 logger = logging.getLogger(__name__)
@@ -199,6 +224,7 @@ class CliGenerator:
         self._generate_cli_main(src_dir, package_name, groups)
         self._generate_client(src_dir)
         self._generate_logging(src_dir)
+        self._generate_redaction(src_dir, groups)
         self._generate_profile(src_dir)
         self._generate_constants(src_dir, ca_file_name, splash_file_name, main_dir)
 
@@ -261,6 +287,17 @@ class CliGenerator:
         template = self.env.get_template("src/{{ PackageName }}/logging.py.j2")
         content = template.render(**self._template_context())
         with open(src_dir / "logging.py", "w") as f:
+            f.write(content)
+
+    def _generate_redaction(
+        self, src_dir: Path, groups: dict[str, CommandGroup]
+    ) -> None:
+        """Generate the debug-output redaction module."""
+        template = self.env.get_template("src/{{ PackageName }}/redaction.py.j2")
+        content = template.render(
+            **self._template_context(sensitive_fields=_sensitive_field_names(groups))
+        )
+        with open(src_dir / "redaction.py", "w") as f:
             f.write(content)
 
     def _generate_profile(self, src_dir: Path) -> None:

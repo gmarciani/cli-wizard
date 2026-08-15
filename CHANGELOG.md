@@ -24,6 +24,7 @@
 
 #### Generated code
 
+- Fixed `--debug` printing passwords, access tokens and the `Authorization` header in cleartext, to the terminal and to `LogFile`. Request parameters, request and response bodies, and headers are now redacted to `***`, based on the `format: password` and `writeOnly: true` spec signals plus a name heuristic for `*password*`, `*token*`, `*secret*` and `*key*`. Command output on stdout is unaffected.
 - Fixed `${HOME}` in `MainDir`, `ProfileFile` and `LogFile` staying literal wherever `HOME` is unset. Home now resolves through `Path.home()`.
 - Fixed `--version` reporting `0.0.0` when installed from a wheel; the version now comes from the installed package metadata instead of a `VERSION` file next to the source.
 - Fixed `tox` running the tests only, because ruff and mypy were left out of the default `envlist`.

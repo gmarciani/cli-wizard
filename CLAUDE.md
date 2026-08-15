@@ -56,6 +56,15 @@ not by Jinja. Files needing the package name must be `.j2` and rendered;
 anything in the generator's `static_files` list is copied byte-for-byte, so it
 cannot reference the generated project.
 
+**Debug output is redacted, never raw.** Every payload a generated CLI logs —
+command parameters, request params and body, response body, request and
+response headers — passes through the generated `redaction.py`. Spec signals
+(`format: password`, `writeOnly`) are collected once by `_sensitive_field_names()`
+and baked into that module as a project-wide constant, deliberately rather than
+threaded per-operation through the client and every command. The name heuristic
+next to it covers what no spec describes, response bodies above all. Redact
+*before* truncating: half a token is still a token.
+
 ## Formatting
 
 Ruff is the only formatter and linter, for this repo and for generated code,

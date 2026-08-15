@@ -294,6 +294,55 @@ class TestOpenApiParser:
         finally:
             Path(spec_path).unlink()
 
+    def test_parse_credential_signals(self):
+        """Test format and writeOnly are kept on parameters and properties."""
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/auth/login": {
+                    "post": {
+                        "operationId": "login",
+                        "tags": ["Auth"],
+                        "parameters": [
+                            {
+                                "name": "apiKey",
+                                "in": "query",
+                                "schema": {"type": "string", "format": "password"},
+                            }
+                        ],
+                        "requestBody": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "email": {"type": "string"},
+                                            "pin": {
+                                                "type": "string",
+                                                "writeOnly": True,
+                                            },
+                                        },
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                }
+            },
+        }
+        spec_path = create_temp_spec(spec)
+        try:
+            op = OpenApiParser(spec_path).parse()["Auth"].operations[0]
+            assert op.parameters[0].spec_format == "password"
+            pin = next(p for p in op.body_properties if p.name == "pin")
+            assert pin.write_only is True
+            email = next(p for p in op.body_properties if p.name == "email")
+            assert email.write_only is False
+        finally:
+            Path(spec_path).unlink()
+
     def test_parse_request_body_with_ref(self):
         """Test parsing request body with $ref."""
         spec = {

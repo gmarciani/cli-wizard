@@ -30,6 +30,7 @@ from cli_wizard.generator.generator import (
     CliGenerator,
     RuffNotFoundError,
     _build_url_path,
+    _sensitive_field_names,
     resolve_ruff,
 )
 from cli_wizard.generator.models import (
@@ -629,6 +630,109 @@ class TestCliGenerator:
 
             assert "_show_splash()" not in calls(tree.body)
             assert "_show_splash()" in calls(ast.walk(main))
+
+
+class TestDebugOutputRedaction:
+    """Debug output must never carry a credential to a bug report."""
+
+    def _login_groups(self) -> dict:
+        """Build a login operation with the credentials a spec can flag."""
+        return {
+            "Auth": CommandGroup(
+                name="Auth",
+                cli_name="auth",
+                description="Authentication",
+                operations=[
+                    Operation(
+                        operation_id="login",
+                        method="POST",
+                        path="/auth/login",
+                        summary="Log in",
+                        description="",
+                        tags=["Auth"],
+                        parameters=[
+                            Parameter(
+                                name="apiKey",
+                                location="query",
+                                param_type="string",
+                                required=True,
+                                spec_format="password",
+                            )
+                        ],
+                        body_properties=[
+                            RequestBodyProperty(
+                                name="email", prop_type="string", required=True
+                            ),
+                            RequestBodyProperty(
+                                name="passphrase",
+                                prop_type="string",
+                                required=True,
+                                write_only=True,
+                            ),
+                        ],
+                    )
+                ],
+            )
+        }
+
+    def test_sensitive_field_names_collects_flagged_fields(self):
+        """Test format and writeOnly decide which names are collected."""
+        assert _sensitive_field_names(self._login_groups()) == ["apiKey", "passphrase"]
+
+    def test_sensitive_field_names_is_empty_without_flagged_fields(self):
+        """Test a spec that flags nothing collects nothing."""
+        groups = {
+            "Users": CommandGroup(
+                name="Users",
+                cli_name="users",
+                description="",
+                operations=[
+                    Operation(
+                        operation_id="listUsers",
+                        method="GET",
+                        path="/users",
+                        summary="",
+                        description="",
+                        tags=["Users"],
+                        parameters=[],
+                    )
+                ],
+            )
+        }
+        assert _sensitive_field_names(groups) == []
+
+    def test_flagged_names_are_baked_into_the_redaction_module(self):
+        """Test the generated module knows the names the spec flagged."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=TestCliGenerator()._default_config())
+            generator.generate(self._login_groups(), output_dir, "test-cli", "test_cli")
+
+            content = (output_dir / "src" / "test_cli" / "redaction.py").read_text()
+            assert '"apiKey"' in content
+            assert '"passphrase"' in content
+
+    def test_no_template_logs_a_raw_payload(self):
+        """Test every payload the generated code logs goes through redaction."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=TestCliGenerator()._default_config())
+            generator.generate(self._login_groups(), output_dir, "test-cli", "test_cli")
+
+            src_dir = output_dir / "src" / "test_cli"
+            leaks = (
+                "{cmd_params}",
+                "{output[",
+                "{json_data}",
+                "{params}",
+                "{response.text[",
+                "{dict(self.session.headers)}",
+                "{dict(response.headers)}",
+            )
+            for py_file in (src_dir / "client.py", src_dir / "commands" / "auth.py"):
+                content = py_file.read_text()
+                for leak in leaks:
+                    assert leak not in content, f"{py_file.name} logs {leak} unredacted"
 
 
 def _parse_pyproject_pins(text):
