@@ -36,7 +36,7 @@ jobs:
     - name: Check code coverage
       run: |
         pip install -e . --group dev
-        coverage_result=$(pytest tests/ --cov=cli_wizard --cov-report=term-missing | grep TOTAL | awk '{print $4}' | sed 's/%//')
+        coverage_result=$(pytest tests/ --cov={{ PackageName }} --cov-report=term-missing | grep TOTAL | awk '{print $4}' | sed 's/%//')
         if [ "$coverage_result" -lt 80 ]; then
           echo "Coverage $coverage_result% is below 80% threshold"
           exit 1

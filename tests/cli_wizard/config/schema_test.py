@@ -79,6 +79,24 @@ class TestConfigSchema:
         config = Config(GithubUser="someone", RepositoryUrl="https://example.com/x")
         assert config.RepositoryUrl == "https://example.com/x"
 
+    def test_home_page_url_defaults_to_the_derived_repository_url(self):
+        """Test that HomePageUrl follows RepositoryUrl when neither is set."""
+        config = Config(ProjectName="My Cli", GithubUser="someone")
+        assert config.HomePageUrl == "https://github.com/someone/my-cli"
+
+    def test_home_page_url_defaults_to_an_explicit_repository_url(self):
+        """Test that HomePageUrl follows a RepositoryUrl the user did set."""
+        config = Config(RepositoryUrl="https://example.com/x")
+        assert config.HomePageUrl == "https://example.com/x"
+
+    def test_home_page_url_explicit_value_kept(self):
+        """Test that an explicit HomePageUrl is preserved."""
+        config = Config(
+            RepositoryUrl="https://example.com/x",
+            HomePageUrl="https://docs.example.com",
+        )
+        assert config.HomePageUrl == "https://docs.example.com"
+
     def test_extra_fields_forbidden(self):
         """Test that extra fields are not allowed."""
         with pytest.raises(ValidationError) as exc_info:

@@ -254,6 +254,15 @@ class TestGetDefaultForParam:
         )
         assert default == "https://github.com/octocat/my-cli"
 
+    def test_home_page_url_defaults_to_the_repository_url(self):
+        """HomePageUrl defaults to the RepositoryUrl prompted just before it."""
+        default = _get_default_for_param(
+            "HomePageUrl",
+            {"RepositoryUrl": "https://github.com/octocat/my-cli"},
+            None,
+        )
+        assert default == "https://github.com/octocat/my-cli"
+
     def test_falls_back_to_schema_default(self):
         """Unrecognized params fall back to the schema default value."""
         default = _get_default_for_param("PythonVersion", {}, None)

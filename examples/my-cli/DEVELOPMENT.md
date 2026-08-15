@@ -29,7 +29,7 @@ local-only metadata that never reaches an index:
 
 | Group | Contents | Installed by |
 |---|---|---|
-| `test` | pytest, pytest-cov | `tox -e py3xx`, and `dev` via `include-group` |
+| `test` | pytest, pytest-cov | the interpreter envs, and `dev` via `include-group` |
 | `dev` | `test`, plus build, mypy, pre-commit, ruff, tox, type stubs | `make install`, CI |
 
 `dev` pulls `test` in through `{include-group = "test"}`,

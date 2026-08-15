@@ -283,6 +283,13 @@ class Config(BaseModel):
         default=None,
         description="Repository URL for the project",
     )
+    HomePageUrl: str | None = Field(
+        default=None,
+        description=(
+            "Home page URL for the project, such as a documentation site. "
+            "Defaults to RepositoryUrl"
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -316,6 +323,8 @@ class Config(BaseModel):
                 data["RepositoryUrl"] = (
                     f"https://github.com/{github_user}/{data['CommandName']}"
                 )
+            if not data.get("HomePageUrl"):
+                data["HomePageUrl"] = data["RepositoryUrl"]
         return data
 
     @field_validator("PythonVersion")
