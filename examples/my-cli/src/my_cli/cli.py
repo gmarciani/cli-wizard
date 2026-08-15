@@ -43,10 +43,6 @@ def _show_splash() -> None:
             click.echo(splash_text)
 
 
-# Show splash on startup (before Click processes --help or --version)
-_show_splash()
-
-
 @click.group(
     invoke_without_command=True,
     help="A CLI application",
@@ -77,6 +73,10 @@ def main(
 ) -> None:
     """Main CLI entry point."""
     ctx.ensure_object(dict)
+
+    # Skipped while Click is parsing for shell completion
+    if not ctx.resilient_parsing:
+        _show_splash()
 
     # Enable debug logging if --debug flag is set
     set_debug(debug)
