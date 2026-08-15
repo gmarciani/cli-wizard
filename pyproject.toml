@@ -97,3 +97,9 @@ disallow_untyped_defs = true
 
 [tool.coverage.run]
 omit = ["*/__init__.py"]
+
+[tool.pytest.ini_options]
+# Import cli_wizard from the checkout being tested. The editable install names
+# one checkout in its .pth file, so a run started from a git worktree would
+# otherwise import that other checkout.
+pythonpath = ["src"]
