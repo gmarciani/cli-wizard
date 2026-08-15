@@ -10,7 +10,7 @@ from typing import Any
 
 import click
 
-from my_cli.client import ApiClient
+from my_cli.client import ApiClient, format_error
 from my_cli.constants import (
     DEFAULT_BASE_URL,
     DEFAULT_CA_FILE,
@@ -134,6 +134,7 @@ def get_greetings(
             log_debug("Command '%s' completed successfully" % cmd_name)
             click.echo("Success")
     except Exception as e:
-        log_error(f"Command '{cmd_name}' failed: {e}")
-        click.secho(f"Error: {e}", fg="red", err=True)
+        message = format_error(e)
+        log_error(f"Command '{cmd_name}' failed: {message}")
+        click.secho(f"Error: {message}", fg="red", err=True)
         raise SystemExit(1)

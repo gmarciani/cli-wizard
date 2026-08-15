@@ -15,9 +15,9 @@ from {{ PackageName }}.constants import (
     DEFAULT_CA_FILE,
 )
 {% if group.has_path_parameters %}
-from {{ PackageName }}.client import ApiClient, encode_path_param
+from {{ PackageName }}.client import ApiClient, encode_path_param, format_error
 {% else %}
-from {{ PackageName }}.client import ApiClient
+from {{ PackageName }}.client import ApiClient, format_error
 {% endif %}
 from {{ PackageName }}.logging import (
     log_error,
@@ -247,9 +247,10 @@ def {{ op.function_name }}(
             )
             click.echo("Success")
     except Exception as e:
+        message = format_error(e)
         log_error(
-            f"Command '{cmd_name}' failed: {e}"
+            f"Command '{cmd_name}' failed: {message}"
         )
-        click.secho(f"Error: {e}", fg="red", err=True)
+        click.secho(f"Error: {message}", fg="red", err=True)
         raise SystemExit(1)
 {% endfor %}

@@ -7,16 +7,19 @@ import ast
 import configparser
 import importlib
 import importlib.util
+import json
 import os
 import re
 import subprocess
 import sys
 import tempfile
 import tomllib
+from contextlib import contextmanager
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 import yaml
 from click.testing import CliRunner
 
@@ -42,6 +45,20 @@ from cli_wizard.generator.models import (
     Parameter,
     RequestBodyProperty,
 )
+
+
+@contextmanager
+def _import_generated(output_dir: Path, package_name: str, module: str):
+    """Import a module out of a freshly generated project."""
+    src_dir = str(output_dir / "src")
+    sys.path.insert(0, src_dir)
+    try:
+        yield importlib.import_module(f"{package_name}.{module}")
+    finally:
+        sys.path.remove(src_dir)
+        for name in list(sys.modules):
+            if name == package_name or name.startswith(f"{package_name}."):
+                del sys.modules[name]
 
 
 class TestBuildUrlExpression:
@@ -402,6 +419,32 @@ class TestCliGenerator:
             assert "--name" in content
             assert "--email" in content
             assert "required=True" in content
+
+    def test_generated_command_reports_the_api_error_body(self):
+        """Test that a rejected request surfaces the fields the API named."""
+        response = requests.Response()
+        response.status_code = 422
+        response.reason = "Unprocessable Entity"
+        response._content = json.dumps(
+            {"detail": [{"loc": ["body", "name"], "msg": "Field required"}]}
+        ).encode()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            groups = self._sample_groups()
+            generator.generate(groups, output_dir, "test-cli", "test_cli")
+
+            with _import_generated(output_dir, "test_cli", "commands.users") as module:
+                client = MagicMock()
+                client.get.return_value = response
+                with patch.object(module, "_get_client", return_value=client):
+                    with patch.object(module, "load_profile"):
+                        result = CliRunner().invoke(module.users, ["list-users"])
+
+        assert result.exit_code == 1
+        assert "Error: 422 Unprocessable Entity" in result.output
+        assert "name: Field required" in result.output
 
     def test_generate_copies_ca_and_splash_files(self):
         """Test that CA and splash files are copied into the resources directory."""
