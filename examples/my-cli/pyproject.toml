@@ -29,25 +29,38 @@ dependencies = [
     "requests~=2.34",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "build~=1.5",
-    "mypy~=2.3",
-    "pre-commit~=4.6",
-    "pytest~=9.1",
-    "pytest-cov~=7.1",
-    "ruff~=0.16.2",
-    "tox~=4.58",
-    "types-PyYAML~=6.0",
-    "types-requests~=2.33",
-]
-
 [project.scripts]
 my-cli = "my_cli.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/gmarciani/my-cli"
 Repository = "https://github.com/gmarciani/my-cli"
+
+# Local-only tooling (PEP 735). Groups are never published, so none of this
+# reaches anyone installing my_cli from an index. There are no extras:
+# the built distributions carry no tests, so a published test extra would only
+# install pytest for a consumer with nothing to run it against.
+[dependency-groups]
+dev = [
+    {include-group = "test"},
+    {include-group = "docs"},
+    "build~=1.5",
+    "mypy~=2.3",
+    "pre-commit~=4.6",
+    "ruff~=0.16.2",
+    "tox~=4.58",
+    "types-PyYAML~=6.0",
+    "types-requests~=2.33",
+]
+test = [
+    "pytest~=9.1",
+    "pytest-cov~=7.1",
+]
+docs = [
+    "sphinx~=9.1",
+    "sphinx-click~=6.2",
+    "sphinx-rtd-theme~=3.1",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

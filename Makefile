@@ -9,7 +9,7 @@ setup:
 	pyenv local $(VENV_NAME)
 	$$HOME/.pyenv/versions/$(VENV_NAME)/bin/python -m pip install --upgrade pip
 	pre-commit install
-	pip install -e ".[dev]"
+	pip install -e . --group dev
 
 install:
 	pip install -e .
@@ -18,7 +18,7 @@ test:
 	tox
 
 install-docs:
-	pip install -e ".[docs]"
+	pip install -e . --group docs
 
 build-docs: install-docs
 	$(MAKE) -C docs html
