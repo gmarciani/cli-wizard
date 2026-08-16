@@ -6,15 +6,110 @@
 
 """Profile management for the generated CLI."""
 
+import os
+import re
 from typing import Any
 
 import yaml
 
-from my_cli.constants import PROFILE_DEFAULTS, PROFILE_FILE
-from my_cli.logging import log_debug, log_error, log_info, log_warning
+from my_cli.constants import ENV_PREFIX, PROFILE_DEFAULTS, PROFILE_FILE
+from my_cli.logging import (
+    log_debug,
+    log_error,
+    log_info,
+    log_warning,
+    set_colors_enabled,
+    set_log_level,
+)
 
 _current_profile: dict[str, Any] = {}
 _profile_name: str = "default"
+
+# Splits a camelCase profile key before every capital, so "retryMaxAttempts"
+# becomes RETRY_MAX_ATTEMPTS once upper-cased.
+_CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
+
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+_FALSY = frozenset({"0", "false", "no", "off"})
+
+
+def env_var_name(key: str) -> str:
+    """Get the environment variable that overrides a profile key.
+
+    Args:
+        key: The profile key, in camelCase
+
+    Returns:
+        The environment variable name, e.g. "baseUrl" -> ENV_PREFIX + "BASE_URL"
+    """
+    return ENV_PREFIX + _CAMEL_BOUNDARY.sub("_", key).upper()
+
+
+def _coerce(key: str, value: Any, default: Any) -> Any:
+    """Convert a value to the type of the built-in default.
+
+    Environment variables always arrive as strings and the profile file is
+    hand-editable, so neither layer can be trusted to hold the type the setting
+    is used at.
+
+    Args:
+        key: The profile key the value belongs to, for error reporting
+        value: The value read from the environment or the profile
+        default: The built-in default, whose type the value must match
+
+    Returns:
+        The converted value, or the built-in default if it cannot be converted
+    """
+    if default is None:
+        return value
+    if isinstance(default, str):
+        return value if isinstance(value, str) else str(value)
+
+    text = str(value).strip()
+    try:
+        # bool is a subclass of int, so it has to be tested first.
+        if isinstance(default, bool):
+            if text.lower() in _TRUTHY:
+                return True
+            if text.lower() in _FALSY:
+                return False
+            raise ValueError(f"'{value}' is not a boolean")
+        if isinstance(default, int):
+            return int(text)
+        if isinstance(default, float):
+            return float(text)
+    except ValueError as e:
+        log_warning(f"Ignoring the value of '{key}': {e}. Falling back to '{default}'.")
+        return default
+    return value
+
+
+def resolve_setting(key: str, flag_value: Any = None) -> Any:
+    """Resolve a setting through the precedence chain.
+
+    The chain is command-line flag > environment variable > profile value >
+    built-in default, and every key in PROFILE_DEFAULTS goes through it.
+
+    Args:
+        key: The profile key to resolve
+        flag_value: The value given on the command line, None when not given
+
+    Returns:
+        The value of the highest-precedence layer that supplies one
+    """
+    if flag_value is not None:
+        return flag_value
+
+    default = PROFILE_DEFAULTS.get(key)
+
+    raw = os.environ.get(env_var_name(key))
+    if raw is not None:
+        return _coerce(key, raw, default)
+
+    if key in _current_profile:
+        return _coerce(key, _current_profile[key], default)
+
+    return default
 
 
 def load_profile(profile_name: str = "default") -> dict[str, Any]:
@@ -28,30 +123,37 @@ def load_profile(profile_name: str = "default") -> dict[str, Any]:
     """
     global _current_profile, _profile_name
     _profile_name = profile_name
+    _current_profile = _read_profile(profile_name)
 
+    # The logging module cannot resolve these itself without importing this
+    # module, which imports it, so the resolved values are pushed to it.
+    set_log_level(str(resolve_setting("logLevel")))
+    set_colors_enabled(bool(resolve_setting("outputColors")))
+
+    return _current_profile
+
+
+def _read_profile(profile_name: str) -> dict[str, Any]:
+    """Read one profile from the profiles file."""
     if not PROFILE_FILE.exists():
         msg = f"Profile file not found: {PROFILE_FILE}. Creating default."
         log_warning(msg)
         _create_default_profile_file()
-        _current_profile = {}
-        return _current_profile
+        return {}
 
     try:
         with open(PROFILE_FILE) as f:
             profiles = yaml.safe_load(f) or {}
     except (yaml.YAMLError, OSError) as e:
         log_error(f"Failed to load profile file: {e}")
-        _current_profile = {}
-        return _current_profile
+        return {}
 
     if profile_name not in profiles:
         log_error(f"Profile '{profile_name}' not found in {PROFILE_FILE}")
-        _current_profile = {}
-        return _current_profile
+        return {}
 
-    _current_profile = profiles[profile_name] or {}
     log_debug(f"Loaded profile '{profile_name}'")
-    return _current_profile
+    return profiles[profile_name] or {}
 
 
 def _create_default_profile_file() -> None:
@@ -78,7 +180,10 @@ def get_profile_name() -> str:
 
 
 def get_profile_value(key: str, default: Any = None) -> Any:
-    """Get a value from the current profile.
+    """Get a value from the current profile, ignoring flags and the environment.
+
+    Use resolve_setting() to apply the full precedence chain; this reads the
+    profile alone.
 
     Args:
         key: The key to look up

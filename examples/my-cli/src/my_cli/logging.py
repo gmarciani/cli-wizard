@@ -24,6 +24,7 @@ from my_cli.constants import (
     LOG_ROTATION_TYPE,
     LOG_TIMESTAMP_FORMAT,
     LOG_TIMEZONE,
+    PROFILE_DEFAULTS,
 )
 
 _file_handler = None
@@ -37,11 +38,34 @@ _LOG_LEVELS = {
     "ERROR": 40,
 }
 
+# The active level and colouring. They start at the generated defaults and are
+# replaced once a profile is loaded, because resolving them against the profile
+# and the environment lives in the profile module, which imports this one.
+_log_level = LOG_LEVEL
+_colors_enabled = bool(PROFILE_DEFAULTS.get("outputColors", True))
+
 
 def set_debug(enabled: bool) -> None:
     """Enable or disable debug logging."""
     global _debug_enabled
     _debug_enabled = enabled
+
+
+def set_log_level(level: str) -> None:
+    """Set the level below which messages are dropped."""
+    global _log_level
+    _log_level = level
+
+
+def set_colors_enabled(enabled: bool) -> None:
+    """Enable or disable coloured console output."""
+    global _colors_enabled
+    _colors_enabled = enabled
+
+
+def colors_enabled() -> bool:
+    """Check if coloured console output is enabled."""
+    return _colors_enabled
 
 
 def is_debug_enabled() -> bool:
@@ -54,7 +78,7 @@ def _should_log(level: str) -> bool:
     if _debug_enabled:
         return True
     level_priority = _LOG_LEVELS.get(level, 20)
-    config_priority = _LOG_LEVELS.get(LOG_LEVEL, 20)
+    config_priority = _LOG_LEVELS.get(_log_level, 20)
     return level_priority >= config_priority
 
 
@@ -138,7 +162,7 @@ def log(
         return
 
     color = LOG_COLORS.get(level, LOG_COLORS["INFO"])
-    rgb = _hex_to_rgb(color)
+    rgb = _hex_to_rgb(color) if _colors_enabled else None
     formatted = _format_message(level, message)
 
     # Log to console with colors

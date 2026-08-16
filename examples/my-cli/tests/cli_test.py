@@ -32,23 +32,28 @@ from my_cli.logging import (
     _get_timestamp,
     _log_to_file,
     _should_log,
+    colors_enabled,
     is_debug_enabled,
     log,
     log_debug,
     log_error,
     log_info,
     log_warning,
+    set_colors_enabled,
     set_debug,
+    set_log_level,
 )
 from my_cli.logging import (
     _hex_to_rgb as logging_hex_to_rgb,
 )
 from my_cli.profile import (
     _create_default_profile_file,
+    env_var_name,
     get_profile,
     get_profile_name,
     get_profile_value,
     load_profile,
+    resolve_setting,
 )
 from my_cli.redaction import REDACTED, redact, redact_text
 
@@ -1233,6 +1238,116 @@ class TestProfile:
                     result = load_profile("default")
             assert result == {}
 
+    @staticmethod
+    def _load(tmpdir, body):
+        """Load a profile from a file written just for the test."""
+        profile_path = Path(tmpdir) / "profiles.yaml"
+        profile_path.write_text(body)
+        with patch.object(constants, "PROFILE_FILE", profile_path):
+            with patch(
+                "my_cli.profile.PROFILE_FILE",
+                profile_path,
+            ):
+                load_profile("default")
+
+    def test_env_var_name_derives_from_the_key(self):
+        """Test the environment variable name is the prefixed, upper-cased key."""
+        prefix = constants.ENV_PREFIX
+        assert env_var_name("baseUrl") == f"{prefix}BASE_URL"
+        assert env_var_name("retryMaxAttempts") == f"{prefix}RETRY_MAX_ATTEMPTS"
+
+    def test_resolve_setting_prefers_the_flag(self):
+        """Test a flag value outranks every other layer."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._load(tmpdir, "default:\n  baseUrl: https://profile.example")
+            env = {env_var_name("baseUrl"): "https://env.example"}
+            with patch.dict(os.environ, env):
+                result = resolve_setting("baseUrl", "https://flag.example")
+        assert result == "https://flag.example"
+
+    def test_resolve_setting_prefers_the_environment_over_the_profile(self):
+        """Test the environment outranks the profile."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._load(tmpdir, "default:\n  baseUrl: https://profile.example")
+            env = {env_var_name("baseUrl"): "https://env.example"}
+            with patch.dict(os.environ, env):
+                result = resolve_setting("baseUrl")
+        assert result == "https://env.example"
+
+    def test_resolve_setting_prefers_the_profile_over_the_default(self):
+        """Test the profile outranks the built-in default."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._load(tmpdir, "default:\n  baseUrl: https://profile.example")
+            with patch.dict(os.environ, {}, clear=True):
+                result = resolve_setting("baseUrl")
+        assert result == "https://profile.example"
+
+    def test_resolve_setting_falls_back_to_the_default(self):
+        """Test the built-in default applies when no other layer supplies one."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._load(tmpdir, "default: {}")
+            with patch.dict(os.environ, {}, clear=True):
+                result = resolve_setting("baseUrl")
+        assert result == constants.PROFILE_DEFAULTS["baseUrl"]
+
+    def test_resolve_setting_coerces_the_environment_to_the_default_type(self):
+        """Test environment strings are converted to the type of the default."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._load(tmpdir, "default: {}")
+            env = {
+                env_var_name("timeout"): "45",
+                env_var_name("outputColors"): "false",
+                env_var_name("retryBackoffFactor"): "1.5",
+            }
+            with patch.dict(os.environ, env):
+                assert resolve_setting("timeout") == 45
+                assert resolve_setting("outputColors") is False
+                assert resolve_setting("retryBackoffFactor") == 1.5
+
+    def test_resolve_setting_ignores_an_unconvertible_environment_value(self):
+        """Test a malformed environment value falls back to the default."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._load(tmpdir, "default: {}")
+            with patch.dict(os.environ, {env_var_name("timeout"): "soon"}):
+                result = resolve_setting("timeout")
+        assert result == constants.PROFILE_DEFAULTS["timeout"]
+
+    def test_resolve_setting_coerces_the_profile_to_the_default_type(self):
+        """Test a quoted number in the profile file is still read as a number."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._load(tmpdir, 'default:\n  timeout: "45"')
+            with patch.dict(os.environ, {}, clear=True):
+                result = resolve_setting("timeout")
+        assert result == 45
+
+    def test_resolve_setting_ignores_an_unconvertible_profile_value(self):
+        """Test a malformed profile value falls back to the default."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._load(tmpdir, "default:\n  timeout: soon")
+            with patch.dict(os.environ, {}, clear=True):
+                result = resolve_setting("timeout")
+        assert result == constants.PROFILE_DEFAULTS["timeout"]
+
+    def test_load_profile_applies_the_log_level(self):
+        """Test the resolved log level takes effect when a profile is loaded."""
+        set_debug(False)
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                self._load(tmpdir, "default:\n  logLevel: ERROR")
+                assert _should_log("WARNING") is False
+                assert _should_log("ERROR") is True
+        finally:
+            set_log_level(constants.LOG_LEVEL)
+
+    def test_load_profile_applies_the_colour_setting(self):
+        """Test the resolved colour setting takes effect when a profile is loaded."""
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                self._load(tmpdir, "default:\n  outputColors: false")
+                assert colors_enabled() is False
+        finally:
+            set_colors_enabled(True)
+
     def test_create_default_profile_file_error(self):
         """Test creating default profile file with error."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1276,8 +1391,23 @@ class TestLogging:
     def test_should_log_by_level(self):
         """Test log filtering by level."""
         set_debug(False)
-        with patch.object(constants, "LOG_LEVEL", "WARNING"):
-            pass
+        try:
+            set_log_level("WARNING")
+            assert _should_log("INFO") is False
+            assert _should_log("WARNING") is True
+            assert _should_log("ERROR") is True
+        finally:
+            set_log_level(constants.LOG_LEVEL)
+
+    def test_colours_can_be_disabled(self):
+        """Test disabling colours drops the escape codes from a log line."""
+        try:
+            set_colors_enabled(False)
+            with patch("click.secho") as mock_secho:
+                log_error("boom")
+            assert mock_secho.call_args.kwargs["fg"] is None
+        finally:
+            set_colors_enabled(True)
 
     def test_hex_to_rgb_logging(self):
         """Test hex to RGB conversion in logging."""

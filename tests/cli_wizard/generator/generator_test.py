@@ -16,6 +16,7 @@ import tempfile
 import tomllib
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -1790,3 +1791,231 @@ class TestGeneratedInsecureTlsWarning:
             )
         assert result.exit_code == 0, result.output
         assert ("TLS certificate verification is DISABLED" in result.stderr) is warns
+
+
+@pytest.fixture(scope="module")
+def generated_cli(tmp_path_factory):
+    """Generate a CLI once and import it, so tests can drive it end to end.
+
+    The package name is unique to this fixture so importing it cannot collide
+    with the packages other tests generate.
+    """
+    root = tmp_path_factory.mktemp("probe")
+    groups = {
+        "Things": CommandGroup(
+            name="Things",
+            cli_name="things",
+            description="Thing management",
+            operations=[
+                Operation(
+                    operation_id="listThings",
+                    method="GET",
+                    path="/things",
+                    summary="List things",
+                    description="",
+                    tags=["Things"],
+                    parameters=[],
+                )
+            ],
+        )
+    }
+    config = {
+        "CommandName": "probe-cli",
+        "PackageName": "probe_cli",
+        "Description": "A probe CLI",
+        "AuthorName": "Test Author",
+        "AuthorEmail": "test@example.com",
+        "PythonVersion": "3.12",
+        "RepositoryUrl": "https://github.com/test/probe-cli",
+        "MainDir": str(root / "home"),
+        "DefaultBaseUrl": "http://default.example",
+        "Timeout": 30,
+        "JsonIndent": 2,
+        "LogLevel": "INFO",
+        "OutputColors": True,
+    }
+    output_dir = root / "probe-cli"
+    CliGenerator(config=config).generate(groups, output_dir, "probe-cli", "probe_cli")
+
+    src = str(output_dir / "src")
+    sys.path.insert(0, src)
+    try:
+        constants = importlib.import_module("probe_cli.constants")
+        yield SimpleNamespace(
+            group=importlib.import_module("probe_cli.commands.things").things,
+            constants=constants,
+            profile=importlib.import_module("probe_cli.profile"),
+            logging=importlib.import_module("probe_cli.logging"),
+            profile_file=constants.PROFILE_FILE,
+        )
+    finally:
+        sys.path.remove(src)
+        for name in [n for n in sys.modules if n.split(".")[0] == "probe_cli"]:
+            del sys.modules[name]
+
+
+class TestGeneratedProfilePrecedence:
+    """Regression tests for #28: profile settings must reach the client."""
+
+    @staticmethod
+    def _write_profile(cli, **values):
+        """Write the default profile with the given settings."""
+        cli.profile_file.parent.mkdir(parents=True, exist_ok=True)
+        cli.profile_file.write_text(yaml.safe_dump({"default": values}))
+
+    @staticmethod
+    def _invoke(cli, args=(), body=None, **kwargs):
+        """Run the generated command against a stubbed transport.
+
+        autospec keeps the bound session in call_args, so a test can assert on
+        the headers the request carries as well as on its URL and timeout.
+        """
+        response = MagicMock()
+        response.text = "" if body is None else json.dumps(body)
+        response.json.return_value = body
+        with patch(
+            "requests.Session.get", autospec=True, return_value=response
+        ) as sent:
+            result = CliRunner().invoke(cli.group, ["list-things", *args], **kwargs)
+        return result, sent
+
+    @staticmethod
+    def _requested_url(sent):
+        """Get the URL of the stubbed request, past the bound session."""
+        return sent.call_args.args[1]
+
+    def test_profile_base_url_reaches_the_request(self, generated_cli):
+        """Test a baseUrl set in the profile is the host the request goes to."""
+        self._write_profile(generated_cli, baseUrl="https://api.example.com")
+
+        result, sent = self._invoke(generated_cli)
+
+        assert result.exit_code == 0
+        assert self._requested_url(sent) == "https://api.example.com/things"
+
+    def test_profile_timeout_reaches_the_request(self, generated_cli):
+        """Test a timeout set in the profile is the timeout the request uses."""
+        self._write_profile(generated_cli, timeout=7)
+
+        result, sent = self._invoke(generated_cli)
+
+        assert result.exit_code == 0
+        assert sent.call_args.kwargs["timeout"] == 7
+
+    def test_profile_access_token_reaches_the_request(self, generated_cli):
+        """Test an accessToken set in the profile is sent as a bearer token."""
+        self._write_profile(generated_cli, accessToken="s3cret")
+
+        result, sent = self._invoke(generated_cli)
+
+        assert result.exit_code == 0
+        session = sent.call_args.args[0]
+        assert session.headers["Authorization"] == "Bearer s3cret"
+
+    def test_builtin_defaults_apply_without_a_profile(self, generated_cli):
+        """Test the generated defaults apply when the profile sets nothing."""
+        self._write_profile(generated_cli)
+
+        result, sent = self._invoke(generated_cli)
+
+        assert result.exit_code == 0
+        assert self._requested_url(sent) == "http://default.example/things"
+        assert sent.call_args.kwargs["timeout"] == 30
+
+    def test_environment_overrides_the_profile_base_url(
+        self, generated_cli, monkeypatch
+    ):
+        """Test the base URL environment variable outranks the profile."""
+        self._write_profile(generated_cli, baseUrl="https://profile.example")
+        monkeypatch.setenv("PROBE_CLI_BASE_URL", "https://env.example")
+
+        result, sent = self._invoke(generated_cli)
+
+        assert result.exit_code == 0
+        assert self._requested_url(sent) == "https://env.example/things"
+
+    def test_environment_overrides_the_profile_timeout(
+        self, generated_cli, monkeypatch
+    ):
+        """Test the timeout environment variable outranks the profile."""
+        self._write_profile(generated_cli, timeout=7)
+        monkeypatch.setenv("PROBE_CLI_TIMEOUT", "11")
+
+        result, sent = self._invoke(generated_cli)
+
+        assert result.exit_code == 0
+        assert sent.call_args.kwargs["timeout"] == 11
+
+    def test_flag_overrides_the_environment_and_the_profile(
+        self, generated_cli, monkeypatch
+    ):
+        """Test a command-line flag outranks both lower layers."""
+        self._write_profile(generated_cli, baseUrl="https://profile.example")
+        monkeypatch.setenv("PROBE_CLI_BASE_URL", "https://env.example")
+
+        result, sent = self._invoke(
+            generated_cli, ["--base-url", "https://flag.example"]
+        )
+
+        assert result.exit_code == 0
+        assert self._requested_url(sent) == "https://flag.example/things"
+
+    def test_a_malformed_profile_value_falls_back_to_the_default(self, generated_cli):
+        """Test a profile value of the wrong type does not break the command."""
+        self._write_profile(generated_cli, timeout="soon")
+
+        result, sent = self._invoke(generated_cli)
+
+        assert result.exit_code == 0
+        assert sent.call_args.kwargs["timeout"] == 30
+
+    def test_profile_json_indent_shapes_the_output(self, generated_cli):
+        """Test jsonIndent from the profile is the indentation of the output."""
+        self._write_profile(generated_cli, jsonIndent=4)
+
+        result, _ = self._invoke(generated_cli, body={"id": 1})
+
+        assert result.exit_code == 0
+        assert result.output == '{\n    "id": 1\n}\n'
+
+    def test_profile_log_level_silences_lower_levels(self, generated_cli):
+        """Test logLevel from the profile decides which messages are logged."""
+        self._write_profile(generated_cli, logLevel="ERROR")
+
+        generated_cli.profile.load_profile("default")
+
+        assert generated_cli.logging._should_log("WARNING") is False
+        assert generated_cli.logging._should_log("ERROR") is True
+
+    @pytest.mark.parametrize("colors,coloured", [(True, True), (False, False)])
+    def test_profile_output_colors_decides_whether_errors_are_coloured(
+        self, generated_cli, colors, coloured
+    ):
+        """Test outputColors from the profile turns error colouring on and off."""
+        self._write_profile(generated_cli, outputColors=colors)
+        response = MagicMock()
+        response.raise_for_status.side_effect = RuntimeError("boom")
+
+        with patch("requests.Session.get", return_value=response):
+            result = CliRunner().invoke(
+                generated_cli.group, ["list-things"], color=True
+            )
+
+        assert result.exit_code == 1
+        assert ("\x1b[31m" in result.stderr) is coloured
+
+    def test_environment_variable_names_derive_from_the_package_name(
+        self, generated_cli
+    ):
+        """Test the environment variable for a profile key is prefixed and cased."""
+        env_var_name = generated_cli.profile.env_var_name
+
+        assert env_var_name("baseUrl") == "PROBE_CLI_BASE_URL"
+        assert env_var_name("retryMaxAttempts") == "PROBE_CLI_RETRY_MAX_ATTEMPTS"
+        assert env_var_name("timeout") == "PROBE_CLI_TIMEOUT"
+
+    def test_every_advertised_setting_has_a_built_in_default(self, generated_cli):
+        """Test PROFILE_DEFAULTS covers every profile parameter, config or not."""
+        expected = set(CliGenerator.PROFILE_PARAM_FIELDS.values()) | {"accessToken"}
+
+        assert set(generated_cli.constants.PROFILE_DEFAULTS) == expected

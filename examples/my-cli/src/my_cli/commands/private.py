@@ -4,7 +4,6 @@
 """Private commands."""
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -12,16 +11,14 @@ import click
 from click.core import ParameterSource
 
 from my_cli.client import ApiClient, format_error
-from my_cli.constants import (
-    DEFAULT_BASE_URL,
-    DEFAULT_CA_FILE,
-)
+from my_cli.constants import DEFAULT_CA_FILE
 from my_cli.logging import (
+    colors_enabled,
     log_debug,
     log_error,
     set_debug,
 )
-from my_cli.profile import get_profile_value, load_profile
+from my_cli.profile import load_profile, resolve_setting
 from my_cli.redaction import redact, redact_text
 
 
@@ -38,15 +35,20 @@ def _get_client(
     ca_file: Path | None,
     debug: bool = False,
 ) -> ApiClient:
-    """Create an API client with the given options."""
-    effective_base_url = base_url or os.environ.get("API_BASE_URL") or DEFAULT_BASE_URL
+    """Create an API client with the given options.
+
+    baseUrl, timeout and accessToken are profile settings, so resolve_setting()
+    runs the precedence chain over them; --base-url is the only one with a flag
+    to outrank it. --no-verify-ssl and --ca-file have no key in
+    PROFILE_DEFAULTS and so come from the command line alone.
+    """
     effective_ca_file = (
         None if no_verify_ssl else (str(ca_file) if ca_file else DEFAULT_CA_FILE)
     )
-    access_token = get_profile_value("accessToken")
     return ApiClient(
-        base_url=effective_base_url,
-        access_token=access_token,
+        base_url=resolve_setting("baseUrl", base_url),
+        access_token=resolve_setting("accessToken"),
+        timeout=int(resolve_setting("timeout")),
         ca_file=effective_ca_file,
         verify_ssl=not no_verify_ssl,
         debug=debug,
@@ -91,7 +93,6 @@ def private(ctx: click.Context, debug: bool) -> None:
 @click.option(
     "--base-url",
     "-u",
-    envvar="API_BASE_URL",
     help="API base URL.",
 )
 @click.option(
@@ -142,7 +143,8 @@ def get_greetings(
         response = client.get("/private/greetings")
         response.raise_for_status()
         if response.text:
-            output = json.dumps(response.json(), indent=2)
+            indent = int(resolve_setting("jsonIndent"))
+            output = json.dumps(response.json(), indent=indent)
             log_debug(
                 f"Command '{cmd_name}' completed"
                 f" with output: {redact_text(output)[:500]}"
@@ -154,5 +156,9 @@ def get_greetings(
     except Exception as e:
         message = format_error(e)
         log_error(f"Command '{cmd_name}' failed: {message}")
-        click.secho(f"Error: {message}", fg="red", err=True)
+        click.secho(
+            f"Error: {message}",
+            fg="red" if colors_enabled() else None,
+            err=True,
+        )
         raise SystemExit(1)

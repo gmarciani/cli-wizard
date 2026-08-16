@@ -203,11 +203,14 @@ class CliGenerator:
         This allows templates to use {{ ParamName }} directly instead of
         {{ config.ParamName }}.
         """
-        # Build profile defaults from config
+        # Build profile defaults from config. Every parameter gets an entry even
+        # when the config omits it: the generated CLI resolves settings against
+        # this mapping, and a missing key would leave the setting unresolvable.
         profile_defaults = {
-            profile_key: self.config[config_key]
+            profile_key: self.config.get(
+                config_key, Config.get_field_default(config_key)
+            )
             for config_key, profile_key in self.PROFILE_PARAM_FIELDS.items()
-            if config_key in self.config
         }
         # Runtime-only profile parameters (not derived from wizard config)
         profile_defaults["accessToken"] = None
