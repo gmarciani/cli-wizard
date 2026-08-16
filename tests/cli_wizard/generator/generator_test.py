@@ -1499,6 +1499,27 @@ def _issue23_groups():
                     ],
                 ),
                 Operation(
+                    operation_id="grantBetaAccess",
+                    method="POST",
+                    path="/admin/beta-access",
+                    summary="Grant beta access",
+                    description="",
+                    tags=["Ops"],
+                    parameters=[],
+                    body_properties=[
+                        RequestBodyProperty(
+                            name="enabled",
+                            prop_type="boolean",
+                            required=False,
+                            description="Invite outright.",
+                            default=True,
+                        ),
+                        RequestBodyProperty(
+                            name="notify", prop_type="boolean", required=True
+                        ),
+                    ],
+                ),
+                Operation(
                     operation_id="revokeBetaAccess",
                     method="DELETE",
                     path="/admin/beta-access/{email}",
@@ -2107,3 +2128,18 @@ class TestGeneratedOptionalityGuards:
             ["ops", "update-beta-access", "--email", "a@b.com", *args],
         )
         assert call.kwargs["json"] == expected
+
+
+class TestGeneratedRequiredBooleans:
+    """Regression tests for #26: a required boolean stays required and documented."""
+
+    def test_required_boolean_must_be_given(self, issue23_cli):
+        """Test omitting a required boolean fails instead of sending a short body."""
+        result = CliRunner().invoke(issue23_cli, ["ops", "grant-beta-access"])
+        assert result.exit_code != 0
+        assert "Missing option '--notify'" in result.output
+
+    def test_help_shows_the_declared_default(self, issue23_cli):
+        """Test the default declared for a boolean is documented, not applied."""
+        result = CliRunner().invoke(issue23_cli, ["ops", "grant-beta-access", "--help"])
+        assert "default: (true)" in result.output

@@ -435,6 +435,10 @@ class TestOpenApiParser:
                                                 "description": "User name",
                                             },
                                             "email": {"type": "string"},
+                                            "enabled": {
+                                                "type": "boolean",
+                                                "default": True,
+                                            },
                                         },
                                     }
                                 }
@@ -450,11 +454,14 @@ class TestOpenApiParser:
             parser = OpenApiParser(spec_path)
             groups = parser.parse()
             op = groups["Users"].operations[0]
-            assert len(op.body_properties) == 2
+            assert len(op.body_properties) == 3
             name_prop = next(p for p in op.body_properties if p.name == "name")
             assert name_prop.required is True
             email_prop = next(p for p in op.body_properties if p.name == "email")
             assert email_prop.required is False
+            assert email_prop.default is None
+            enabled_prop = next(p for p in op.body_properties if p.name == "enabled")
+            assert enabled_prop.default is True
         finally:
             Path(spec_path).unlink()
 

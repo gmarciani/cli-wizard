@@ -76,6 +76,7 @@ class RequestBodyProperty:
     required: bool
     description: str = ""
     items_type: str | None = None
+    default: Any = None
     # Signals that the value is a credential, read by _sensitive_field_names
     spec_format: str = ""
     write_only: bool = False

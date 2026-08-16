@@ -127,9 +127,15 @@ def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
 {% for prop in op.body_properties %}
 @click.option(
 {% if prop.click_type == "bool" and not prop.is_array %}
-{# Tri-state: the body omits the field entirely unless the user picks a side. #}
+{# Tri-state: the body omits the field entirely unless the user picks a side.
+   A required one gets no default, which click reads as a value already given. #}
     "--{{ prop.cli_name }}/--no-{{ prop.cli_name }}",
+{% if not prop.required %}
     default=None,
+{% endif %}
+{% if prop.default is not none %}
+    show_default="{{ prop.default | lower }}",
+{% endif %}
 {% else %}
     "--{{ prop.cli_name }}",
 {% if prop.is_array %}
