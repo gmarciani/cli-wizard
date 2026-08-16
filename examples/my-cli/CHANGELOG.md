@@ -8,10 +8,6 @@ All notable changes will be documented in this file.
 
 A CLI application
 
-### Features
-
-Add features here ...
-
 ### Commands
 
 - `my-cli config` - Configure the CLI.
