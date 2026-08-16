@@ -161,6 +161,7 @@ class OpenApiParser:
             description=param.get("description", ""),
             default=schema.get("default"),
             enum=schema.get("enum", []),
+            items_type=schema.get("items", {}).get("type"),
             spec_format=schema.get("format", ""),
             write_only=schema.get("writeOnly", False),
         )
@@ -189,6 +190,7 @@ class OpenApiParser:
                     prop_type=prop_schema.get("type", "string"),
                     required=prop_name in required_props,
                     description=prop_schema.get("description", ""),
+                    items_type=prop_schema.get("items", {}).get("type"),
                     spec_format=prop_schema.get("format", ""),
                     write_only=prop_schema.get("writeOnly", False),
                 )

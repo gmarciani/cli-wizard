@@ -79,6 +79,41 @@ class TestParameter:
         )
         assert param.click_type == "str"
 
+    @pytest.mark.parametrize(
+        ("items_type", "expected"),
+        [("string", "str"), ("integer", "int"), (None, "str")],
+    )
+    def test_click_type_array_follows_items(self, items_type, expected):
+        """Test Click type for an array comes from its item type."""
+        param = Parameter(
+            name="tags",
+            location="query",
+            param_type="array",
+            required=False,
+            items_type=items_type,
+        )
+        assert param.is_array
+        assert param.click_type == expected
+
+    @pytest.mark.parametrize("required", [True, False])
+    def test_python_annotation_array_is_a_tuple(self, required):
+        """Test an array parameter is annotated as a tuple, never optional."""
+        param = Parameter(
+            name="tags",
+            location="query",
+            param_type="array",
+            required=required,
+            items_type="string",
+        )
+        assert param.python_annotation == "tuple[str, ...]"
+
+    def test_python_annotation_optional_scalar(self):
+        """Test an optional scalar parameter is annotated as nullable."""
+        param = Parameter(
+            name="limit", location="query", param_type="integer", required=False
+        )
+        assert param.python_annotation == "int | None"
+
 
 class TestRequestBodyProperty:
     """Tests for RequestBodyProperty model."""
@@ -97,6 +132,21 @@ class TestRequestBodyProperty:
         """Test Click type conversion."""
         prop = RequestBodyProperty(name="count", prop_type="integer", required=True)
         assert prop.click_type == "int"
+
+    def test_click_type_array_follows_items(self):
+        """Test Click type for an array comes from its item type."""
+        prop = RequestBodyProperty(
+            name="ports", prop_type="array", required=True, items_type="integer"
+        )
+        assert prop.is_array
+        assert prop.click_type == "int"
+
+    def test_python_annotation_array_is_a_tuple(self):
+        """Test an array property is annotated as a tuple."""
+        prop = RequestBodyProperty(
+            name="ports", prop_type="array", required=False, items_type="integer"
+        )
+        assert prop.python_annotation == "tuple[int, ...]"
 
 
 class TestOperation:

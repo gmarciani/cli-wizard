@@ -432,6 +432,57 @@ class TestCliGenerator:
             assert "--email" in content
             assert "required=True" in content
 
+    def test_generate_command_with_array_parameters(self):
+        """Test array parameters become repeatable options sent as JSON lists."""
+        groups = {
+            "Ops": CommandGroup(
+                name="Ops",
+                cli_name="ops",
+                description="Operations",
+                operations=[
+                    Operation(
+                        operation_id="setRateLimits",
+                        method="POST",
+                        path="/rate-limits",
+                        summary="Set rate limits",
+                        description="",
+                        tags=["Ops"],
+                        parameters=[
+                            Parameter(
+                                name="ids",
+                                location="query",
+                                param_type="array",
+                                required=False,
+                                items_type="integer",
+                            ),
+                        ],
+                        body_properties=[
+                            RequestBodyProperty(
+                                name="operations",
+                                prop_type="array",
+                                required=True,
+                                items_type="string",
+                            ),
+                        ],
+                    )
+                ],
+            )
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate(groups, output_dir, "test-cli", "test_cli")
+
+            content = (
+                output_dir / "src" / "test_cli" / "commands" / "ops.py"
+            ).read_text()
+            assert content.count("multiple=True") == 2
+            assert "ids: tuple[int, ...]," in content
+            assert "operations: tuple[str, ...]," in content
+            assert 'params["ids"] = list(ids)' in content
+            assert 'body["operations"] = list(operations)' in content
+
     def test_generated_command_reports_the_api_error_body(self):
         """Test that a rejected request surfaces the fields the API named."""
         response = requests.Response()
