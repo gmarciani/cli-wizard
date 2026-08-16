@@ -28,6 +28,7 @@
 - Fixed the profile file, which may hold secrets, being created world-readable; it is now created `0600` inside a `0700` directory, and `config set` tightens a file left loose by an older version.
 - Fixed commands ignoring the values passed for path and query parameters: `get-user --user-id 42` requested `/users/{userId}`, and only GET sent a query string. Both now reach the request, with path values URL-encoded.
 - Fixed `--profile`, `--debug`, `--base-url`, `--no-verify-ssl` and `--ca-file` given at the root being silently ignored by the subcommands. The subcommands now inherit them, and still take precedence when the option is repeated at their own level.
+- Fixed nullable parameters and body properties, declared as an `anyOf`/`oneOf` with a single non-null member, being typed as strings: an `Optional[int]` now yields `type=int` and is sent as a JSON number.
 - Fixed `${HOME}` in `MainDir`, `ProfileFile` and `LogFile` staying literal wherever `HOME` is unset. Home now resolves through `Path.home()`.
 - Fixed `--version` reporting `0.0.0` when installed from a wheel; the version now comes from the installed package metadata instead of a `VERSION` file next to the source.
 - Fixed `tox` running the tests only, because ruff and mypy were left out of the default `envlist`.

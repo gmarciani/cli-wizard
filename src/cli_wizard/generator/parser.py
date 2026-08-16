@@ -17,6 +17,19 @@ from cli_wizard.generator.models import (
 )
 
 
+def _unwrap_nullable(schema: dict[str, Any]) -> dict[str, Any]:
+    """Merge an `anyOf`/`oneOf` union with a single non-null member into its parent.
+
+    Optional fields of a Pydantic model serialise as `anyOf: [T, null]`, which
+    carries no `type` of its own; without this the type would default to string.
+    """
+    for keyword in ("anyOf", "oneOf"):
+        members = [m for m in schema.get(keyword, []) if m.get("type") != "null"]
+        if len(members) == 1:
+            return {**schema, **members[0]}
+    return schema
+
+
 class OpenApiParser:
     """Parses OpenAPI specification."""
 
@@ -139,7 +152,7 @@ class OpenApiParser:
 
     def _parse_parameter(self, param: dict[str, Any]) -> Parameter:
         """Parse a parameter definition."""
-        schema = param.get("schema", {})
+        schema = _unwrap_nullable(param.get("schema", {}))
         return Parameter(
             name=param["name"],
             location=param["in"],
@@ -168,7 +181,8 @@ class OpenApiParser:
         required_props = schema.get("required", [])
         properties = []
 
-        for prop_name, prop_schema in schema.get("properties", {}).items():
+        for prop_name, raw_schema in schema.get("properties", {}).items():
+            prop_schema = _unwrap_nullable(raw_schema)
             properties.append(
                 RequestBodyProperty(
                     name=prop_name,
