@@ -114,8 +114,10 @@ class ApiClient:
             self.session.verify = False
         elif self.ca_file:
             ca_path = Path(self.ca_file)
-            if isinstance(self.ca_file, str) and ca_path.exists():
-                self.session.verify = str(ca_path)
+            # Fail closed: a silent fallback to the system trust store un-pins.
+            if not ca_path.exists():
+                raise click.ClickException(f"CA file not found: {ca_path}")
+            self.session.verify = str(ca_path)
 
     def _url(self, path: str) -> str:
         """Build full URL from path."""
