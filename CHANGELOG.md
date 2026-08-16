@@ -20,6 +20,7 @@
 - Publishes no extras: the dev, test and docs toolchains are PEP 735 dependency groups, and `dev` includes the other two.
 - Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.
 - Catches `OSError` instead of the redundant `(IOError, OSError)` tuple, `IOError` having been an alias of `OSError` since Python 3.3.
+- Drops the unused `MAIN_DIR`, `get_profile()`, `get_profile_name()` and `is_debug_enabled()` definitions, along with the unreachable `is not None` guards around inputs Click always supplies.
 
 ### Bug Fixes
 
@@ -46,6 +47,7 @@
 - Fixed the splash screen printing at import time, which put it in `--help` and `--version` output and corrupted the shell completion stream. It now prints from the CLI callback.
 - Fixed command errors reporting only the status line, discarding the response body naming the rejected fields; it is now printed, redacted, falling back to the raw body when it is not JSON and truncating past 2000 characters.
 - Fixed the generated `CHANGELOG.md` shipping an empty `### Features` section reading `Add features here ...`, which could end up verbatim in published release notes. The section is gone; `### Commands` still lists every command.
+- Fixed boolean body fields always reaching the request: leaving `--enabled` off sent `"enabled": false` instead of omitting the field, so a `PATCH` could not leave a flag untouched. They are now `--enabled/--no-enabled`, sent only when one of the two is given.
 
 
 ## 2.1.0

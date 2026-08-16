@@ -1418,7 +1418,6 @@ class TestGeneratedPathExpansion:
     @pytest.mark.parametrize(
         "constant,param",
         [
-            ("MAIN_DIR", "MainDir"),
             ("PROFILE_FILE", "ProfileFile"),
             ("LOG_FILE", "LogFile"),
         ],
@@ -2019,3 +2018,92 @@ class TestGeneratedProfilePrecedence:
         expected = set(CliGenerator.PROFILE_PARAM_FIELDS.values()) | {"accessToken"}
 
         assert set(generated_cli.constants.PROFILE_DEFAULTS) == expected
+
+
+@pytest.fixture(scope="module")
+def issue50_source(issue50_cli):
+    """Read the generated command module covering every kind of input."""
+    return (issue50_cli / "src" / "issue50_cli" / "commands" / "ops.py").read_text()
+
+
+class TestGeneratedOptionalityGuards:
+    """Regression tests for #48: guard only the inputs that can be omitted."""
+
+    @pytest.mark.parametrize("name,target", [("format", "params"), ("title", "body")])
+    def test_required_input_is_assigned_unconditionally(
+        self, issue50_source, name, target
+    ):
+        """Test an input Click always supplies carries no unreachable guard."""
+        assert f'{target}["{name}"] = {name}' in issue50_source
+        assert f"if {name} is not None:" not in issue50_source
+
+    @pytest.mark.parametrize(
+        "name,target",
+        [("limit", "params"), ("reason", "params"), ("ratio", "body")],
+    )
+    def test_optional_input_is_guarded(self, issue50_source, name, target):
+        """Test an input the user may omit is left out of the request."""
+        assert f"if {name} is not None:" in issue50_source
+        assert f'{target}["{name}"] = {name}' in issue50_source
+
+    def test_defaulted_input_is_assigned_unconditionally(self, tmp_path):
+        """Test a parameter carrying a default is never left out either."""
+        page = Parameter(
+            name="page",
+            location="query",
+            param_type="integer",
+            required=False,
+            default=1,
+        )
+        groups = {
+            "Ops": CommandGroup(
+                name="Ops",
+                cli_name="ops",
+                description="Operations",
+                operations=[
+                    Operation(
+                        operation_id="listUsers",
+                        method="GET",
+                        path="/users",
+                        summary="List users",
+                        description="",
+                        tags=["Ops"],
+                        parameters=[page],
+                    )
+                ],
+            )
+        }
+        config = {
+            "CommandName": "issue48-cli",
+            "PackageName": "issue48_cli",
+            "Description": "A test CLI",
+            "AuthorName": "Test Author",
+            "AuthorEmail": "test@example.com",
+            "PythonVersion": "3.12",
+            "RepositoryUrl": "https://github.com/test/issue48-cli",
+        }
+        CliGenerator(config=config).generate(
+            groups, tmp_path / "cli", "issue48-cli", "issue48_cli"
+        )
+
+        source = (
+            tmp_path / "cli" / "src" / "issue48_cli" / "commands" / "ops.py"
+        ).read_text()
+        assert 'params["page"] = page' in source
+        assert "if page is not None:" not in source
+
+    @pytest.mark.parametrize(
+        "args,expected",
+        [
+            (["--enabled"], {"enabled": True}),
+            (["--no-enabled"], {"enabled": False}),
+            ([], {}),
+        ],
+    )
+    def test_boolean_body_property_is_tri_state(self, issue23_cli, args, expected):
+        """Test a boolean body field is sent only when the user picks a side."""
+        call = _invoke_issue23(
+            issue23_cli,
+            ["ops", "update-beta-access", "--email", "a@b.com", *args],
+        )
+        assert call.kwargs["json"] == expected

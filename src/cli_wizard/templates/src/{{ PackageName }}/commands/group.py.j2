@@ -126,14 +126,18 @@ def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
 {% endfor %}
 {% for prop in op.body_properties %}
 @click.option(
+{% if prop.click_type == "bool" and not prop.is_array %}
+{# Tri-state: the body omits the field entirely unless the user picks a side. #}
+    "--{{ prop.cli_name }}/--no-{{ prop.cli_name }}",
+    default=None,
+{% else %}
     "--{{ prop.cli_name }}",
 {% if prop.is_array %}
     multiple=True,
 {% endif %}
-{% if prop.click_type == "bool" and not prop.is_array %}
-    is_flag=True,
-{% elif prop.click_type != "str" %}
+{% if prop.click_type != "str" %}
     type={{ prop.click_type }},
+{% endif %}
 {% endif %}
 {% if prop.required %}
     required=True,
@@ -223,6 +227,9 @@ def {{ op.function_name }}(
 {% if param.is_array %}
     if {{ param.python_name }}:
         params["{{ param.name }}"] = list({{ param.python_name }})
+{# Click always supplies a required option, or one carrying a default. #}
+{% elif param.required or param.default is not none %}
+    params["{{ param.name }}"] = {{ param.python_name }}
 {% else %}
     if {{ param.python_name }} is not None:
         params["{{ param.name }}"] = {{ param.python_name }}
@@ -236,6 +243,8 @@ def {{ op.function_name }}(
 {% if prop.is_array %}
     if {{ prop.python_name }}:
         body["{{ prop.name }}"] = list({{ prop.python_name }})
+{% elif prop.required %}
+    body["{{ prop.name }}"] = {{ prop.python_name }}
 {% else %}
     if {{ prop.python_name }} is not None:
         body["{{ prop.name }}"] = {{ prop.python_name }}
