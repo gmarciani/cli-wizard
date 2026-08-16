@@ -110,6 +110,9 @@ def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
 {% else %}
 @click.option(
     "--{{ param.cli_name }}",
+{% if param.is_array %}
+    multiple=True,
+{% endif %}
 {% if param.click_type != "str" %}
     type={{ param.click_type }},
 {% endif %}
@@ -126,7 +129,10 @@ def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
 {% for prop in op.body_properties %}
 @click.option(
     "--{{ prop.cli_name }}",
-{% if prop.click_type == "bool" %}
+{% if prop.is_array %}
+    multiple=True,
+{% endif %}
+{% if prop.click_type == "bool" and not prop.is_array %}
     is_flag=True,
 {% elif prop.click_type != "str" %}
     type={{ prop.click_type }},
@@ -170,10 +176,10 @@ def {{ op.function_name }}(
     {{ param.python_name }}: {{ param.click_type }},
 {% endfor %}
 {% for param in op.query_parameters %}
-    {{ param.python_name }}: {{ param.click_type }}{% if not param.required %} | None{% endif %},
+    {{ param.python_name }}: {{ param.python_annotation }},
 {% endfor %}
 {% for prop in op.body_properties %}
-    {{ prop.python_name }}: {{ prop.click_type }}{% if not prop.required %} | None{% endif %},
+    {{ prop.python_name }}: {{ prop.python_annotation }},
 {% endfor %}
     profile: str,
     debug: bool,
@@ -217,16 +223,26 @@ def {{ op.function_name }}(
 
     params: dict[str, Any] = {}
 {% for param in op.query_parameters %}
+{% if param.is_array %}
+    if {{ param.python_name }}:
+        params["{{ param.name }}"] = list({{ param.python_name }})
+{% else %}
     if {{ param.python_name }} is not None:
         params["{{ param.name }}"] = {{ param.python_name }}
+{% endif %}
 {% endfor %}
 {% endif %}
 {% if op.body_properties %}
 
     body: dict[str, Any] = {}
 {% for prop in op.body_properties %}
+{% if prop.is_array %}
+    if {{ prop.python_name }}:
+        body["{{ prop.name }}"] = list({{ prop.python_name }})
+{% else %}
     if {{ prop.python_name }} is not None:
         body["{{ prop.name }}"] = {{ prop.python_name }}
+{% endif %}
 {% endfor %}
 {% endif %}
 

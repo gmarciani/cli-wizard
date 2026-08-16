@@ -80,13 +80,16 @@ def _operation_test_case(op: Operation) -> dict[str, Any]:
         encoded[param.name] = quote(str(value), safe="")
         argv += [f"--{param.cli_name}", str(value)]
     for param in op.query_parameters:
-        params[param.name] = _sample_value(param)
-        argv += [f"--{param.cli_name}", str(params[param.name])]
+        value = _sample_value(param)
+        params[param.name] = [value] if param.is_array else value
+        argv += [f"--{param.cli_name}", str(value)]
     for prop in op.body_properties:
-        body[prop.name] = _sample_value(prop)
+        value = _sample_value(prop)
+        body[prop.name] = [value] if prop.is_array else value
         argv.append(f"--{prop.cli_name}")
-        if prop.click_type != "bool":  # a boolean property is a flag
-            argv.append(str(body[prop.name]))
+        # A boolean property is a flag, unless it repeats as an array
+        if prop.click_type != "bool" or prop.is_array:
+            argv.append(str(value))
 
     return {
         "argv": argv,

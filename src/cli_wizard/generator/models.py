@@ -19,6 +19,7 @@ class Parameter:
     description: str = ""
     default: Any = None
     enum: list[str] = field(default_factory=list)
+    items_type: str | None = None
     # Signals that the value is a credential, read by _sensitive_field_names
     spec_format: str = ""
     write_only: bool = False
@@ -35,15 +36,32 @@ class Parameter:
         return name.replace("-", "_")
 
     @property
+    def is_array(self) -> bool:
+        """Whether this parameter accepts multiple values."""
+        return self.param_type == "array"
+
+    @property
     def click_type(self) -> str:
-        """Get Click type for this parameter."""
+        """Get Click type for this parameter, or for its items when an array."""
         type_map = {
             "string": "str",
             "integer": "int",
             "number": "float",
             "boolean": "bool",
         }
-        return type_map.get(self.param_type, "str")
+        source = (self.items_type or "string") if self.is_array else self.param_type
+        return type_map.get(source, "str")
+
+    @property
+    def python_annotation(self) -> str:
+        """Get the annotation for the generated function argument.
+
+        Click hands a tuple to a `multiple=True` option, empty when the option
+        is omitted, so an array is never optional.
+        """
+        if self.is_array:
+            return f"tuple[{self.click_type}, ...]"
+        return self.click_type if self.required else f"{self.click_type} | None"
 
 
 @dataclass
@@ -54,6 +72,7 @@ class RequestBodyProperty:
     prop_type: str
     required: bool
     description: str = ""
+    items_type: str | None = None
     # Signals that the value is a credential, read by _sensitive_field_names
     spec_format: str = ""
     write_only: bool = False
@@ -71,15 +90,32 @@ class RequestBodyProperty:
         return name.replace("-", "_")
 
     @property
+    def is_array(self) -> bool:
+        """Whether this property accepts multiple values."""
+        return self.prop_type == "array"
+
+    @property
     def click_type(self) -> str:
-        """Get Click type."""
+        """Get Click type, or the type of the items when an array."""
         type_map = {
             "string": "str",
             "integer": "int",
             "number": "float",
             "boolean": "bool",
         }
-        return type_map.get(self.prop_type, "str")
+        source = (self.items_type or "string") if self.is_array else self.prop_type
+        return type_map.get(source, "str")
+
+    @property
+    def python_annotation(self) -> str:
+        """Get the annotation for the generated function argument.
+
+        Click hands a tuple to a `multiple=True` option, empty when the option
+        is omitted, so an array is never optional.
+        """
+        if self.is_array:
+            return f"tuple[{self.click_type}, ...]"
+        return self.click_type if self.required else f"{self.click_type} | None"
 
 
 @dataclass

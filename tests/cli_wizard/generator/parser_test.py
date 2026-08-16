@@ -253,6 +253,81 @@ class TestOpenApiParser:
         finally:
             Path(spec_path).unlink()
 
+    def test_parse_array_parameter(self):
+        """Test parsing an array parameter keeps its item type."""
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/users": {
+                    "get": {
+                        "operationId": "listUsers",
+                        "tags": ["Users"],
+                        "parameters": [
+                            {
+                                "name": "ids",
+                                "in": "query",
+                                "schema": {
+                                    "type": "array",
+                                    "items": {"type": "integer"},
+                                },
+                            }
+                        ],
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                }
+            },
+        }
+        spec_path = create_temp_spec(spec)
+        try:
+            parser = OpenApiParser(spec_path)
+            groups = parser.parse()
+            param = groups["Users"].operations[0].parameters[0]
+            assert param.is_array
+            assert param.click_type == "int"
+        finally:
+            Path(spec_path).unlink()
+
+    def test_parse_array_body_property(self):
+        """Test parsing an array body property keeps its item type."""
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/users": {
+                    "post": {
+                        "operationId": "createUser",
+                        "tags": ["Users"],
+                        "requestBody": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "roles": {
+                                                "type": "array",
+                                                "items": {"type": "string"},
+                                            }
+                                        },
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {"201": {"description": "Created"}},
+                    }
+                }
+            },
+        }
+        spec_path = create_temp_spec(spec)
+        try:
+            parser = OpenApiParser(spec_path)
+            groups = parser.parse()
+            prop = groups["Users"].operations[0].body_properties[0]
+            assert prop.is_array
+            assert prop.click_type == "str"
+        finally:
+            Path(spec_path).unlink()
+
     def test_parse_exclude_tags(self):
         """Test excluding tags from parsing."""
         spec = {
