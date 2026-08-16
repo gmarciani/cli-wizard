@@ -330,6 +330,18 @@ class TestCliGenerator:
             assert "my-cli" in readme
             assert "pip install" in readme
 
+    def test_generate_changelog_content(self):
+        """Test CHANGELOG.md documents the commands and leaves no placeholder."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "my-cli"
+            config = self._default_config(cli_name="my-cli", package_name="my_cli")
+            generator = CliGenerator(config=config)
+            generator.generate({}, output_dir, "my-cli", "my_cli")
+
+            changelog = (output_dir / "CHANGELOG.md").read_text()
+            assert "### Commands" in changelog
+            assert "Add features here" not in changelog
+
     def test_generate_command_with_parameters(self):
         """Test generating command with various parameters."""
         groups = {

@@ -42,6 +42,7 @@
 - Fixed the docs workflow installing a `[docs]` extra the generated `pyproject.toml` does not declare.
 - Fixed the splash screen printing at import time, which put it in `--help` and `--version` output and corrupted the shell completion stream. It now prints from the CLI callback.
 - Fixed command errors reporting only the status line, discarding the response body naming the rejected fields; it is now printed, redacted, falling back to the raw body when it is not JSON and truncating past 2000 characters.
+- Fixed the generated `CHANGELOG.md` shipping an empty `### Features` section reading `Add features here ...`, which could end up verbatim in published release notes. The section is gone; `### Commands` still lists every command.
 
 
 ## 2.1.0
