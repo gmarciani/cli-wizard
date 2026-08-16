@@ -90,6 +90,10 @@ ignore_missing_imports = true
 [tool.coverage.run]
 omit = ["*/__init__.py"]
 
+# Set here rather than on a tox command line, so every coverage run is gated.
+[tool.coverage.report]
+fail_under = 80
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

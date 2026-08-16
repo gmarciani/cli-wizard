@@ -219,6 +219,11 @@ class CliGenerator:
 
         context = {
             **self.config,  # Spread all config values at top level
+            # Same fallback: an absent threshold would render an empty
+            # fail_under, which is not valid TOML.
+            "CoverageThreshold": self.config.get(
+                "CoverageThreshold", Config.get_field_default("CoverageThreshold")
+            ),
             "config": self.config,  # Also include as nested dict for compatibility
             "cli_name": self.cli_name,
             "package_name": self.package_name,

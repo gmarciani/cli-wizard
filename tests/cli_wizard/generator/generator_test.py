@@ -518,6 +518,24 @@ class TestCliGenerator:
             assert "flake8" not in content
             assert "autoflake" not in content
 
+    @pytest.mark.parametrize(
+        "overrides, expected",
+        [
+            ({"CoverageThreshold": 95}, 95),
+            # A config that never went through Config omits the key entirely.
+            ({}, Config.get_field_default("CoverageThreshold")),
+        ],
+    )
+    def test_generated_pyproject_gates_coverage(self, overrides, expected):
+        """Test that the generated pyproject enforces the coverage threshold."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config={**self._default_config(), **overrides})
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            pyproject = tomllib.loads((output_dir / "pyproject.toml").read_text())
+            assert pyproject["tool"]["coverage"]["report"]["fail_under"] == expected
+
     def test_missing_ruff_is_fatal(self):
         """Test that a missing ruff aborts generation before writing anything."""
         with tempfile.TemporaryDirectory() as temp_dir:

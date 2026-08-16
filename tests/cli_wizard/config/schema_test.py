@@ -61,6 +61,17 @@ class TestConfigSchema:
         """Test that an empty PackageName is derived from ProjectName."""
         assert Config(PackageName="", ProjectName="My CLI").PackageName == "my_cli"
 
+    @pytest.mark.parametrize("threshold", [-1, 101])
+    def test_coverage_threshold_outside_percentage_range_rejected(self, threshold):
+        """Test that CoverageThreshold must be a percentage."""
+        with pytest.raises(ValidationError):
+            Config(CoverageThreshold=threshold)
+
+    @pytest.mark.parametrize("threshold", [0, 80, 100])
+    def test_valid_coverage_threshold_accepted(self, threshold):
+        """Test that any percentage is accepted as CoverageThreshold."""
+        assert Config(CoverageThreshold=threshold).CoverageThreshold == threshold
+
     def test_copyright_year_defaults_to_current_year(self):
         """Test that CopyrightYear defaults to the current year."""
         assert Config().CopyrightYear == date.today().year

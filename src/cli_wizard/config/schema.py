@@ -271,6 +271,12 @@ class Config(BaseModel):
         default=False,
         description="Include .github folder with workflows, issue templates, etc.",
     )
+    CoverageThreshold: int = Field(
+        default=80,
+        ge=0,
+        le=100,
+        description="Minimum test coverage percentage to enforce (0 disables it)",
+    )
 
     # Copyright
     CopyrightYear: int | None = Field(
