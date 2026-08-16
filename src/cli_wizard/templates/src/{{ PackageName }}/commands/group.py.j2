@@ -14,7 +14,11 @@ from {{ PackageName }}.constants import (
     DEFAULT_BASE_URL,
     DEFAULT_CA_FILE,
 )
+{% if group.has_path_parameters %}
+from {{ PackageName }}.client import ApiClient, encode_path_param
+{% else %}
 from {{ PackageName }}.client import ApiClient
+{% endif %}
 from {{ PackageName }}.logging import (
     log_error,
     log_debug,
@@ -67,7 +71,7 @@ def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
     name="{{ op.command_name }}",
     help="{{ op.summary or op.operation_id }}",
 )
-{% for param in op.parameters if param.location == "path" %}
+{% for param in op.path_parameters %}
 @click.option(
     "--{{ param.cli_name }}",
 {% if param.click_type != "str" %}
@@ -77,7 +81,7 @@ def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
     help="{{ param.description }}",
 )
 {% endfor %}
-{% for param in op.parameters if param.location == "query" %}
+{% for param in op.query_parameters %}
 {% if param.enum %}
 @click.option(
     "--{{ param.cli_name }}",
@@ -151,10 +155,10 @@ def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
     help="CA certificate file for SSL verification.",
 )
 def {{ op.function_name }}(
-{% for param in op.parameters if param.location == "path" %}
+{% for param in op.path_parameters %}
     {{ param.python_name }}: {{ param.click_type }},
 {% endfor %}
-{% for param in op.parameters if param.location == "query" %}
+{% for param in op.query_parameters %}
     {{ param.python_name }}: {{ param.click_type }}{% if not param.required %} | None{% endif %},
 {% endfor %}
 {% for prop in op.body_properties %}
@@ -174,10 +178,10 @@ def {{ op.function_name }}(
     load_profile(profile)
     # Log command execution start
     cmd_params: dict[str, Any] = {
-{% for param in op.parameters if param.location == "path" %}
+{% for param in op.path_parameters %}
         "{{ param.name }}": {{ param.python_name }},
 {% endfor %}
-{% for param in op.parameters if param.location == "query" %}
+{% for param in op.query_parameters %}
         "{{ param.name }}": {{ param.python_name }},
 {% endfor %}
 {% for prop in op.body_properties %}
@@ -191,10 +195,10 @@ def {{ op.function_name }}(
     )
 
     client = _get_client(base_url, no_verify_ssl, ca_file, debug)
-{% if op.parameters | selectattr("location", "equalto", "query") | list %}
+{% if op.query_parameters %}
 
     params: dict[str, Any] = {}
-{% for param in op.parameters if param.location == "query" %}
+{% for param in op.query_parameters %}
     if {{ param.python_name }} is not None:
         params["{{ param.name }}"] = {{ param.python_name }}
 {% endfor %}
@@ -208,47 +212,25 @@ def {{ op.function_name }}(
 {% endfor %}
 {% endif %}
 
+{% set call_args = [op | url_expression] %}
+{% if op.body_properties and op.method != "GET" %}
+{% set _ = call_args.append("json_data=body") %}
+{% endif %}
+{% if op.query_parameters %}
+{% set _ = call_args.append("params=params") %}
+{% endif %}
     try:
-{% if op.method == "GET" %}
-{% if op.parameters | selectattr("location", "equalto", "query") | list %}
-        response = client.get(
-            "{{ op | url_path }}", params=params,
-        )
+{# One argument on one line; anything longer is pre-wrapped, since an
+   interpolated path pushes a single line past the line-length limit and
+   ruff formats generated code only after it has linted it. #}
+{% if call_args | length == 1 and not op.path_parameters %}
+        response = client.{{ op.method | lower }}({{ call_args[0] }})
 {% else %}
-        response = client.get("{{ op | url_path }}")
-{% endif %}
-{% elif op.method == "POST" %}
-{% if op.body_properties %}
-        response = client.post(
-            "{{ op | url_path }}", json_data=body,
+        response = client.{{ op.method | lower }}(
+{% for arg in call_args %}
+            {{ arg }},
+{% endfor %}
         )
-{% else %}
-        response = client.post("{{ op | url_path }}")
-{% endif %}
-{% elif op.method == "PUT" %}
-{% if op.body_properties %}
-        response = client.put(
-            "{{ op | url_path }}", json_data=body,
-        )
-{% else %}
-        response = client.put("{{ op | url_path }}")
-{% endif %}
-{% elif op.method == "PATCH" %}
-{% if op.body_properties %}
-        response = client.patch(
-            "{{ op | url_path }}", json_data=body,
-        )
-{% else %}
-        response = client.patch("{{ op | url_path }}")
-{% endif %}
-{% elif op.method == "DELETE" %}
-{% if op.body_properties %}
-        response = client.delete(
-            "{{ op | url_path }}", json_data=body,
-        )
-{% else %}
-        response = client.delete("{{ op | url_path }}")
-{% endif %}
 {% endif %}
         response.raise_for_status()
         if response.text:

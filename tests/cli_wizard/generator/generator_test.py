@@ -5,10 +5,12 @@
 
 import ast
 import configparser
+import importlib
 import importlib.util
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import tomllib
 from pathlib import Path
@@ -16,6 +18,7 @@ from unittest.mock import patch
 
 import pytest
 import yaml
+from click.testing import CliRunner
 
 import cli_wizard
 from cli_wizard.config.schema import (
@@ -29,7 +32,7 @@ from cli_wizard.generator.generator import (
     RUFF_COMMANDS,
     CliGenerator,
     RuffNotFoundError,
-    _build_url_path,
+    _build_url_expression,
     _sensitive_field_names,
     resolve_ruff,
 )
@@ -41,11 +44,11 @@ from cli_wizard.generator.models import (
 )
 
 
-class TestBuildUrlPath:
-    """Tests for _build_url_path helper."""
+class TestBuildUrlExpression:
+    """Tests for _build_url_expression helper."""
 
     def test_no_path_params(self):
-        """Test URL path without parameters."""
+        """Test a path without parameters stays a plain string literal."""
         op = Operation(
             operation_id="listUsers",
             method="GET",
@@ -55,10 +58,10 @@ class TestBuildUrlPath:
             tags=["Users"],
             parameters=[],
         )
-        assert _build_url_path(op) == "/users"
+        assert _build_url_expression(op) == '"/users"'
 
     def test_single_path_param(self):
-        """Test URL path with single parameter."""
+        """Test a single path parameter becomes an encoded f-string field."""
         op = Operation(
             operation_id="getUser",
             method="GET",
@@ -75,10 +78,10 @@ class TestBuildUrlPath:
                 )
             ],
         )
-        assert _build_url_path(op) == "/users/{user_id}"
+        assert _build_url_expression(op) == 'f"/users/{encode_path_param(user_id)}"'
 
     def test_multiple_path_params(self):
-        """Test URL path with multiple parameters."""
+        """Test every path parameter is interpolated."""
         op = Operation(
             operation_id="getOrderItem",
             method="GET",
@@ -101,10 +104,13 @@ class TestBuildUrlPath:
                 ),
             ],
         )
-        assert _build_url_path(op) == "/orders/{order_id}/items/{item_id}"
+        assert _build_url_expression(op) == (
+            'f"/orders/{encode_path_param(order_id)}'
+            '/items/{encode_path_param(item_id)}"'
+        )
 
     def test_query_params_ignored(self):
-        """Test that query parameters don't affect URL path."""
+        """Test that query parameters don't affect the URL expression."""
         op = Operation(
             operation_id="listUsers",
             method="GET",
@@ -121,7 +127,29 @@ class TestBuildUrlPath:
                 )
             ],
         )
-        assert _build_url_path(op) == "/users"
+        assert _build_url_expression(op) == '"/users"'
+
+    def test_undeclared_placeholder_stays_literal(self):
+        """Test a placeholder with no matching parameter is escaped, not evaluated."""
+        op = Operation(
+            operation_id="getUser",
+            method="GET",
+            path="/users/{userId}/{unknown}",
+            summary="Get user",
+            description="",
+            tags=["Users"],
+            parameters=[
+                Parameter(
+                    name="userId",
+                    location="path",
+                    param_type="string",
+                    required=True,
+                )
+            ],
+        )
+        assert _build_url_expression(op) == (
+            'f"/users/{encode_path_param(user_id)}/{{unknown}}"'
+        )
 
 
 class TestCliGenerator:
@@ -1239,3 +1267,163 @@ class TestGeneratedPathExpansion:
                 spec.loader.exec_module(module)
 
             assert getattr(module, constant) == Path.home() / ".test-cli"
+
+
+ISSUE23_PACKAGE = "issue23_cli"
+ISSUE23_BASE_URL = "http://api.test"
+
+
+def _issue23_groups():
+    """Build a group whose operations cover path, query and body inputs."""
+    email = Parameter(name="email", location="path", param_type="string", required=True)
+    return {
+        "Ops": CommandGroup(
+            name="Ops",
+            cli_name="ops",
+            description="Operations",
+            operations=[
+                Operation(
+                    operation_id="getUser",
+                    method="GET",
+                    path="/users/{userId}",
+                    summary="Get user",
+                    description="",
+                    tags=["Ops"],
+                    parameters=[
+                        Parameter(
+                            name="userId",
+                            location="path",
+                            param_type="string",
+                            required=True,
+                        ),
+                        Parameter(
+                            name="limit",
+                            location="query",
+                            param_type="integer",
+                            required=False,
+                        ),
+                    ],
+                ),
+                Operation(
+                    operation_id="updateBetaAccess",
+                    method="PATCH",
+                    path="/admin/beta-access/{email}",
+                    summary="Update beta access",
+                    description="",
+                    tags=["Ops"],
+                    parameters=[email],
+                    body_properties=[
+                        RequestBodyProperty(
+                            name="enabled", prop_type="boolean", required=False
+                        )
+                    ],
+                ),
+                Operation(
+                    operation_id="revokeBetaAccess",
+                    method="DELETE",
+                    path="/admin/beta-access/{email}",
+                    summary="Revoke beta access",
+                    description="",
+                    tags=["Ops"],
+                    parameters=[
+                        email,
+                        Parameter(
+                            name="reason",
+                            location="query",
+                            param_type="string",
+                            required=False,
+                        ),
+                    ],
+                ),
+            ],
+        )
+    }
+
+
+@pytest.fixture(scope="module")
+def issue23_cli(tmp_path_factory):
+    """Generate a CLI with path parameters and import its entry point."""
+    output_dir = tmp_path_factory.mktemp("issue23") / "cli"
+    config = {
+        "CommandName": "issue23-cli",
+        "PackageName": ISSUE23_PACKAGE,
+        "Description": "A test CLI",
+        "AuthorName": "Test Author",
+        "AuthorEmail": "test@example.com",
+        "PythonVersion": "3.12",
+        "DefaultBaseUrl": ISSUE23_BASE_URL,
+        "RepositoryUrl": "https://github.com/test/issue23-cli",
+        # Keep the profile file the commands write out of the real home.
+        "MainDir": str(output_dir / "home"),
+    }
+    generator = CliGenerator(config=config)
+    generator.generate(_issue23_groups(), output_dir, "issue23-cli", ISSUE23_PACKAGE)
+
+    src_dir = str(output_dir / "src")
+    sys.path.insert(0, src_dir)
+    try:
+        yield importlib.import_module(f"{ISSUE23_PACKAGE}.cli").main
+    finally:
+        sys.path.remove(src_dir)
+        for name in list(sys.modules):
+            if name == ISSUE23_PACKAGE or name.startswith(f"{ISSUE23_PACKAGE}."):
+                del sys.modules[name]
+
+
+def _invoke_issue23(cli, args):
+    """Run a generated command against a mocked transport."""
+    with patch("requests.Session.request") as request:
+        request.return_value.text = ""
+        result = CliRunner().invoke(cli, [*args, "--base-url", ISSUE23_BASE_URL])
+    assert result.exit_code == 0, result.output
+    return request.call_args
+
+
+class TestGeneratedPathParameters:
+    """Regression tests for #23: path parameters must reach the request URL."""
+
+    def test_path_parameter_is_substituted_into_the_url(self, issue23_cli):
+        """Test a path parameter value replaces its placeholder."""
+        call = _invoke_issue23(issue23_cli, ["ops", "get-user", "--user-id", "42"])
+        assert call.args == ("GET", f"{ISSUE23_BASE_URL}/users/42")
+
+    @pytest.mark.parametrize(
+        "value,encoded",
+        [
+            ("a@b.com", "a%40b.com"),
+            ("with space", "with%20space"),
+            ("with/slash", "with%2Fslash"),
+            ("100%", "100%25"),
+        ],
+    )
+    def test_path_parameter_is_percent_encoded(self, issue23_cli, value, encoded):
+        """Test a path parameter value cannot alter the URL structure."""
+        call = _invoke_issue23(issue23_cli, ["ops", "get-user", "--user-id", value])
+        assert call.args == ("GET", f"{ISSUE23_BASE_URL}/users/{encoded}")
+
+    def test_path_parameter_is_substituted_alongside_a_body(self, issue23_cli):
+        """Test a path parameter reaches the URL of a request that has a body."""
+        call = _invoke_issue23(
+            issue23_cli,
+            ["ops", "update-beta-access", "--email", "a@b.com", "--enabled"],
+        )
+        assert call.args == (
+            "PATCH",
+            f"{ISSUE23_BASE_URL}/admin/beta-access/a%40b.com",
+        )
+        assert call.kwargs["json"] == {"enabled": True}
+
+    def test_query_parameters_are_sent_on_a_get_request(self, issue23_cli):
+        """Test query parameters reach a GET request that also has a path one."""
+        call = _invoke_issue23(
+            issue23_cli, ["ops", "get-user", "--user-id", "42", "--limit", "5"]
+        )
+        assert call.kwargs["params"] == {"limit": 5}
+
+    def test_query_parameters_are_sent_on_a_non_get_request(self, issue23_cli):
+        """Test query parameters reach a DELETE request."""
+        call = _invoke_issue23(
+            issue23_cli,
+            ["ops", "revoke-beta-access", "--email", "a@b.com", "--reason", "spam"],
+        )
+        assert call.kwargs["params"] == {"reason": "spam"}

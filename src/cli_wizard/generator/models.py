@@ -96,6 +96,16 @@ class Operation:
     body_properties: list[RequestBodyProperty] = field(default_factory=list)
 
     @property
+    def path_parameters(self) -> list["Parameter"]:
+        """Get the parameters carried in the URL path."""
+        return [p for p in self.parameters if p.location == "path"]
+
+    @property
+    def query_parameters(self) -> list["Parameter"]:
+        """Get the parameters carried in the query string."""
+        return [p for p in self.parameters if p.location == "query"]
+
+    @property
     def _base_operation_id(self) -> str:
         """Get the base operation ID without the module path.
 
@@ -130,3 +140,12 @@ class CommandGroup:
     def module_name(self) -> str:
         """Get Python module name."""
         return self.cli_name.replace("-", "_")
+
+    @property
+    def has_path_parameters(self) -> bool:
+        """Whether any operation in the group takes a path parameter.
+
+        The generated module only imports the path encoder when it has
+        something to encode.
+        """
+        return any(op.path_parameters for op in self.operations)

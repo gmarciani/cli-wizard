@@ -8,12 +8,22 @@
 
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
 from {{ PackageName }}.constants import DEFAULT_BASE_URL, DEFAULT_TIMEOUT, DEFAULT_CA_FILE
 from {{ PackageName }}.logging import log_debug
 from {{ PackageName }}.redaction import redact, redact_text
+
+
+def encode_path_param(value: Any) -> str:
+    """Encode a value for interpolation into a single URL path segment.
+
+    Nothing is left safe, so a value containing "/", "?" or "#" becomes one
+    segment instead of changing which resource the request addresses.
+    """
+    return quote(str(value), safe="")
 
 
 class ApiClient:
@@ -104,11 +114,14 @@ class ApiClient:
         self,
         path: str,
         json_data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a POST request."""
         url = self._url(path)
-        self._log_request("POST", url, json_data=json_data)
-        response = self.session.post(url, json=json_data, timeout=self.timeout)
+        self._log_request("POST", url, params=params, json_data=json_data)
+        response = self.session.post(
+            url, json=json_data, params=params, timeout=self.timeout
+        )
         self._log_response(response)
         return response
 
@@ -116,11 +129,14 @@ class ApiClient:
         self,
         path: str,
         json_data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a PUT request."""
         url = self._url(path)
-        self._log_request("PUT", url, json_data=json_data)
-        response = self.session.put(url, json=json_data, timeout=self.timeout)
+        self._log_request("PUT", url, params=params, json_data=json_data)
+        response = self.session.put(
+            url, json=json_data, params=params, timeout=self.timeout
+        )
         self._log_response(response)
         return response
 
@@ -128,12 +144,13 @@ class ApiClient:
         self,
         path: str,
         json_data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a PATCH request."""
         url = self._url(path)
-        self._log_request("PATCH", url, json_data=json_data)
+        self._log_request("PATCH", url, params=params, json_data=json_data)
         response = self.session.patch(
-            url, json=json_data, timeout=self.timeout
+            url, json=json_data, params=params, timeout=self.timeout
         )
         self._log_response(response)
         return response
@@ -142,12 +159,13 @@ class ApiClient:
         self,
         path: str,
         json_data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a DELETE request."""
         url = self._url(path)
-        self._log_request("DELETE", url, json_data=json_data)
+        self._log_request("DELETE", url, params=params, json_data=json_data)
         response = self.session.delete(
-            url, json=json_data, timeout=self.timeout
+            url, json=json_data, params=params, timeout=self.timeout
         )
         self._log_response(response)
         return response

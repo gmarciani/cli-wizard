@@ -19,7 +19,7 @@ from click.testing import CliRunner
 
 from my_cli import constants
 from my_cli.cli import _hex_to_rgb, _show_splash, main
-from my_cli.client import ApiClient
+from my_cli.client import ApiClient, encode_path_param
 from my_cli.logging import (
     _format_message,
     _get_file_handler,
@@ -812,6 +812,30 @@ class TestApiClient:
 
         mock_delete.assert_called_once()
         assert response.status_code == 204
+
+    @pytest.mark.parametrize("method", ["post", "put", "patch", "delete"])
+    def test_client_sends_query_parameters_without_a_get(self, method):
+        """Test query parameters are forwarded by the non-GET methods."""
+        client = ApiClient(base_url="https://api.example.com")
+
+        with patch(f"requests.Session.{method}") as mock_send:
+            getattr(client, method)("/users/1", params={"force": True})
+
+        assert mock_send.call_args.kwargs["params"] == {"force": True}
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            ("plain", "plain"),
+            ("a@b.com", "a%40b.com"),
+            ("with space", "with%20space"),
+            ("with/slash", "with%2Fslash"),
+            (42, "42"),
+        ],
+    )
+    def test_encode_path_param(self, value, expected):
+        """Test a path parameter value is encoded into a single segment."""
+        assert encode_path_param(value) == expected
 
     def test_client_debug_logging(self):
         """Test client debug logging."""
