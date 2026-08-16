@@ -25,6 +25,7 @@
 #### Generated code
 
 - Fixed `--debug` printing passwords, access tokens and the `Authorization` header in cleartext, to the terminal and to `LogFile`. Request parameters, request and response bodies, and headers are now redacted to `***`, based on the `format: password` and `writeOnly: true` spec signals plus a name heuristic for `*password*`, `*token*`, `*secret*` and `*key*`. Command output on stdout is unaffected.
+- Fixed the profile file, which may hold secrets, being created world-readable; it is now created `0600` inside a `0700` directory, and `config set` tightens a file left loose by an older version.
 - Fixed commands ignoring the values passed for path and query parameters: `get-user --user-id 42` requested `/users/{userId}`, and only GET sent a query string. Both now reach the request, with path values URL-encoded.
 - Fixed `${HOME}` in `MainDir`, `ProfileFile` and `LogFile` staying literal wherever `HOME` is unset. Home now resolves through `Path.home()`.
 - Fixed `--version` reporting `0.0.0` when installed from a wheel; the version now comes from the installed package metadata instead of a `VERSION` file next to the source.

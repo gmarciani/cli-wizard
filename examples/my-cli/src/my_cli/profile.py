@@ -57,7 +57,8 @@ def load_profile(profile_name: str = "default") -> dict[str, Any]:
 def _create_default_profile_file() -> None:
     """Create a default profile file with empty settings."""
     try:
-        PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        PROFILE_FILE.touch(mode=0o600, exist_ok=True)
         default_content: dict[str, dict[str, Any]] = {"default": {}}
         with open(PROFILE_FILE, "w") as f:
             yaml.safe_dump(default_content, f, default_flow_style=False)
