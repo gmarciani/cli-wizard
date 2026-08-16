@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from jinja2 import Environment, PackageLoader
 
@@ -45,6 +46,57 @@ def _build_url_expression(op: Operation) -> str:
         return f"{{encode_path_param({param.python_name})}}"
 
     return f'f"{_PLACEHOLDER_PATTERN.sub(substitute, op.path)}"'
+
+
+# One sample per Click type, fed to the generated commands by the generated
+# tests. A path string needs percent-encoding so the test proves the URL is
+# escaped rather than interpolated raw.
+_SAMPLE_VALUES: dict[str, Any] = {"str": "test", "int": 1, "float": 1.5, "bool": True}
+_SAMPLE_PATH_STRING = "a@b.com"
+
+
+def _sample_value(spec_field: Parameter | RequestBodyProperty) -> Any:
+    """Pick a value of the right type for one command option."""
+    enum: list[str] = getattr(spec_field, "enum", [])
+    return enum[0] if enum else _SAMPLE_VALUES[spec_field.click_type]
+
+
+def _operation_test_case(op: Operation) -> dict[str, Any]:
+    """Describe the request one generated command must make.
+
+    Everything the generator already knows at render time - the option names,
+    the resolved URL, the query and body shapes with their JSON types - so the
+    generated suite asserts the spec-derived surface rather than the
+    scaffolding that is identical for every user.
+    """
+    argv: list[str] = []
+    encoded: dict[str, str] = {}
+    params: dict[str, Any] = {}
+    body: dict[str, Any] = {}
+
+    for param in op.path_parameters:
+        is_string = param.click_type == "str"
+        value = _SAMPLE_PATH_STRING if is_string else _sample_value(param)
+        encoded[param.name] = quote(str(value), safe="")
+        argv += [f"--{param.cli_name}", str(value)]
+    for param in op.query_parameters:
+        params[param.name] = _sample_value(param)
+        argv += [f"--{param.cli_name}", str(params[param.name])]
+    for prop in op.body_properties:
+        body[prop.name] = _sample_value(prop)
+        argv.append(f"--{prop.cli_name}")
+        if prop.click_type != "bool":  # a boolean property is a flag
+            argv.append(str(body[prop.name]))
+
+    return {
+        "argv": argv,
+        "path": _PLACEHOLDER_PATTERN.sub(
+            lambda match: encoded.get(match.group(1), match.group(0)), op.path
+        ),
+        "params": params or None,
+        # The command sends no body on a GET, whatever the spec declares.
+        "body": body or None if op.method != "GET" else None,
+    }
 
 
 def _sensitive_field_names(groups: dict[str, CommandGroup]) -> list[str]:
@@ -140,6 +192,7 @@ class CliGenerator:
             keep_trailing_newline=True,
         )
         self.env.filters["url_expression"] = _build_url_expression
+        self.env.filters["test_case"] = _operation_test_case
 
     def _template_context(self, **extra: Any) -> dict[str, Any]:
         """Build template context with all config values spread at top level.
@@ -234,7 +287,7 @@ class CliGenerator:
             self._generate_github_files(github_dir, workflows_dir, issue_template_dir)
 
         # Generate test files
-        self._generate_tests(tests_dir)
+        self._generate_tests(tests_dir, groups)
 
         # Generate package files
         self._generate_package_init(src_dir, package_name)
@@ -542,12 +595,18 @@ class CliGenerator:
         with open(workflows_dir / "test.yaml", "w") as f:
             f.write(content)
 
-    def _generate_tests(self, tests_dir: Path) -> None:
+    def _generate_tests(self, tests_dir: Path, groups: dict[str, CommandGroup]) -> None:
         """Generate test files."""
         # Generate cli_test.py directly in tests/
         template = self.env.get_template("tests/{{ PackageName }}/cli_test.py.j2")
         content = template.render(**self._template_context())
         with open(tests_dir / "cli_test.py", "w") as f:
+            f.write(content)
+
+        # One test per spec-derived command, covering the rendered output
+        template = self.env.get_template("tests/{{ PackageName }}/commands_test.py.j2")
+        content = template.render(**self._template_context(groups=groups))
+        with open(tests_dir / "commands_test.py", "w") as f:
             f.write(content)
 
     @staticmethod
