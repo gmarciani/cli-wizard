@@ -126,7 +126,7 @@ def _log_to_file(formatted_message: str) -> None:
     try:
         with open(LOG_FILE, "a") as f:
             f.write(formatted_message + "\n")
-    except (IOError, OSError):
+    except OSError:
         pass  # Silently ignore file write errors
 
 

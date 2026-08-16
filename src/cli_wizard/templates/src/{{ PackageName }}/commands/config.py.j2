@@ -62,7 +62,7 @@ def config_init(debug: bool) -> None:
             "path": str(PROFILE_FILE),
         }
         click.echo(json.dumps(result, indent=2))
-    except (IOError, OSError) as e:
+    except OSError as e:
         log_error(
             f"Failed to create profile file: {e}"
         )
@@ -93,7 +93,7 @@ def config_list_profiles(debug: bool) -> None:
             profiles: dict[str, Any] = (
                 yaml.safe_load(f) or {}
             )
-    except (yaml.YAMLError, IOError) as e:
+    except (yaml.YAMLError, OSError) as e:
         log_error(
             f"Failed to load profile file: {e}"
         )
@@ -130,7 +130,7 @@ def config_show(profile: str, debug: bool) -> None:
             profiles: dict[str, Any] = (
                 yaml.safe_load(f) or {}
             )
-    except (yaml.YAMLError, IOError) as e:
+    except (yaml.YAMLError, OSError) as e:
         log_error(
             f"Failed to load profile file: {e}"
         )
@@ -189,7 +189,7 @@ def config_get(
             profiles: dict[str, Any] = (
                 yaml.safe_load(f) or {}
             )
-    except (yaml.YAMLError, IOError) as e:
+    except (yaml.YAMLError, OSError) as e:
         log_error(
             f"Failed to load profile file: {e}"
         )
@@ -246,7 +246,7 @@ def config_set(
         try:
             with open(PROFILE_FILE) as f:
                 profiles = yaml.safe_load(f) or {}
-        except (yaml.YAMLError, IOError) as e:
+        except (yaml.YAMLError, OSError) as e:
             log_error(
                 f"Failed to load profile file: {e}"
             )
@@ -290,7 +290,7 @@ def config_set(
             "oldValue": old_value,
         }
         click.echo(json.dumps(result, indent=2))
-    except (IOError, OSError) as e:
+    except OSError as e:
         log_error(
             f"Failed to save profile file: {e}"
         )
@@ -333,7 +333,7 @@ def config_unset(
             profiles: dict[str, Any] = (
                 yaml.safe_load(f) or {}
             )
-    except (yaml.YAMLError, IOError) as e:
+    except (yaml.YAMLError, OSError) as e:
         log_error(
             f"Failed to load profile file: {e}"
         )
@@ -366,7 +366,7 @@ def config_unset(
                 f"Removed '{param}'"
                 f" from profile '{profile}'"
             )
-        except (IOError, OSError) as e:
+        except OSError as e:
             log_error(
                 f"Failed to save profile file: {e}"
             )

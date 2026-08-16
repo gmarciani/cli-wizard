@@ -39,7 +39,7 @@ def load_profile(profile_name: str = "default") -> dict[str, Any]:
     try:
         with open(PROFILE_FILE) as f:
             profiles = yaml.safe_load(f) or {}
-    except (yaml.YAMLError, IOError) as e:
+    except (yaml.YAMLError, OSError) as e:
         log_error(f"Failed to load profile file: {e}")
         _current_profile = {}
         return _current_profile
@@ -62,7 +62,7 @@ def _create_default_profile_file() -> None:
         with open(PROFILE_FILE, "w") as f:
             yaml.safe_dump(default_content, f, default_flow_style=False)
         log_info(f"Created default profile file: {PROFILE_FILE}")
-    except (IOError, OSError) as e:
+    except OSError as e:
         log_error(f"Failed to create default profile file: {e}")
 
 

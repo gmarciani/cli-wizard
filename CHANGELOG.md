@@ -19,6 +19,7 @@
 
 - Publishes no extras: the dev, test and docs toolchains are PEP 735 dependency groups, and `dev` includes the other two.
 - Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.
+- Catches `OSError` instead of the redundant `(IOError, OSError)` tuple, `IOError` having been an alias of `OSError` since Python 3.3.
 
 ### Bug Fixes
 
