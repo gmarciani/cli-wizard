@@ -744,10 +744,11 @@ class TestApiClient:
         client = ApiClient(base_url="https://api.example.com")
         assert client._url("/users") == "https://api.example.com/users"
 
-    def test_client_ssl_disabled(self):
-        """Test SSL verification disabled."""
+    def test_client_ssl_disabled(self, capsys):
+        """Test SSL verification disabled, loudly."""
         client = ApiClient(verify_ssl=False)
         assert client.session.verify is False
+        assert "TLS certificate verification is DISABLED" in capsys.readouterr().err
 
     def test_client_ssl_with_ca_file(self):
         """Test SSL with custom CA file."""

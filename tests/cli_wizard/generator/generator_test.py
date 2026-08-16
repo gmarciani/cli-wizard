@@ -1694,3 +1694,18 @@ class TestGeneratedCommandTests:
             assert "json" not in asserted  # a GET carries no body
         else:
             assert asserted["json"] == body
+
+
+class TestGeneratedInsecureTlsWarning:
+    """Regression test for #32: --no-verify-ssl must never be silent."""
+
+    @pytest.mark.parametrize("args,warns", [(["--no-verify-ssl"], True), ([], False)])
+    def test_warning_tracks_the_flag(self, issue23_cli, args, warns):
+        """Test stderr warns about unverified TLS only when verification is off."""
+        with patch("requests.Session.request") as request:
+            request.return_value.text = ""
+            result = CliRunner().invoke(
+                issue23_cli, ["ops", "get-user", "--user-id", "42", *args]
+            )
+        assert result.exit_code == 0, result.output
+        assert ("TLS certificate verification is DISABLED" in result.stderr) is warns
