@@ -1501,3 +1501,57 @@ class TestGeneratedPathParameters:
             ["ops", "revoke-beta-access", "--email", "a@b.com", "--reason", "spam"],
         )
         assert call.kwargs["params"] == {"reason": "spam"}
+
+
+class TestGeneratedGlobalOptions:
+    """Regression tests for #27: root options must reach the subcommands."""
+
+    def _invoke(self, cli, root_args, command_args):
+        """Run a generated command with the transport and its effects mocked."""
+        args = [*root_args, "ops", "get-user", "--user-id", "42", *command_args]
+        with (
+            patch("requests.Session.request") as request,
+            patch(f"{ISSUE23_PACKAGE}.commands.ops.load_profile") as load_profile,
+            patch(f"{ISSUE23_PACKAGE}.commands.ops.set_debug") as set_debug,
+        ):
+            request.return_value.text = ""
+            result = CliRunner().invoke(cli, args)
+        assert result.exit_code == 0, result.output
+        return request, load_profile, set_debug
+
+    @pytest.mark.parametrize(
+        "root_args,command_args,expected",
+        [
+            (["--base-url", "http://root"], [], "http://root"),
+            ([], ["--base-url", "http://leaf"], "http://leaf"),
+            (
+                ["--base-url", "http://root"],
+                ["--base-url", "http://leaf"],
+                "http://leaf",
+            ),
+            ([], [], ISSUE23_BASE_URL),
+        ],
+    )
+    def test_base_url_precedence(self, issue23_cli, root_args, command_args, expected):
+        """Test the command uses the root base URL unless it is given its own."""
+        request, _, _ = self._invoke(issue23_cli, root_args, command_args)
+        assert request.call_args.args[1] == f"{expected}/users/42"
+
+    @pytest.mark.parametrize(
+        "root_args,command_args,expected",
+        [
+            (["--profile", "root"], [], "root"),
+            ([], ["--profile", "leaf"], "leaf"),
+            (["--profile", "root"], ["--profile", "leaf"], "leaf"),
+            ([], [], "default"),
+        ],
+    )
+    def test_profile_precedence(self, issue23_cli, root_args, command_args, expected):
+        """Test the command loads the root profile unless it is given its own."""
+        _, load_profile, _ = self._invoke(issue23_cli, root_args, command_args)
+        assert load_profile.call_args.args[0] == expected
+
+    def test_root_debug_survives_the_group(self, issue23_cli):
+        """Test a root --debug is not undone by the group or the command."""
+        _, _, set_debug = self._invoke(issue23_cli, ["--debug"], [])
+        assert set_debug.call_args.args[0] is True

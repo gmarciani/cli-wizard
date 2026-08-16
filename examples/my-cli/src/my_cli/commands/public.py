@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import click
+from click.core import ParameterSource
 
 from my_cli.client import ApiClient, format_error
 from my_cli.constants import (
@@ -22,6 +23,13 @@ from my_cli.logging import (
 )
 from my_cli.profile import get_profile_value, load_profile
 from my_cli.redaction import redact, redact_text
+
+
+def _resolve_global(ctx: click.Context, name: str, value: Any) -> Any:
+    """Fall back to the root group's value when this level was given none."""
+    if ctx.get_parameter_source(name) is ParameterSource.DEFAULT:
+        return (ctx.obj or {}).get(name, value)
+    return value
 
 
 def _get_client(
@@ -59,6 +67,7 @@ def _get_client(
 def public(ctx: click.Context, debug: bool) -> None:
     """Public command group."""
     ctx.ensure_object(dict)
+    debug = _resolve_global(ctx, "debug", debug)
     set_debug(debug)
     ctx.obj["debug"] = debug
 
@@ -100,7 +109,9 @@ def public(ctx: click.Context, debug: bool) -> None:
     ),
     help="CA certificate file for SSL verification.",
 )
+@click.pass_context
 def get_public_greetings(
+    ctx: click.Context,
     profile: str,
     debug: bool,
     base_url: str | None,
@@ -108,6 +119,13 @@ def get_public_greetings(
     ca_file: Path | None,
 ) -> None:
     """get_public_greetings command."""
+    # Options given at the root group apply unless repeated here
+    profile = _resolve_global(ctx, "profile", profile)
+    debug = _resolve_global(ctx, "debug", debug)
+    base_url = _resolve_global(ctx, "base_url", base_url)
+    no_verify_ssl = _resolve_global(ctx, "no_verify_ssl", no_verify_ssl)
+    ca_file = _resolve_global(ctx, "ca_file", ca_file)
+
     # Enable debug logging if --debug flag is set
     set_debug(debug)
 
