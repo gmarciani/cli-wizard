@@ -27,6 +27,7 @@
 
 - Fixed `--debug` printing passwords, access tokens and the `Authorization` header in cleartext, to the terminal and to `LogFile`. Request parameters, request and response bodies, and headers are now redacted to `***`, based on the `format: password` and `writeOnly: true` spec signals plus a name heuristic for `*password*`, `*token*`, `*secret*` and `*key*`. Command output on stdout is unaffected.
 - Fixed the generated test suite exercising only the scaffolding: `tests/commands_test.py` now runs every command built from the spec, asserting the HTTP method, the resolved URL and the query and body it sends.
+- Fixed a configured CA file that does not exist being ignored, so requests were silently verified against the system trust store instead of the pinned bundle. Commands now fail with `Error: CA file not found: <path>`.
 - Fixed the profile file, which may hold secrets, being created world-readable; it is now created `0600` inside a `0700` directory, and `config set` tightens a file left loose by an older version.
 - Fixed commands ignoring the values passed for path and query parameters: `get-user --user-id 42` requested `/users/{userId}`, and only GET sent a query string. Both now reach the request, with path values URL-encoded.
 - Fixed `--profile`, `--debug`, `--base-url`, `--no-verify-ssl` and `--ca-file` given at the root being silently ignored by the subcommands. The subcommands now inherit them, and still take precedence when the option is repeated at their own level.

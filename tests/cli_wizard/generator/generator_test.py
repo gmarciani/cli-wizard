@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import click
 import pytest
 import requests
 import yaml
@@ -445,6 +446,17 @@ class TestCliGenerator:
         assert result.exit_code == 1
         assert "Error: 422 Unprocessable Entity" in result.output
         assert "name: Field required" in result.output
+
+    def test_generated_client_rejects_a_missing_ca_file(self):
+        """Test that a CA file that does not exist fails instead of un-pinning."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            with _import_generated(output_dir, "test_cli", "client") as module:
+                with pytest.raises(click.ClickException, match="CA file not found"):
+                    module.ApiClient(ca_file=str(output_dir / "absent-ca.pem"))
 
     def test_generate_copies_ca_and_splash_files(self):
         """Test that CA and splash files are copied into the resources directory."""
