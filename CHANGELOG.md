@@ -33,6 +33,7 @@
 - Fixed `--profile`, `--debug`, `--base-url`, `--no-verify-ssl` and `--ca-file` given at the root being silently ignored by the subcommands. The subcommands now inherit them, and still take precedence when the option is repeated at their own level.
 - Fixed nullable parameters and body properties, declared as an `anyOf`/`oneOf` with a single non-null member, being typed as strings: an `Optional[int]` now yields `type=int` and is sent as a JSON number.
 - Fixed array parameters becoming single-value options, which kept only the last value and sent a bare string where the API expects a list. They are now repeatable (`--tag a --tag b`) and sent as a JSON list, with `items.type` setting the element type.
+- Fixed profile settings other than `accessToken` being saved and shown but never applied, so `config set baseUrl` changed nothing. Every setting now takes effect, from a command-line flag, then an environment variable named after it under a per-CLI prefix (`API_BASE_URL` is replaced by `<PACKAGE>_BASE_URL`), then the profile, then the built-in default.
 - Fixed `${HOME}` in `MainDir`, `ProfileFile` and `LogFile` staying literal wherever `HOME` is unset. Home now resolves through `Path.home()`.
 - Fixed `--version` reporting `0.0.0` when installed from a wheel; the version now comes from the installed package metadata instead of a `VERSION` file next to the source.
 - Fixed `tox` running the tests only, because ruff and mypy were left out of the default `envlist`.

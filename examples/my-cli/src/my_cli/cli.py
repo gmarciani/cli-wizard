@@ -50,7 +50,7 @@ def _show_splash() -> None:
 @click.version_option(version=__version__)
 @click.option("--profile", "-p", default="default", help="Profile name.")
 @click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
-@click.option("--base-url", "-u", envvar="API_BASE_URL", help="API base URL.")
+@click.option("--base-url", "-u", help="API base URL.")
 @click.option(
     "--no-verify-ssl",
     is_flag=True,

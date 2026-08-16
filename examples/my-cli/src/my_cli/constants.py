@@ -42,6 +42,11 @@ SPLASH_ENABLED = False
 SPLASH_FILE = None
 SPLASH_COLOR = None
 
+# Prefix of the environment variables that override profile settings. A profile
+# key follows it in upper snake case, so "baseUrl" is read from the variable
+# named by ENV_PREFIX + "BASE_URL".
+ENV_PREFIX = "MY_CLI_"
+
 # Profile defaults (generated from cli-wizard configuration)
 PROFILE_DEFAULTS: dict[str, object] = {
     "baseUrl": "http://localhost:3000",
