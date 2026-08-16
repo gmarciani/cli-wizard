@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+import click
 import requests
 
 from my_cli.constants import DEFAULT_BASE_URL, DEFAULT_CA_FILE, DEFAULT_TIMEOUT
@@ -103,6 +104,13 @@ class ApiClient:
     def _setup_ssl(self) -> None:
         """Set up SSL verification with custom CA file if provided."""
         if not self.verify_ssl:
+            # Straight to stderr, never through the logger: no log level may
+            # silence it, since the flag outlives the reason it was added.
+            click.echo(
+                "WARNING: TLS certificate verification is DISABLED."
+                " Traffic can be intercepted.",
+                err=True,
+            )
             self.session.verify = False
         elif self.ca_file:
             ca_path = Path(self.ca_file)
