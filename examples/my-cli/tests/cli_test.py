@@ -183,6 +183,20 @@ class TestConfigCommands:
             output = json.loads(result.output[json_start:])
             assert output["status"] == "created"
 
+    def test_config_init_restricts_permissions(self):
+        """Test config init creates an owner-only file and directory."""
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            profile_path = Path.cwd() / "home" / "profiles.yaml"
+            with patch(
+                "my_cli.commands.config.PROFILE_FILE",
+                profile_path,
+            ):
+                result = runner.invoke(main, ["config", "init"])
+            assert result.exit_code == 0
+            assert profile_path.stat().st_mode & 0o777 == 0o600
+            assert profile_path.parent.stat().st_mode & 0o777 == 0o700
+
     def test_config_init_file_exists(self):
         """Test config init when file already exists."""
         runner = CliRunner()
@@ -342,6 +356,31 @@ class TestConfigCommands:
             output = json.loads(result.output[json_start:])
             assert output["key"] == "newkey"
             assert output["value"] == "newvalue"
+
+    def test_config_set_restricts_permissions(self):
+        """Test config set tightens a world-readable profile file."""
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            profile_path = Path.cwd() / "profiles.yaml"
+            profile_path.write_text("default: {}")
+            profile_path.chmod(0o644)
+            with patch(
+                "my_cli.commands.config.PROFILE_FILE",
+                profile_path,
+            ):
+                result = runner.invoke(
+                    main,
+                    [
+                        "config",
+                        "set",
+                        "--param",
+                        "accessToken",
+                        "--value",
+                        "secret",
+                    ],
+                )
+            assert result.exit_code == 0
+            assert profile_path.stat().st_mode & 0o777 == 0o600
 
     def test_config_set_json_value(self):
         """Test setting a JSON config value."""
@@ -992,6 +1031,19 @@ class TestProfile:
                 ):
                     result = load_profile("default")
             assert result == {}
+
+    def test_load_profile_restricts_permissions(self):
+        """Test the created default profile file is owner-only."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir) / "home" / "profiles.yaml"
+            with patch.object(constants, "PROFILE_FILE", profile_path):
+                with patch(
+                    "my_cli.profile.PROFILE_FILE",
+                    profile_path,
+                ):
+                    load_profile("default")
+            assert profile_path.stat().st_mode & 0o777 == 0o600
+            assert profile_path.parent.stat().st_mode & 0o777 == 0o700
 
     def test_load_profile_success(self):
         """Test loading profile successfully."""

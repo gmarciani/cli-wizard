@@ -50,7 +50,8 @@ def config_init(debug: bool) -> None:
         return
 
     try:
-        PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        PROFILE_FILE.touch(mode=0o600, exist_ok=True)
         default_content: dict[str, dict[str, Any]] = {
             "default": {},
         }
@@ -256,7 +257,6 @@ def config_set(
     profiles: dict[str, Any]
     result: dict[str, Any]
     if not PROFILE_FILE.exists():
-        PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
         profiles = {}
     else:
         try:
@@ -289,6 +289,10 @@ def config_set(
     profiles[profile][param] = parsed_value
 
     try:
+        PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        PROFILE_FILE.touch(mode=0o600, exist_ok=True)
+        # Tighten files left world-readable by older versions
+        PROFILE_FILE.chmod(0o600)
         with open(PROFILE_FILE, "w") as f:
             yaml.safe_dump(
                 profiles,
