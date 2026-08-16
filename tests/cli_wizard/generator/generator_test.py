@@ -789,6 +789,37 @@ class TestDependencyPins:
         )
 
 
+# Distributions whose import name differs from the name on the index.
+IMPORT_NAMES = {"pyyaml": "yaml"}
+
+
+class TestPublishedDependenciesAreUsed:
+    """A generated CLI must not publish libraries it never imports."""
+
+    def test_every_runtime_dependency_is_imported(self, tmp_path):
+        """Test that each published dependency is imported by the generated code."""
+        output_dir = tmp_path / "test-cli"
+        generator = CliGenerator(config=Config(ProjectName="Test Cli").model_dump())
+        generator.generate({}, output_dir, "test-cli", "test_cli")
+
+        imported = set()
+        for py_file in output_dir.rglob("*.py"):
+            for node in ast.walk(ast.parse(py_file.read_text())):
+                if isinstance(node, ast.Import):
+                    imported.update(alias.name.split(".")[0] for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imported.add(node.module.split(".")[0])
+
+        pyproject = tomllib.loads((output_dir / "pyproject.toml").read_text())
+        declared = {
+            re.match(r"[A-Za-z0-9_.-]+", dep).group().lower()
+            for dep in pyproject["project"]["dependencies"]
+        }
+
+        unused = {d for d in declared if IMPORT_NAMES.get(d, d) not in imported}
+        assert not unused, f"declared but never imported: {sorted(unused)}"
+
+
 # Tooling nobody installing from an index should be offered. cli-wizard also
 # publishes to PyPI (twine), builds docs (sphinx) and bundles ruff as a runtime
 # dependency, so the two lists are not the same.

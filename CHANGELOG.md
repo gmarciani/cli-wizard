@@ -29,6 +29,7 @@
 - Fixed `--version` reporting `0.0.0` when installed from a wheel; the version now comes from the installed package metadata instead of a `VERSION` file next to the source.
 - Fixed `tox` running the tests only, because ruff and mypy were left out of the default `envlist`.
 - Fixed the PR validation workflow measuring coverage of `cli_wizard` instead of the generated package.
+- Fixed `Jinja2` and `pydantic` being published as runtime dependencies; neither is imported by the generated code.
 - Fixed that workflow and `DEVELOPMENT.md` calling `tox -e test`, `type` and `coverage`, which `tox.ini` never defined.
 - Fixed `DEVELOPMENT.md` documenting `make setup`, a target the generated `Makefile` never defined.
 - Fixed the docs workflow installing a `[docs]` extra the generated `pyproject.toml` does not declare.
