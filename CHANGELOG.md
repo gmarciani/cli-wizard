@@ -33,6 +33,7 @@
 - Fixed nullable parameters and body properties, declared as an `anyOf`/`oneOf` with a single non-null member, being typed as strings: an `Optional[int]` now yields `type=int` and is sent as a JSON number.
 - Fixed `${HOME}` in `MainDir`, `ProfileFile` and `LogFile` staying literal wherever `HOME` is unset. Home now resolves through `Path.home()`.
 - Fixed `--version` reporting `0.0.0` when installed from a wheel; the version now comes from the installed package metadata instead of a `VERSION` file next to the source.
+- Fixed the log file growing without bound: `LogRotationType`, `LogRotationSize`, `LogRotationDays` and `LogRotationBackupCount` now take effect, since messages are written through the rotating handler instead of bypassing it.
 - Fixed `tox` running the tests only, because ruff and mypy were left out of the default `envlist`.
 - Fixed the PR validation workflow measuring coverage of `cli_wizard` instead of the generated package.
 - Fixed `Jinja2` and `pydantic` being published as runtime dependencies; neither is imported by the generated code.
