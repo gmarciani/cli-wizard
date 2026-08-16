@@ -7,6 +7,7 @@ import json
 import tempfile
 from pathlib import Path
 
+import pytest
 import yaml
 
 from cli_wizard.generator.parser import OpenApiParser
@@ -161,6 +162,94 @@ class TestOpenApiParser:
             assert op.parameters[0].name == "limit"
             assert op.parameters[0].location == "query"
             assert op.parameters[0].default == 10
+        finally:
+            Path(spec_path).unlink()
+
+    @pytest.mark.parametrize(
+        ("schema", "expected_type"),
+        [
+            ({"anyOf": [{"type": "integer"}, {"type": "null"}]}, "integer"),
+            ({"oneOf": [{"type": "integer"}, {"type": "null"}]}, "integer"),
+            # Several non-null members leave no single type to adopt.
+            (
+                {"anyOf": [{"type": "integer"}, {"type": "string"}, {"type": "null"}]},
+                "string",
+            ),
+        ],
+    )
+    def test_parse_union_query_parameter(self, schema, expected_type):
+        """Test a union query parameter adopts its only non-null member type."""
+        spec = {
+            "openapi": "3.1.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/users": {
+                    "get": {
+                        "operationId": "listUsers",
+                        "tags": ["Users"],
+                        "parameters": [
+                            {
+                                "name": "limit",
+                                "in": "query",
+                                "schema": {**schema, "default": 10},
+                            }
+                        ],
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                }
+            },
+        }
+        spec_path = create_temp_spec(spec)
+        try:
+            parser = OpenApiParser(spec_path)
+            groups = parser.parse()
+            param = groups["Users"].operations[0].parameters[0]
+            assert param.param_type == expected_type
+            assert param.default == 10
+        finally:
+            Path(spec_path).unlink()
+
+    @pytest.mark.parametrize("keyword", ["anyOf", "oneOf"])
+    def test_parse_nullable_body_property(self, keyword):
+        """Test nullable body property keeps its non-null member type."""
+        spec = {
+            "openapi": "3.1.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/limits": {
+                    "post": {
+                        "operationId": "setLimits",
+                        "tags": ["Limits"],
+                        "requestBody": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "duration_minutes": {
+                                                keyword: [
+                                                    {"type": "integer"},
+                                                    {"type": "null"},
+                                                ],
+                                                "description": "Window length",
+                                            },
+                                        },
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                }
+            },
+        }
+        spec_path = create_temp_spec(spec)
+        try:
+            parser = OpenApiParser(spec_path)
+            groups = parser.parse()
+            prop = groups["Limits"].operations[0].body_properties[0]
+            assert prop.prop_type == "integer"
+            assert prop.description == "Window length"
         finally:
             Path(spec_path).unlink()
 
