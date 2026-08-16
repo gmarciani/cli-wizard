@@ -7,6 +7,7 @@
 """Logging utilities for the generated CLI."""
 
 from datetime import datetime, timezone
+from logging import makeLogRecord
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from typing import Literal, Any
 
@@ -139,14 +140,11 @@ def _get_file_handler() -> Any:
 def _log_to_file(formatted_message: str) -> None:
     """Write log message to file if file logging is enabled."""
     handler = _get_file_handler()
-    if handler is None or LOG_FILE is None:
+    if handler is None:
         return
 
-    try:
-        with open(LOG_FILE, "a") as f:
-            f.write(formatted_message + "\n")
-    except OSError:
-        pass  # Silently ignore file write errors
+    # Emit through the handler so the configured rotation policy applies.
+    handler.emit(makeLogRecord({"msg": formatted_message}))
 
 
 def log(

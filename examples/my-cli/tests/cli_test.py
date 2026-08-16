@@ -11,6 +11,7 @@ import importlib.metadata
 import json
 import os
 import tempfile
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -1460,6 +1461,19 @@ class TestLogging:
                         with patch("click.secho"):
                             log_info("Test file logging")
         set_debug(False)
+
+    def test_log_to_file_rotates_by_size(self):
+        """Test file logging rotates once the configured size is exceeded."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_file = Path(tmpdir) / "test.log"
+            handler = RotatingFileHandler(log_file, maxBytes=100, backupCount=1)
+            try:
+                with patch("my_cli.logging._file_handler", handler):
+                    for _ in range(10):
+                        _log_to_file("x" * 50)
+            finally:
+                handler.close()
+            assert (Path(tmpdir) / "test.log.1").exists()
 
     def test_get_file_handler_size_rotation(self):
         """Test file handler with size rotation."""
