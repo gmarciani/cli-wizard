@@ -1580,3 +1580,117 @@ class TestGeneratedGlobalOptions:
         """Test a root --debug is not undone by the group or the command."""
         _, _, set_debug = self._invoke(issue23_cli, ["--debug"], [])
         assert set_debug.call_args.args[0] is True
+
+
+def _issue50_groups():
+    """Extend the #23 group with the option kinds it does not cover."""
+    groups = _issue23_groups()
+    groups["Ops"].operations.append(
+        Operation(
+            operation_id="createReport",
+            method="POST",
+            path="/reports",
+            summary="Create report",
+            description="",
+            tags=["Ops"],
+            parameters=[
+                Parameter(
+                    name="format",
+                    location="query",
+                    param_type="string",
+                    required=True,
+                    enum=["json", "csv"],
+                )
+            ],
+            body_properties=[
+                RequestBodyProperty(name="title", prop_type="string", required=True),
+                RequestBodyProperty(name="ratio", prop_type="number", required=False),
+            ],
+        )
+    )
+    return groups
+
+
+@pytest.fixture(scope="module")
+def issue50_cli(tmp_path_factory):
+    """Generate a CLI whose commands cover every kind of option."""
+    output_dir = tmp_path_factory.mktemp("issue50") / "cli"
+    config = {
+        "CommandName": "issue50-cli",
+        "PackageName": "issue50_cli",
+        "Description": "A test CLI",
+        "AuthorName": "Test Author",
+        "AuthorEmail": "test@example.com",
+        "PythonVersion": "3.12",
+        "DefaultBaseUrl": ISSUE23_BASE_URL,
+        "RepositoryUrl": "https://github.com/test/issue50-cli",
+        # Keep the profile file the commands write out of the real home.
+        "MainDir": str(output_dir / "home"),
+    }
+    generator = CliGenerator(config=config)
+    generator.generate(_issue50_groups(), output_dir, "issue50-cli", "issue50_cli")
+    return output_dir
+
+
+class TestGeneratedCommandTests:
+    """Regression tests for #50: the generated suite must run the commands."""
+
+    def test_every_operation_gets_a_test(self, issue50_cli):
+        """Test each spec-derived command is exercised by its own test."""
+        content = (issue50_cli / "tests" / "commands_test.py").read_text()
+        for op in _issue50_groups()["Ops"].operations:
+            assert f"def test_{op.function_name}(" in content
+
+    def test_generated_command_tests_pass(self, issue50_cli):
+        """Test the generated command tests hold against the generated code."""
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", "tests/commands_test.py", "-q"],
+            cwd=issue50_cli,
+            capture_output=True,
+        )
+        assert result.returncode == 0, result.stdout.decode()
+
+    @pytest.mark.parametrize(
+        "command,method,path,params,body",
+        [
+            ("get_user", "GET", "/users/a%40b.com", {"limit": 1}, None),
+            (
+                "update_beta_access",
+                "PATCH",
+                "/admin/beta-access/a%40b.com",
+                None,
+                {"enabled": True},
+            ),
+            (
+                "revoke_beta_access",
+                "DELETE",
+                "/admin/beta-access/a%40b.com",
+                {"reason": "test"},
+                None,
+            ),
+            (
+                "create_report",
+                "POST",
+                "/reports",
+                {"format": "json"},
+                {"title": "test", "ratio": 1.5},
+            ),
+        ],
+    )
+    def test_expected_request_is_asserted(
+        self, issue50_cli, command, method, path, params, body
+    ):
+        """Test the generated test states the URL, the verb and the JSON types."""
+        content = (issue50_cli / "tests" / "commands_test.py").read_text()
+        test = content.split(f"def test_{command}(")[1].split("    def ")[0]
+        asserted = {
+            match.group(1): ast.literal_eval(match.group(2))
+            for match in re.finditer(r'kwargs\["(\w+)"\] (?:==|is) (.+)', test)
+        }
+
+        assert f'("{method}", BASE_URL + "{path}")' in test
+        assert asserted["params"] == params
+        if method == "GET":
+            assert "json" not in asserted  # a GET carries no body
+        else:
+            assert asserted["json"] == body
