@@ -69,11 +69,6 @@ def colors_enabled() -> bool:
     return _colors_enabled
 
 
-def is_debug_enabled() -> bool:
-    """Check if debug logging is enabled."""
-    return _debug_enabled
-
-
 def _should_log(level: str) -> bool:
     """Check if a message at the given level should be logged."""
     if _debug_enabled:

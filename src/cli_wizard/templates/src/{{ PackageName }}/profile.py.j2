@@ -24,7 +24,6 @@ from {{ PackageName }}.logging import (
 
 
 _current_profile: dict[str, Any] = {}
-_profile_name: str = "default"
 
 # Splits a camelCase profile key before every capital, so "retryMaxAttempts"
 # becomes RETRY_MAX_ATTEMPTS once upper-cased.
@@ -125,8 +124,7 @@ def load_profile(profile_name: str = "default") -> dict[str, Any]:
     Returns:
         Profile settings as a dictionary, empty dict if profile not found
     """
-    global _current_profile, _profile_name
-    _profile_name = profile_name
+    global _current_profile
     _current_profile = _read_profile(profile_name)
 
     # The logging module cannot resolve these itself without importing this
@@ -171,16 +169,6 @@ def _create_default_profile_file() -> None:
         log_info(f"Created default profile file: {PROFILE_FILE}")
     except OSError as e:
         log_error(f"Failed to create default profile file: {e}")
-
-
-def get_profile() -> dict[str, Any]:
-    """Get the currently loaded profile settings."""
-    return _current_profile
-
-
-def get_profile_name() -> str:
-    """Get the name of the currently loaded profile."""
-    return _profile_name
 
 
 def get_profile_value(key: str, default: Any = None) -> Any:

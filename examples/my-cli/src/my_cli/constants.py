@@ -27,9 +27,6 @@ def _expand_path(raw: str) -> Path:
     return Path(os.path.expandvars(resolved)).expanduser()
 
 
-# Main directory for CLI data (config, cache, etc.)
-MAIN_DIR = _expand_path("${HOME}/.my-cli")
-
 # Profile configuration
 PROFILE_FILE = _expand_path("${HOME}/.my-cli/profiles.yaml")
 

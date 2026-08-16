@@ -57,11 +57,14 @@ class Parameter:
         """Get the annotation for the generated function argument.
 
         Click hands a tuple to a `multiple=True` option, empty when the option
-        is omitted, so an array is never optional.
+        is omitted, so an array is never optional. Neither is a parameter
+        carrying a default, which Click supplies whenever the user does not.
         """
         if self.is_array:
             return f"tuple[{self.click_type}, ...]"
-        return self.click_type if self.required else f"{self.click_type} | None"
+        if self.required or self.default is not None:
+            return self.click_type
+        return f"{self.click_type} | None"
 
 
 @dataclass

@@ -27,8 +27,6 @@ from {{ PackageName }}.client import (
 )
 from {{ PackageName }}.profile import (
     load_profile,
-    get_profile,
-    get_profile_name,
     get_profile_value,
     env_var_name,
     resolve_setting,
@@ -39,7 +37,6 @@ from {{ PackageName }}.logging import (
     set_log_level,
     set_colors_enabled,
     colors_enabled,
-    is_debug_enabled,
     log_debug,
     log_info,
     log_warning,
@@ -1133,34 +1130,6 @@ class TestProfile:
                     result = load_profile("nonexistent")
             assert result == {}
 
-    def test_get_profile(self):
-        """Test getting current profile."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            profile_path = Path(tmpdir) / "profiles.yaml"
-            profile_path.write_text("default:\n  key: value")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "{{ PackageName }}.profile.PROFILE_FILE",
-                    profile_path,
-                ):
-                    load_profile("default")
-                    result = get_profile()
-            assert result == {"key": "value"}
-
-    def test_get_profile_name(self):
-        """Test getting current profile name."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            profile_path = Path(tmpdir) / "profiles.yaml"
-            profile_path.write_text("myprofile: {}")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "{{ PackageName }}.profile.PROFILE_FILE",
-                    profile_path,
-                ):
-                    load_profile("myprofile")
-                    result = get_profile_name()
-            assert result == "myprofile"
-
     def test_get_profile_value(self):
         """Test getting profile value."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1336,13 +1305,6 @@ class TestProfile:
 
 class TestLogging:
     """Tests for logging utilities."""
-
-    def test_set_debug(self):
-        """Test setting debug mode."""
-        set_debug(True)
-        assert is_debug_enabled() is True
-        set_debug(False)
-        assert is_debug_enabled() is False
 
     def test_should_log_debug_enabled(self):
         """Test log filtering with debug enabled."""
@@ -1537,11 +1499,6 @@ class TestConstants:
         finally:
             monkeypatch.undo()
             importlib.reload(constants)
-
-    def test_main_dir_exists(self):
-        """Test main directory constant exists."""
-        assert hasattr(constants, "MAIN_DIR")
-        assert isinstance(constants.MAIN_DIR, Path)
 
     def test_profile_file_exists(self):
         """Test profile file constant exists."""
