@@ -1240,6 +1240,31 @@ class TestGeneratedPythonVersions:
             matrix = workflow["jobs"]["test"]["strategy"]["matrix"]["python-version"]
             assert [str(v) for v in matrix] == expected
 
+    @pytest.mark.parametrize("minimum", SUPPORTED_PYTHON_VERSIONS)
+    def test_generated_sources_parse_on_the_declared_minimum(self, minimum):
+        """Test that no template emits syntax newer than the configured minimum.
+
+        The templates are shared across every PythonVersion, and ruff formats
+        the output for the target version, so a construct such as PEP 758's
+        unparenthesized ``except A, B:`` would parse for the generator and be
+        a SyntaxError in the generated project.
+        """
+        feature_version = tuple(int(part) for part in minimum.split("."))
+        if sys.version_info[:2] < feature_version:
+            pytest.skip(f"parsing {minimum} syntax needs a {minimum} interpreter")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = self._generate(minimum, temp_dir)
+
+            sources = sorted(output_dir.rglob("*.py"))
+            assert sources, "expected the generator to write Python sources"
+            for path in sources:
+                ast.parse(
+                    path.read_text(encoding="utf-8"),
+                    filename=str(path),
+                    feature_version=feature_version,
+                )
+
     def test_single_version_workflows_use_the_declared_minimum(self):
         """Test that docs, release and pr-validation pin the project's minimum.
 
