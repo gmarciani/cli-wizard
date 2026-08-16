@@ -48,6 +48,7 @@
 - Fixed command errors reporting only the status line, discarding the response body naming the rejected fields; it is now printed, redacted, falling back to the raw body when it is not JSON and truncating past 2000 characters.
 - Fixed the generated `CHANGELOG.md` shipping an empty `### Features` section reading `Add features here ...`, which could end up verbatim in published release notes. The section is gone; `### Commands` still lists every command.
 - Fixed boolean body fields always reaching the request: leaving `--enabled` off sent `"enabled": false` instead of omitting the field, so a `PATCH` could not leave a flag untouched. They are now `--enabled/--no-enabled`, sent only when one of the two is given.
+- Fixed a required boolean field being accepted when omitted, which sent `"enabled": null` for the API to reject; it is now demanded up front. A boolean's declared default is shown in `--help` instead of being invisible.
 
 
 ## 2.1.0

@@ -191,6 +191,7 @@ class OpenApiParser:
                     required=prop_name in required_props,
                     description=prop_schema.get("description", ""),
                     items_type=prop_schema.get("items", {}).get("type"),
+                    default=prop_schema.get("default"),
                     spec_format=prop_schema.get("format", ""),
                     write_only=prop_schema.get("writeOnly", False),
                 )
