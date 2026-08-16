@@ -2,13 +2,3 @@
 # Generated from OpenAPI specification by cli-wizard
 
 """Command groups."""
-
-{% for tag, group in groups.items() %}
-from {{ PackageName }}.commands.{{ group.module_name }} import {{ group.module_name }}
-{% endfor %}
-
-__all__ = [
-{% for tag, group in groups.items() %}
-    "{{ group.module_name }}",
-{% endfor %}
-]

@@ -731,6 +731,25 @@ class TestCliGenerator:
 
         assert tuple(commands) == RUFF_COMMANDS
 
+    def test_generated_commands_init_declares_no_re_exports(self):
+        """Test that the commands package __init__ carries no imports."""
+        groups = self._sample_groups()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate(groups, output_dir, "test-cli", "test_cli")
+
+            init_file = output_dir / "src" / "test_cli" / "commands" / "__init__.py"
+            content = init_file.read_text()
+
+            assert not [
+                node
+                for node in ast.parse(content).body
+                if isinstance(node, (ast.Import, ast.ImportFrom))
+            ]
+            assert "__all__" not in content
+
     def test_generated_code_uses_absolute_non_lazy_imports(self):
         """Test that generated code avoids relative and function-level imports."""
         groups = self._sample_groups()
