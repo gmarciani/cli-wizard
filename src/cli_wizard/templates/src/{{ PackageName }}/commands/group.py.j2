@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 
 import click
+from click.core import ParameterSource
 from typing import Any
 
 from {{ PackageName }}.constants import (
@@ -26,6 +27,13 @@ from {{ PackageName }}.logging import (
 )
 from {{ PackageName }}.profile import load_profile, get_profile_value
 from {{ PackageName }}.redaction import redact, redact_text
+
+
+def _resolve_global(ctx: click.Context, name: str, value: Any) -> Any:
+    """Fall back to the root group's value when this level was given none."""
+    if ctx.get_parameter_source(name) is ParameterSource.DEFAULT:
+        return (ctx.obj or {}).get(name, value)
+    return value
 
 
 def _get_client(
@@ -62,6 +70,7 @@ def _get_client(
 def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
     """{{ group.name }} command group."""
     ctx.ensure_object(dict)
+    debug = _resolve_global(ctx, "debug", debug)
     set_debug(debug)
     ctx.obj["debug"] = debug
 {% for op in group.operations %}
@@ -154,7 +163,9 @@ def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
     ),
     help="CA certificate file for SSL verification.",
 )
+@click.pass_context
 def {{ op.function_name }}(
+    ctx: click.Context,
 {% for param in op.path_parameters %}
     {{ param.python_name }}: {{ param.click_type }},
 {% endfor %}
@@ -171,6 +182,13 @@ def {{ op.function_name }}(
     ca_file: Path | None,
 ) -> None:
     """{{ op.function_name }} command."""
+    # Options given at the root group apply unless repeated here
+    profile = _resolve_global(ctx, "profile", profile)
+    debug = _resolve_global(ctx, "debug", debug)
+    base_url = _resolve_global(ctx, "base_url", base_url)
+    no_verify_ssl = _resolve_global(ctx, "no_verify_ssl", no_verify_ssl)
+    ca_file = _resolve_global(ctx, "ca_file", ca_file)
+
     # Enable debug logging if --debug flag is set
     set_debug(debug)
 
