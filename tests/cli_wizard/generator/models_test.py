@@ -3,6 +3,8 @@
 
 """Tests for generator models."""
 
+import pytest
+
 from cli_wizard.generator.models import (
     CommandGroup,
     Operation,
@@ -126,6 +128,64 @@ class TestOperation:
         )
         assert op.function_name == "get_user_by_id"
 
+    def test_path_parameters_keeps_only_path_ones_in_order(self):
+        """Test path parameters are selected in declaration order."""
+        op = Operation(
+            operation_id="getOrderItem",
+            method="GET",
+            path="/orders/{orderId}/items/{itemId}",
+            summary="Get order item",
+            description="",
+            tags=["Orders"],
+            parameters=[
+                Parameter(
+                    name="orderId", location="path", param_type="string", required=True
+                ),
+                Parameter(
+                    name="verbose",
+                    location="query",
+                    param_type="boolean",
+                    required=False,
+                ),
+                Parameter(
+                    name="itemId", location="path", param_type="string", required=True
+                ),
+                Parameter(
+                    name="X-Trace",
+                    location="header",
+                    param_type="string",
+                    required=False,
+                ),
+            ],
+        )
+        assert [p.name for p in op.path_parameters] == ["orderId", "itemId"]
+
+    def test_query_parameters_keeps_only_query_ones(self):
+        """Test query parameters exclude path and header parameters."""
+        op = Operation(
+            operation_id="listUsers",
+            method="GET",
+            path="/tenants/{tenantId}/users",
+            summary="List users",
+            description="",
+            tags=["Users"],
+            parameters=[
+                Parameter(
+                    name="tenantId", location="path", param_type="string", required=True
+                ),
+                Parameter(
+                    name="limit", location="query", param_type="integer", required=False
+                ),
+                Parameter(
+                    name="X-Trace",
+                    location="header",
+                    param_type="string",
+                    required=False,
+                ),
+            ],
+        )
+        assert [p.name for p in op.query_parameters] == ["limit"]
+
 
 class TestCommandGroup:
     """Tests for CommandGroup model."""
@@ -138,3 +198,43 @@ class TestCommandGroup:
             description="API key management",
         )
         assert group.module_name == "api_keys"
+
+    @pytest.mark.parametrize(
+        "location,expected",
+        [("path", True), ("query", False)],
+    )
+    def test_has_path_parameters(self, location, expected):
+        """Test a group reports whether any operation takes a path parameter."""
+        group = CommandGroup(
+            name="Users",
+            cli_name="users",
+            description="User management",
+            operations=[
+                Operation(
+                    operation_id="listUsers",
+                    method="GET",
+                    path="/users",
+                    summary="List users",
+                    description="",
+                    tags=["Users"],
+                    parameters=[],
+                ),
+                Operation(
+                    operation_id="getUser",
+                    method="GET",
+                    path="/users/{userId}",
+                    summary="Get user",
+                    description="",
+                    tags=["Users"],
+                    parameters=[
+                        Parameter(
+                            name="userId",
+                            location=location,
+                            param_type="string",
+                            required=True,
+                        )
+                    ],
+                ),
+            ],
+        )
+        assert group.has_path_parameters is expected

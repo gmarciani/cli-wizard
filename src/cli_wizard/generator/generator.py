@@ -4,6 +4,7 @@
 """CLI code generator using Jinja2 templates."""
 
 import logging
+import re
 import shutil
 import subprocess
 import sys
@@ -20,14 +21,30 @@ from cli_wizard.generator.models import (
     RequestBodyProperty,
 )
 
+_PLACEHOLDER_PATTERN = re.compile(r"\{([^{}]*)\}")
 
-def _build_url_path(op: Operation) -> str:
-    """Build URL path with Python variable substitutions."""
-    path = op.path
-    for param in op.parameters:
-        if param.location == "path":
-            path = path.replace(f"{{{param.name}}}", f"{{{param.python_name}}}")
-    return path
+
+def _build_url_expression(op: Operation) -> str:
+    """Build the request path as a Python expression, quotes included.
+
+    An operation with `in: path` parameters becomes an f-string that
+    interpolates the matching command options, each percent-encoded so a
+    value such as `a@b.com` cannot alter the URL structure. Paths with no
+    such parameter stay plain string literals, and a placeholder no
+    parameter declares is escaped so it survives as a literal instead of
+    being evaluated.
+    """
+    by_name = {param.name: param for param in op.path_parameters}
+    if not by_name:
+        return f'"{op.path}"'
+
+    def substitute(match: re.Match[str]) -> str:
+        param = by_name.get(match.group(1))
+        if param is None:
+            return f"{{{{{match.group(1)}}}}}"
+        return f"{{encode_path_param({param.python_name})}}"
+
+    return f'f"{_PLACEHOLDER_PATTERN.sub(substitute, op.path)}"'
 
 
 def _sensitive_field_names(groups: dict[str, CommandGroup]) -> list[str]:
@@ -122,7 +139,7 @@ class CliGenerator:
             lstrip_blocks=True,
             keep_trailing_newline=True,
         )
-        self.env.filters["url_path"] = _build_url_path
+        self.env.filters["url_expression"] = _build_url_expression
 
     def _template_context(self, **extra: Any) -> dict[str, Any]:
         """Build template context with all config values spread at top level.
