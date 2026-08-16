@@ -307,7 +307,7 @@ class CliGenerator:
         self._generate_constants(src_dir, ca_file_name, splash_file_name, main_dir)
 
         # Generate commands
-        self._generate_commands_init(commands_dir, groups)
+        self._generate_commands_init(commands_dir)
         self._generate_config_commands(commands_dir)
         for tag, group in groups.items():
             self._generate_command_group(group, commands_dir)
@@ -453,14 +453,12 @@ class CliGenerator:
         shutil.copy2(splash_path, dest_path)
         return splash_path.name
 
-    def _generate_commands_init(
-        self, commands_dir: Path, groups: dict[str, CommandGroup]
-    ) -> None:
+    def _generate_commands_init(self, commands_dir: Path) -> None:
         """Generate commands __init__.py."""
         template = self.env.get_template(
             "src/{{ PackageName }}/commands/__init__.py.j2"
         )
-        content = template.render(**self._template_context(groups=groups))
+        content = template.render(**self._template_context())
         with open(commands_dir / "__init__.py", "w") as f:
             f.write(content)
 
