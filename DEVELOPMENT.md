@@ -3,6 +3,8 @@
 ## Prerequisites
 
 - Python 3.12, 3.13 or 3.14 — see [Python versions](#python-versions).
+  The default is 3.14: `make setup` pins the release named in the `Makefile`,
+  and tox, mypy and the single-version CI jobs run on it.
 - [pyenv](https://github.com/pyenv/pyenv), used by `make setup` to create the
   virtualenv.
 - pip 25.1 or newer. The development toolchain is a
@@ -65,6 +67,13 @@ tox -e py312       # Run the suite on a single version
 tox -e py312,py313,py314
 ```
 
+Every other tox environment (`test`, `lint`, `type`, `format`, `coverage`) runs
+on the default interpreter, 3.14, declared as its `base_python` in `tox.ini`. The same
+`DEFAULT_PYTHON_VERSION` is what a generated project targets when its config
+leaves `PythonVersion` unset. Ruff
+targets the oldest supported version so it never emits syntax 3.12 rejects;
+mypy checks against the default.
+
 tox does not install interpreters, it only discovers them, and it fails rather
 than skipping when one is missing. Install the versions you do not have first —
 with pyenv:
@@ -73,12 +82,21 @@ with pyenv:
 pyenv install 3.12 3.13 3.14
 ```
 
+pyenv only exposes the interpreter selected by `.python-version`, so put the
+others on `PATH` before running the matrix:
+
+```shell
+export PATH="$HOME/.pyenv/versions/3.12.13/bin:$HOME/.pyenv/versions/3.13.13/bin:$PATH"
+```
+
 The supported range is declared once, in `SUPPORTED_PYTHON_VERSIONS` in
 [src/cli_wizard/config/schema.py](src/cli_wizard/config/schema.py). It drives
-cli-wizard's classifiers, tox envlist and CI matrix, and — through a generated
-project's `PythonVersion` — the same in everything cli-wizard generates. Tests
-fail if any of them disagree, so adding a version means updating `tox.ini` and
-`.github/workflows/test.yaml` alongside the constant.
+cli-wizard's classifiers, tox envlist, CI matrices and README badge, and —
+through a generated project's `PythonVersion` — the same in everything
+cli-wizard generates. Tests fail if any of them disagree, so adding a version
+means updating `tox.ini`, `.github/workflows/test.yaml`,
+`.github/workflows/pr-validation.yaml` and the README badge alongside the
+constant.
 
 ## Documentation
 

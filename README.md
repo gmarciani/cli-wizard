@@ -4,7 +4,7 @@
 <img src="https://raw.githubusercontent.com/gmarciani/cli-wizard/main/resources/brand/banner.png" alt="cli-wizard-banner" width="500">
 
 [![PyPI version](https://img.shields.io/pypi/v/cli-wizard.svg)](https://pypi.org/project/cli-wizard)
-[![Python versions](https://img.shields.io/pypi/pyversions/cli-wizard.svg)](https://pypi.org/project/cli-wizard)
+[![Python versions](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://pypi.org/project/cli-wizard)
 [![License](https://img.shields.io/github/license/gmarciani/cli-wizard.svg)](https://github.com/gmarciani/cli-wizard/blob/main/LICENSE)
 [![Build status](https://img.shields.io/github/actions/workflow/status/gmarciani/cli-wizard/test.yaml?branch=main)](https://github.com/gmarciani/cli-wizard/actions)
 [![Tests](https://img.shields.io/github/actions/workflow/status/gmarciani/cli-wizard/test.yaml?branch=main&label=tests)](https://github.com/gmarciani/cli-wizard/actions)

@@ -29,7 +29,7 @@ jobs:
         pip install tox
 
     - name: Run tests on Python ${{ matrix.python-version }}
-      run: tox -e py$(echo "${{ matrix.python-version }}" | tr -d '.')
+      run: tox -e ${{ matrix.python-version }}
 
   quality:
     runs-on: ubuntu-latest

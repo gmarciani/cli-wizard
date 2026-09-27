@@ -983,7 +983,14 @@ class TestPublishedDependenciesAreUsed:
     def test_every_runtime_dependency_is_imported(self, tmp_path):
         """Test that each published dependency is imported by the generated code."""
         output_dir = tmp_path / "test-cli"
-        generator = CliGenerator(config=Config(ProjectName="Test Cli").model_dump())
+        # Target the oldest supported version rather than the default: ruff
+        # formats the output for its target, so a 3.14 target yields syntax
+        # (PEP 758 `except A, B:`) that the 3.12 interpreter running this suite
+        # in CI cannot parse. Every supported interpreter parses 3.12 syntax.
+        config = Config(
+            ProjectName="Test Cli", PythonVersion=SUPPORTED_PYTHON_VERSIONS[0]
+        )
+        generator = CliGenerator(config=config.model_dump())
         generator.generate({}, output_dir, "test-cli", "test_cli")
 
         imported = set()

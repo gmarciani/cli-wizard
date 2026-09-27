@@ -17,6 +17,7 @@ from cli_wizard.commands.bootstrap import (
     _load_existing_config,
     _yaml_value,
 )
+from cli_wizard.config.schema import DEFAULT_PYTHON_VERSION
 
 DEFAULT_ANSWERS = "\n" * len(BOOTSTRAP_PARAMS)
 
@@ -266,7 +267,7 @@ class TestGetDefaultForParam:
     def test_falls_back_to_schema_default(self):
         """Unrecognized params fall back to the schema default value."""
         default = _get_default_for_param("PythonVersion", {}, None)
-        assert default == "3.12"
+        assert default == DEFAULT_PYTHON_VERSION
 
 
 class TestLoadExistingConfig:
