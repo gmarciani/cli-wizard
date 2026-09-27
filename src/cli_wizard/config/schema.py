@@ -20,9 +20,13 @@ from typing import Any, Literal, get_args, get_origin, get_type_hints
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.fields import FieldInfo
 
-# Supported Python versions, oldest first. Adding one means updating tox.ini
-# and .github/workflows/test.yaml too; the tests fail if they disagree.
+# Supported Python versions, oldest first. Adding one means updating tox.ini,
+# the CI workflows and the README badge too; the tests fail if they disagree.
 SUPPORTED_PYTHON_VERSIONS: tuple[str, ...] = ("3.12", "3.13", "3.14")
+
+# The default Python version, 3.14: what a generated project targets unless
+# PythonVersion says otherwise, and what cli-wizard itself develops on.
+DEFAULT_PYTHON_VERSION: str = SUPPORTED_PYTHON_VERSIONS[-1]
 
 
 def python_versions_from(minimum: str) -> list[str]:
@@ -95,7 +99,7 @@ class Config(BaseModel):
 
     # Python settings (prompted during bootstrap)
     PythonVersion: str = Field(
-        default="3.12",
+        default=DEFAULT_PYTHON_VERSION,
         description=(
             f"Minimum Python version, one of {', '.join(SUPPORTED_PYTHON_VERSIONS)}"
         ),

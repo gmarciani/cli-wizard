@@ -82,6 +82,8 @@ cli_wizard = [
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
 
+# Ruff targets the oldest supported version: it emits syntax valid for the
+# target, and newer syntax would be a SyntaxError on 3.12.
 [tool.ruff]
 line-length = 88
 target-version = "py312"
@@ -89,8 +91,9 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 
+# mypy checks against the default interpreter, the newest supported version.
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

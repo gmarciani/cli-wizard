@@ -17,6 +17,7 @@
 
 #### Generated code
 
+- `PythonVersion` defaults to 3.14, the newest supported version, instead of 3.12. Set it explicitly to keep generating projects for older interpreters.
 - Publishes no extras: the dev, test and docs toolchains are PEP 735 dependency groups, and `dev` includes the other two.
 - Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.
 - Catches `OSError` instead of the redundant `(IOError, OSError)` tuple, `IOError` having been an alias of `OSError` since Python 3.3.

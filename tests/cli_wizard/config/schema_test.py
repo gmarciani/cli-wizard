@@ -3,6 +3,7 @@
 
 """Tests for configuration schema."""
 
+import configparser
 import re
 import tomllib
 from datetime import date
@@ -13,9 +14,11 @@ import yaml
 from pydantic import ValidationError
 
 from cli_wizard.config.schema import (
+    DEFAULT_PYTHON_VERSION,
     SUPPORTED_PYTHON_VERSIONS,
     Config,
     python_versions_from,
+    ruff_target_version,
     tox_env_name,
 )
 
@@ -399,9 +402,13 @@ class TestSupportedPythonVersions:
         """Test that every advertised version is actually accepted."""
         assert Config(PythonVersion=version).PythonVersion == version
 
-    def test_default_python_version_is_the_oldest_supported(self):
-        """Test that the default minimum is the oldest version we support."""
-        assert Config().PythonVersion == SUPPORTED_PYTHON_VERSIONS[0]
+    def test_default_python_version_is_supported(self):
+        """Test that the default is one of the versions we support."""
+        assert DEFAULT_PYTHON_VERSION in SUPPORTED_PYTHON_VERSIONS
+
+    def test_config_defaults_to_the_default_python_version(self):
+        """Test that PythonVersion falls back to the declared default."""
+        assert Config().PythonVersion == DEFAULT_PYTHON_VERSION
 
     def test_cli_wizard_requires_python_matches_oldest_supported(self):
         """Test that cli-wizard's own requires-python matches the matrix."""
@@ -442,3 +449,72 @@ class TestSupportedPythonVersions:
         )
         matrix = workflow["jobs"]["test"]["strategy"]["matrix"]["python-version"]
         assert [str(v) for v in matrix] == list(SUPPORTED_PYTHON_VERSIONS)
+
+    def test_cli_wizard_pr_check_covers_supported_versions(self):
+        """Test that the PR check runs the suite on every supported interpreter."""
+        workflow = yaml.safe_load(
+            (REPO_ROOT / ".github" / "workflows" / "pr-validation.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        matrix = workflow["jobs"]["test"]["strategy"]["matrix"]["python-version"]
+        assert [str(v) for v in matrix] == list(SUPPORTED_PYTHON_VERSIONS)
+
+    @pytest.mark.parametrize(
+        "workflow, job",
+        [
+            ("test.yaml", "quality"),
+            ("pr-validation.yaml", "quality"),
+            ("docs.yaml", "build"),
+            ("release.yaml", "publish"),
+        ],
+    )
+    def test_single_version_ci_jobs_use_the_default_version(self, workflow, job):
+        """Test that CI jobs running once use the default interpreter."""
+        loaded = yaml.safe_load(
+            (REPO_ROOT / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
+        )
+        steps = loaded["jobs"][job]["steps"]
+        setup = next(s for s in steps if "setup-python" in s.get("uses", ""))
+        assert str(setup["with"]["python-version"]) == DEFAULT_PYTHON_VERSION
+
+    def test_cli_wizard_tox_defaults_to_the_default_version(self):
+        """Test that environments not named after a version run on the default."""
+        tox_ini = configparser.ConfigParser()
+        tox_ini.read(REPO_ROOT / "tox.ini", encoding="utf-8")
+        versioned = {tox_env_name(v) for v in SUPPORTED_PYTHON_VERSIONS}
+        others = [s for s in tox_ini.sections() if s.startswith("testenv:")]
+        assert others, "expected named tox environments"
+        for section in others:
+            if section.removeprefix("testenv:") in versioned:
+                continue
+            assert tox_ini[section].get("base_python") == tox_env_name(
+                DEFAULT_PYTHON_VERSION
+            ), f"{section} does not run on the default interpreter"
+        assert "base_python" not in tox_ini["testenv"], (
+            "a base_python in [testenv] conflicts with the py3xx environments"
+        )
+
+    def test_cli_wizard_ruff_targets_the_oldest_supported(self):
+        """Test that ruff never emits syntax the oldest interpreter rejects."""
+        pyproject = tomllib.loads(
+            (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        )
+        assert pyproject["tool"]["ruff"]["target-version"] == ruff_target_version(
+            SUPPORTED_PYTHON_VERSIONS[0]
+        )
+
+    def test_cli_wizard_mypy_checks_the_default_version(self):
+        """Test that mypy checks against the default interpreter."""
+        pyproject = tomllib.loads(
+            (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        )
+        assert pyproject["tool"]["mypy"]["python_version"] == (DEFAULT_PYTHON_VERSION)
+
+    def test_cli_wizard_readme_badge_lists_supported_versions(self):
+        """Test that the README badge advertises exactly the supported versions."""
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        badge = re.search(
+            r"img\.shields\.io/badge/python-([^-]+)-blue\.svg", readme
+        ).group(1)
+        assert badge.split("%20%7C%20") == list(SUPPORTED_PYTHON_VERSIONS)

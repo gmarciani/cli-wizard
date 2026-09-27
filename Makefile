@@ -1,6 +1,6 @@
 .PHONY: setup install
 
-PYTHON_VERSION = 3.14.2
+PYTHON_VERSION = 3.14.7
 VENV_NAME = cli-wizard-dev
 
 setup:
