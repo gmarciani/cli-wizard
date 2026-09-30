@@ -289,7 +289,7 @@ class TestGenerateCommand:
             assert result.exit_code == 0
 
     def test_generate_no_api_no_openapi_spec(self):
-        """Test generate without --api and without OpenapiSpec in config."""
+        """Test generate without --api and without Api in config."""
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -310,8 +310,8 @@ class TestGenerateCommand:
             assert result.exit_code == 0
             assert "No OpenAPI spec provided" in result.output
 
-    def test_generate_openapi_spec_from_config(self):
-        """Test generate resolves OpenapiSpec from config relative to config dir."""
+    def test_generate_api_from_config(self):
+        """Test generate resolves Api from config relative to config dir."""
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -321,7 +321,7 @@ class TestGenerateCommand:
             config_path.write_text(
                 "PackageName: test\n"
                 "DefaultBaseUrl: https://api.example.com\n"
-                "OpenapiSpec: openapi.json\n"
+                "Api: openapi.json\n"
             )
 
             result = runner.invoke(
@@ -336,8 +336,8 @@ class TestGenerateCommand:
             assert result.exit_code == 0
             assert "Parsing OpenAPI spec" in result.output
 
-    def test_generate_openapi_spec_from_config_missing(self):
-        """Test generate warns when configured OpenapiSpec file is missing."""
+    def test_generate_api_from_config_missing(self):
+        """Test generate warns when the configured Api file is missing."""
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -345,7 +345,7 @@ class TestGenerateCommand:
             config_path.write_text(
                 "PackageName: test\n"
                 "DefaultBaseUrl: https://api.example.com\n"
-                "OpenapiSpec: missing.json\n"
+                "Api: missing.json\n"
             )
 
             result = runner.invoke(

@@ -277,6 +277,15 @@ class TestConfigSchema:
             )
             assert config.LogTimezone == tz
 
+    def test_api_is_optional(self):
+        """Test that a config without Api validates and leaves it unset."""
+        assert Config(PackageName="my_cli").Api is None
+
+    def test_openapi_spec_is_no_longer_a_parameter(self):
+        """Test that the former OpenapiSpec name is rejected, not silently ignored."""
+        with pytest.raises(ValidationError, match="OpenapiSpec"):
+            Config(PackageName="my_cli", OpenapiSpec="openapi.json")
+
     def test_full_config(self):
         """Test full configuration with all fields."""
         config = Config(
@@ -284,7 +293,7 @@ class TestConfigSchema:
             DefaultBaseUrl="https://api.example.com",
             MainDir="/home/user/.my-cli",
             ProfileFile="/home/user/.my-cli/profiles.yaml",
-            OpenapiSpec="api.yaml",
+            Api="api.yaml",
             ExcludeTags=["internal"],
             IncludeTags=["public"],
             TagMapping={"Users": "user-management"},

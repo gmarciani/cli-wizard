@@ -57,10 +57,10 @@ PythonVersion: "3.12"
 # Default: "#[MainDir]/profiles.yaml"
 # ProfileFile: "#[MainDir]/profiles.yaml"
 
-# Path to OpenAPI spec (relative to config file or absolute)
+# Path to the OpenAPI spec (relative to config file or absolute)
 # Type: str
-# Default: "openapi.json"
-# OpenapiSpec: "openapi.json"
+# Default: null
+# Api: "openapi.json"
 
 # Tags to exclude from generation
 # Type: list

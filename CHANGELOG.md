@@ -12,6 +12,7 @@
 
 #### cli-wizard
 
+- [Breaking] Renamed the `OpenapiSpec` configuration parameter to `Api`, matching the `--api` option of the `generate` command. A configuration still using `OpenapiSpec` is rejected.
 - Publishes no extras: the dev, test and docs toolchains are [PEP 735](https://peps.python.org/pep-0735/) groups, `dev` including the other two.
 - Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.
 
