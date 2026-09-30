@@ -122,9 +122,9 @@ class Config(BaseModel):
     )
 
     # OpenAPI settings
-    OpenapiSpec: str | None = Field(
+    Api: str | None = Field(
         default=None,
-        description="Path to OpenAPI spec (relative to config file or absolute)",
+        description="Path to the OpenAPI spec (relative to config file or absolute)",
     )
     IncludeTags: list[str] = Field(
         default_factory=list,

@@ -27,8 +27,9 @@ logger = logging.getLogger(__name__)
 PATH is the output directory where the CLI project will be generated.
 It can be a relative or absolute path.
 
-If --api is provided, API commands will be generated from the OpenAPI spec.
-Otherwise, a functional CLI is generated without API commands."""
+API commands are generated from the OpenAPI spec given with --api or with the
+Api parameter of the configuration file. Without either, a functional CLI is
+generated without API commands."""
 )
 @click.argument(
     "path",
@@ -47,7 +48,7 @@ Otherwise, a functional CLI is generated without API commands."""
     "-a",
     type=click.Path(exists=True, dir_okay=False, resolve_path=True),
     default=None,
-    help="Path to OpenAPI spec file in YAML or JSON format (optional)",
+    help="Path to the OpenAPI spec file, YAML or JSON",
 )
 @click.option(
     "--force",
@@ -77,20 +78,20 @@ def generate(
     # Load and validate configuration
     cli_config = _load_cli_config(config_path)
 
-    # Resolve OpenAPI spec path: CLI option > config OpenapiSpec > None
+    # Resolve OpenAPI spec path: --api option, else config Api, else none
     api_path: Path | None = None
     if api:
         api_path = Path(api)
-    elif cli_config.get("OpenapiSpec"):
+    elif cli_config.get("Api"):
         # Resolve relative to config file directory
-        spec_path = Path(cli_config["OpenapiSpec"])
+        spec_path = Path(cli_config["Api"])
         if not spec_path.is_absolute():
             spec_path = config_path.parent / spec_path
         if spec_path.exists():
             api_path = spec_path
         else:
             click.secho(
-                f"⚠️  OpenapiSpec '{cli_config['OpenapiSpec']}' not found, "
+                f"⚠️  Api '{cli_config['Api']}' not found, "
                 "generating CLI without API commands",
                 fg="yellow",
             )
