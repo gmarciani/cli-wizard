@@ -103,14 +103,15 @@ IncludeTags:
 
 ### Step 3: Generate the CLI
 
-Run the `generate` command, passing the output directory, the configuration file
-and the OpenAPI spec:
+Run the `generate` command, passing the configuration file and the OpenAPI spec:
 
 ```shell
-cli-wizard generate my-cli --configuration cli-wizard.yaml --api openapi.yaml
+cli-wizard generate --configuration cli-wizard.yaml --api openapi.yaml
 ```
 
-This creates a complete Python CLI project in the `my-cli` directory.
+This creates a complete Python CLI project in the `my-cli` directory, named
+after `CommandName` and placed next to the configuration file. Pass `--output`
+to write it elsewhere.
 
 ### Step 4: Install the Generated CLI
 
@@ -141,16 +142,14 @@ See the [examples](examples/) directory for complete configuration examples.
 Generate a CLI from a configuration file and an OpenAPI specification.
 
 ```shell
-cli-wizard generate [OPTIONS] PATH
+cli-wizard generate [OPTIONS]
 ```
-
-`PATH` is the output directory. Its contents are replaced, after confirmation
-when it is not empty.
 
 Options:
 - `--api, -a` - Path to the OpenAPI spec file, YAML or JSON. Without it and without `Api` in the configuration, the CLI is generated without API commands
 - `--configuration, -c` - Path to the `cli-wizard.yaml` configuration file (required)
-- `--force, -f` - Skip the confirmation prompt when `PATH` is not empty
+- `--output, -o` - Output directory (default: a directory named after `CommandName` next to the configuration file). Its contents are replaced, after confirmation when it is not empty
+- `--force, -f` - Skip the confirmation prompt when the output directory is not empty
 
 ## Issues
 

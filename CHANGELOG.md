@@ -12,6 +12,7 @@
 
 #### cli-wizard
 
+- [Breaking] `generate` and `bootstrap` take the output directory with `--output` instead of a positional argument. It defaults to a directory named after `CommandName` next to the configuration file, and both commands refuse an output directory that contains the configuration file.
 - [Breaking] Renamed the `OpenapiSpec` configuration parameter to `Api`, matching the `--api` option of the `generate` command. A configuration still using `OpenapiSpec` is rejected.
 - Publishes no extras: the dev, test and docs toolchains are [PEP 735](https://peps.python.org/pep-0735/) groups, `dev` including the other two.
 - Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.

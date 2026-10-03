@@ -24,17 +24,20 @@ logger = logging.getLogger(__name__)
 @click.command(
     help="""Generate the CLI from config and OpenAPI spec.
 
-PATH is the output directory where the CLI project will be generated.
-It can be a relative or absolute path.
-
 API commands are generated from the OpenAPI spec given with --api or with the
 Api parameter of the configuration file. Without either, a functional CLI is
-generated without API commands."""
+generated without API commands.
+
+The project is written to the --output directory, by default a directory named
+after CommandName next to the configuration file. Its previous contents are
+deleted."""
 )
-@click.argument(
-    "path",
-    type=click.Path(file_okay=False, resolve_path=True),
-    required=True,
+@click.option(
+    "--api",
+    "-a",
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+    default=None,
+    help="Path to the OpenAPI spec file, YAML or JSON",
 )
 @click.option(
     "--configuration",
@@ -44,11 +47,11 @@ generated without API commands."""
     help=f"Path to {CONFIG_FILE_NAME} configuration file",
 )
 @click.option(
-    "--api",
-    "-a",
-    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+    "--output",
+    "-o",
+    type=click.Path(file_okay=False, resolve_path=True),
     default=None,
-    help="Path to the OpenAPI spec file, YAML or JSON",
+    help="Output directory (default: CommandName next to the configuration file)",
 )
 @click.option(
     "--force",
@@ -59,24 +62,27 @@ generated without API commands."""
 @click.pass_context
 def generate(
     ctx: click.Context,
-    path: str,
-    configuration: str,
     api: str | None,
+    configuration: str,
+    output: str | None,
     force: bool,
 ) -> None:
     """Generate command implementation."""
     debug = ctx.obj.get("debug", False) if ctx.obj else False
 
-    output_path = Path(path)
     config_path = Path(configuration)
 
     if debug:
-        logger.debug(f"Output directory: {output_path}")
         logger.debug(f"Config file: {config_path}")
         logger.debug(f"OpenAPI spec (CLI): {api}")
+        logger.debug(f"Output directory (CLI): {output}")
 
     # Load and validate configuration
     cli_config = _load_cli_config(config_path)
+    output_path = resolve_output_dir(output, config_path, cli_config["CommandName"])
+
+    if debug:
+        logger.debug(f"Output directory (resolved): {output_path}")
 
     # Resolve OpenAPI spec path: --api option, else config Api, else none
     api_path: Path | None = None
@@ -188,6 +194,29 @@ def generate(
     click.secho("📋 Validate:", fg="cyan", bold=True)
     click.echo(f"   pip install -e {output_path}")
     click.echo(f"   {cli_name} --help")
+
+
+def resolve_output_dir(
+    output: str | None, config_path: Path, command_name: str
+) -> Path:
+    """Return the directory to write the project to.
+
+    Without an explicit ``--output`` it is a directory named after
+    ``CommandName`` next to the configuration file, the layout ``bootstrap``
+    produces and ``examples/`` uses. The output directory is deleted before
+    generation, so one that contains the configuration file is refused rather
+    than destroying the file that describes the project.
+    """
+    output_path = Path(output) if output else config_path.parent / command_name
+    if output_path == config_path.parent or output_path in config_path.parents:
+        click.secho(
+            f"✗ Output directory '{output_path}' contains the configuration "
+            f"file '{config_path}'. Choose a different --output.",
+            fg="red",
+            err=True,
+        )
+        raise SystemExit(1)
+    return output_path
 
 
 def _load_cli_config(config_path: Path) -> dict:

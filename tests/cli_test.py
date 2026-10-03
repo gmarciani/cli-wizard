@@ -38,4 +38,5 @@ def test_generate_command_options():
     assert result.exit_code == 0
     assert "--api" in result.output or "-a" in result.output
     assert "--configuration" in result.output or "-c" in result.output
-    assert "PATH" in result.output
+    assert "--output" in result.output or "-o" in result.output
+    assert "PATH" not in result.output

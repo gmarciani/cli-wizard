@@ -66,7 +66,8 @@ class TestGenerateCommand:
         assert result.exit_code == 0
         assert "--api" in result.output or "-a" in result.output
         assert "--configuration" in result.output or "-c" in result.output
-        assert "PATH" in result.output
+        assert "--output" in result.output or "-o" in result.output
+        assert "PATH" not in result.output
 
     def test_generate_missing_openapi(self):
         """Test generate with missing OpenAPI file."""
@@ -82,6 +83,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(output_dir),
                     "--api",
                     "nonexistent.yaml",
@@ -104,6 +106,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(output_dir),
                     "--api",
                     str(openapi_path),
@@ -126,6 +129,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(output_dir),
                     "--api",
                     str(openapi_path),
@@ -151,6 +155,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(output_dir),
                     "--api",
                     str(openapi_path),
@@ -176,6 +181,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(output_dir),
                     "--api",
                     str(openapi_path),
@@ -212,6 +218,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(temp_path / "output"),
                     "--api",
                     str(openapi_path),
@@ -256,6 +263,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(temp_path / "output"),
                     "--api",
                     str(openapi_path),
@@ -279,6 +287,7 @@ class TestGenerateCommand:
                 [
                     "--debug",
                     "generate",
+                    "--output",
                     str(output_dir),
                     "--api",
                     str(openapi_path),
@@ -302,6 +311,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(temp_path / "output"),
                     "--configuration",
                     str(config_path),
@@ -328,6 +338,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(temp_path / "output"),
                     "--configuration",
                     str(config_path),
@@ -352,6 +363,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(temp_path / "output"),
                     "--configuration",
                     str(config_path),
@@ -374,6 +386,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(output_dir),
                     "--force",
                     "--api",
@@ -400,6 +413,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(output_dir),
                     "--api",
                     str(openapi_path),
@@ -428,6 +442,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(output_dir),
                     "--api",
                     str(openapi_path),
@@ -455,6 +470,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(output_dir),
                     "--api",
                     str(openapi_path),
@@ -479,6 +495,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(output_dir),
                     "--api",
                     str(openapi_path),
@@ -490,26 +507,81 @@ class TestGenerateCommand:
             assert result.exit_code == 0
             assert "entire contents will be deleted" not in result.output
 
-    def test_generate_output_dir_is_cwd_fails(self):
+    def test_generate_output_dir_is_cwd_fails(self, tmp_path, monkeypatch):
         """Test generate refuses to clean the output directory when it is cwd."""
         runner = CliRunner()
-        with runner.isolated_filesystem() as temp_dir:
-            temp_path = Path(temp_dir)
-            openapi_path, config_path = create_test_files(temp_path)
+        openapi_path, config_path = create_test_files(tmp_path)
+        output_dir = tmp_path / "output"
+        (output_dir / "inner").mkdir(parents=True)
+        monkeypatch.chdir(output_dir / "inner")
 
-            result = runner.invoke(
-                main,
-                [
-                    "generate",
-                    ".",
-                    "--api",
-                    str(openapi_path),
-                    "--configuration",
-                    str(config_path),
-                ],
-            )
-            assert result.exit_code == 1
-            assert "Cannot clean output directory" in result.output
+        result = runner.invoke(
+            main,
+            [
+                "generate",
+                "--output",
+                str(output_dir),
+                "--api",
+                str(openapi_path),
+                "--configuration",
+                str(config_path),
+            ],
+        )
+        assert result.exit_code == 1
+        assert "Cannot clean output directory" in result.output
+
+    def test_generate_output_defaults_to_command_name_beside_config(self, tmp_path):
+        """Test that without --output the project lands beside the config."""
+        runner = CliRunner()
+        config_dir = tmp_path / "project"
+        config_dir.mkdir()
+        openapi_path, _ = create_test_files(tmp_path)
+        config_path = config_dir / "cli-wizard.yaml"
+        config_path.write_text(
+            "CommandName: pet-store\n"
+            "PackageName: pet_store\n"
+            "DefaultBaseUrl: https://api.example.com\n"
+        )
+
+        result = runner.invoke(
+            main,
+            [
+                "generate",
+                "--api",
+                str(openapi_path),
+                "--configuration",
+                str(config_path),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert (config_dir / "pet-store" / "pyproject.toml").exists()
+        assert config_path.exists()
+
+    def test_generate_refuses_output_containing_the_config(self, tmp_path):
+        """Test that an output directory holding the config file is left alone."""
+        runner = CliRunner()
+        openapi_path, config_path = create_test_files(tmp_path)
+        (tmp_path / "keep.txt").write_text("keep")
+
+        result = runner.invoke(
+            main,
+            [
+                "generate",
+                "--output",
+                str(tmp_path),
+                "--api",
+                str(openapi_path),
+                "--configuration",
+                str(config_path),
+                "--force",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "contains the configuration file" in result.output
+        assert config_path.exists()
+        assert (tmp_path / "keep.txt").exists()
 
     def test_generate_invalid_field_value(self):
         """Test generate with a syntactically valid but semantically invalid config."""
@@ -529,6 +601,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(temp_path / "output"),
                     "--api",
                     str(openapi_path),
@@ -571,6 +644,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(temp_path / "output"),
                     "--api",
                     str(openapi_path),
@@ -605,6 +679,7 @@ class TestGenerateCommand:
                     main,
                     [
                         "generate",
+                        "--output",
                         str(output_dir),
                         "--api",
                         str(openapi_path),
@@ -635,6 +710,7 @@ class TestGenerateCommand:
                 main,
                 [
                     "generate",
+                    "--output",
                     str(temp_path / "output"),
                     "--api",
                     str(openapi_path),
