@@ -19,7 +19,7 @@ releases. Not covered there:
 pytest tests/cli_wizard/generator/generator_test.py::TestBuildUrlPath -v
 
 # End-to-end against the bundled example
-cli-wizard generate examples/my-cli --configuration examples/cli-wizard.yaml --api examples/openapi.json
+cli-wizard generate --configuration examples/cli-wizard.yaml --api examples/openapi.json
 ```
 
 ## Architecture

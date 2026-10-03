@@ -48,7 +48,8 @@ class TestBootstrapCommand:
         runner = CliRunner()
         result = runner.invoke(main, ["bootstrap", "--help"])
         assert result.exit_code == 0
-        assert "PATH" in result.output
+        assert "PATH" not in result.output
+        assert "--output" in result.output
         assert "--force" in result.output
         assert "--configuration" in result.output
 
@@ -62,6 +63,7 @@ class TestBootstrapCommand:
             main,
             [
                 "bootstrap",
+                "--output",
                 str(target_dir),
                 "--configuration",
                 str(config_path),
@@ -83,7 +85,13 @@ class TestBootstrapCommand:
 
         result = runner.invoke(
             main,
-            ["bootstrap", str(target_dir), "--configuration", str(config_path)],
+            [
+                "bootstrap",
+                "--output",
+                str(target_dir),
+                "--configuration",
+                str(config_path),
+            ],
             input=DEFAULT_ANSWERS,
         )
 
@@ -99,8 +107,14 @@ class TestBootstrapCommand:
 
         result = runner.invoke(
             main,
-            ["bootstrap", str(target_dir), "--configuration", str(config_path)],
-            input="y\n" + DEFAULT_ANSWERS,
+            [
+                "bootstrap",
+                "--output",
+                str(target_dir),
+                "--configuration",
+                str(config_path),
+            ],
+            input=DEFAULT_ANSWERS + "y\n",
         )
 
         assert result.exit_code == 0, result.output
@@ -116,8 +130,14 @@ class TestBootstrapCommand:
 
         result = runner.invoke(
             main,
-            ["bootstrap", str(target_dir), "--configuration", str(config_path)],
-            input="n\n",
+            [
+                "bootstrap",
+                "--output",
+                str(target_dir),
+                "--configuration",
+                str(config_path),
+            ],
+            input=DEFAULT_ANSWERS + "n\n",
         )
 
         assert result.exit_code == 1
@@ -136,6 +156,7 @@ class TestBootstrapCommand:
             main,
             [
                 "bootstrap",
+                "--output",
                 str(target_dir),
                 "--force",
                 "--configuration",
@@ -158,7 +179,13 @@ class TestBootstrapCommand:
 
         result = runner.invoke(
             main,
-            ["bootstrap", str(target_dir), "--configuration", str(config_path)],
+            [
+                "bootstrap",
+                "--output",
+                str(target_dir),
+                "--configuration",
+                str(config_path),
+            ],
             input=DEFAULT_ANSWERS,
         )
 
@@ -174,12 +201,88 @@ class TestBootstrapCommand:
 
         result = runner.invoke(
             main,
-            ["bootstrap", str(target_dir)],
+            ["bootstrap", "--output", str(target_dir)],
             input=DEFAULT_ANSWERS,
         )
 
         assert result.exit_code == 0, result.output
         assert (tmp_path / "cli-wizard.yaml").exists()
+
+    def test_bootstrap_output_defaults_to_command_name_beside_config(self, tmp_path):
+        """Test that without --output the project lands beside the config."""
+        runner = CliRunner()
+        config_path = tmp_path / "nested" / "cli-wizard.yaml"
+        answers = "pet-store\n" + "\n" * (len(BOOTSTRAP_PARAMS) - 1)
+
+        result = runner.invoke(
+            main,
+            ["bootstrap", "--configuration", str(config_path)],
+            input=answers,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "nested" / "pet-store" / "pyproject.toml").exists()
+        assert "cli-wizard generate --configuration" in result.output
+        assert "--output" not in result.output.split("Next steps")[1]
+
+    def test_bootstrap_next_step_repeats_an_explicit_output(self, tmp_path):
+        """Test that the suggested generate command keeps a non-default --output."""
+        runner = CliRunner()
+        target_dir = tmp_path / "elsewhere"
+        config_path = tmp_path / "cli-wizard.yaml"
+
+        result = runner.invoke(
+            main,
+            [
+                "bootstrap",
+                "--output",
+                str(target_dir),
+                "--configuration",
+                str(config_path),
+            ],
+            input=DEFAULT_ANSWERS,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert f"--output {target_dir}" in result.output
+
+    def test_bootstrap_refuses_output_containing_the_config(self, tmp_path):
+        """Test that the config file is never written inside the output directory."""
+        runner = CliRunner()
+        config_path = tmp_path / "cli-wizard.yaml"
+
+        result = runner.invoke(
+            main,
+            [
+                "bootstrap",
+                "--output",
+                str(tmp_path),
+                "--configuration",
+                str(config_path),
+            ],
+            input=DEFAULT_ANSWERS,
+        )
+
+        assert result.exit_code == 1
+        assert "contains the configuration file" in result.output
+        assert not config_path.exists()
+
+    def test_command_name_defaults_to_the_config_directory_without_output(
+        self, tmp_path
+    ):
+        """Test that the CommandName prompt defaults to the config file's directory."""
+        runner = CliRunner()
+        config_path = tmp_path / "Pet Store" / "cli-wizard.yaml"
+
+        result = runner.invoke(
+            main,
+            ["bootstrap", "--configuration", str(config_path)],
+            input=DEFAULT_ANSWERS,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "CLI command name" in result.output
+        assert "[pet-store]:" in result.output
 
     def test_bootstrap_with_debug(self, tmp_path):
         """Test bootstrap with --debug flag enabled."""
@@ -192,6 +295,7 @@ class TestBootstrapCommand:
             [
                 "--debug",
                 "bootstrap",
+                "--output",
                 str(target_dir),
                 "--configuration",
                 str(config_path),

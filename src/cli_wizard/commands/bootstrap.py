@@ -15,6 +15,7 @@ import yaml
 from jinja2 import Environment, PackageLoader
 from pydantic import ValidationError
 
+from cli_wizard.commands.generate import resolve_output_dir
 from cli_wizard.config.schema import Config
 from cli_wizard.constants import CONFIG_FILE_NAME
 from cli_wizard.generator import CliGenerator
@@ -124,19 +125,8 @@ You will be guided through a step by step procedure to generate
 a basic CLI and an extensible configuration file to evolve it.
 No OpenAPI file is required.
 
-PATH is the directory where the project will be created.
-It can be a relative or absolute path."""
-)
-@click.argument(
-    "path",
-    type=click.Path(file_okay=False, resolve_path=True),
-    required=True,
-)
-@click.option(
-    "--force",
-    "-f",
-    is_flag=True,
-    help="Skip confirmation prompt if directory exists and is not empty",
+The project is written to the --output directory, by default a directory named
+after CommandName next to the configuration file."""
 )
 @click.option(
     "--configuration",
@@ -145,13 +135,25 @@ It can be a relative or absolute path."""
     default=None,
     help=f"Path for {CONFIG_FILE_NAME} (default: ./{CONFIG_FILE_NAME})",
 )
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(file_okay=False, resolve_path=True),
+    default=None,
+    help="Output directory (default: CommandName next to the configuration file)",
+)
+@click.option(
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Skip confirmation prompt if directory exists and is not empty",
+)
 @click.pass_context
 def bootstrap(
-    ctx: click.Context, path: str, force: bool, configuration: str | None
+    ctx: click.Context, configuration: str | None, output: str | None, force: bool
 ) -> None:
     """Bootstrap command implementation."""
     debug = ctx.obj.get("debug", False) if ctx.obj else False
-    target_dir = Path(path)
 
     # Determine where to write config file
     if configuration:
@@ -160,21 +162,9 @@ def bootstrap(
         config_path = Path.cwd() / CONFIG_FILE_NAME
 
     if debug:
-        logger.debug(f"Target directory: {target_dir}")
         logger.debug(f"Config path: {config_path}")
+        logger.debug(f"Output directory (CLI): {output}")
         logger.debug(f"Force mode: {force}")
-
-    # Check if directory exists and is not empty
-    if target_dir.exists():
-        contents = list(target_dir.iterdir())
-        if contents and not force:
-            click.secho(
-                f"⚠️  Directory '{target_dir}' already exists and is not empty.",
-                fg="yellow",
-            )
-            if not click.confirm("Do you want to continue anyway?"):
-                click.secho("Aborted.", fg="red")
-                raise SystemExit(1)
 
     # Load existing config if available (for default values)
     existing_config = _load_existing_config(config_path)
@@ -184,8 +174,11 @@ def bootstrap(
     # Gather project information interactively
     click.secho("\n📋 Project Configuration\n", fg="cyan", bold=True)
 
-    # Collect values for bootstrap parameters
-    values: dict = {"_target_dir_name": target_dir.name}
+    # Collect values for bootstrap parameters. CommandName defaults to the
+    # name of the output directory when one is given, else to the name of the
+    # directory the configuration file lives in.
+    target_dir_name = Path(output).name if output else config_path.parent.name
+    values: dict = {"_target_dir_name": target_dir_name}
 
     for param_name in BOOTSTRAP_PARAMS:
         description = Config.get_field_description(param_name)
@@ -214,6 +207,23 @@ def bootstrap(
 
     if debug:
         logger.debug(f"Config: {cli_config}")
+
+    target_dir = resolve_output_dir(output, config_path, cli_config["CommandName"])
+
+    if debug:
+        logger.debug(f"Output directory (resolved): {target_dir}")
+
+    # Check if directory exists and is not empty
+    if target_dir.exists():
+        contents = list(target_dir.iterdir())
+        if contents and not force:
+            click.secho(
+                f"⚠️  Directory '{target_dir}' already exists and is not empty.",
+                fg="yellow",
+            )
+            if not click.confirm("Do you want to continue anyway?"):
+                click.secho("Aborted.", fg="red")
+                raise SystemExit(1)
 
     # Generate config file
     click.echo()
@@ -253,7 +263,10 @@ def bootstrap(
     click.echo()
     click.secho("📋 Next steps:", fg="cyan", bold=True)
     click.echo(f"   Customize {config_path}")
-    click.echo(f"   cli-wizard generate --configuration {config_path} {target_dir}")
+    next_command = f"cli-wizard generate --configuration {config_path}"
+    if output:
+        next_command += f" --output {target_dir}"
+    click.echo(f"   {next_command}")
 
 
 def _yaml_value(value: Any) -> str:
