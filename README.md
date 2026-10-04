@@ -49,7 +49,8 @@ Generate modern CLIs from OpenAPI specifications.
 
 ### Developer Experience
 - Generated projects are pip-installable out of the box
-- Auto-generated `pyproject.toml`, `README.md`, and `VERSION`
+- Auto-generated `pyproject.toml` and `VERSION`
+- Auto-generated `README.md` with a command reference, profile setup, authentication and configuration precedence
 - Resources (CA certs, splash files) bundled in the package
 - Profile management for storing credentials and settings
 
