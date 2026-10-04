@@ -67,6 +67,8 @@ class TestGenerateCommand:
         assert "--api" in result.output or "-a" in result.output
         assert "--configuration" in result.output or "-c" in result.output
         assert "--output" in result.output or "-o" in result.output
+        assert "--project-name" in result.output
+        assert "[required]" not in result.output
         assert "PATH" not in result.output
 
     def test_generate_missing_openapi(self):
@@ -557,6 +559,58 @@ class TestGenerateCommand:
         assert result.exit_code == 0, result.output
         assert (config_dir / "pet-store" / "pyproject.toml").exists()
         assert config_path.exists()
+
+    def test_generate_without_configuration_uses_project_name(
+        self, tmp_path, monkeypatch
+    ):
+        """Test that --project-name alone is enough: no configuration file needed."""
+        runner = CliRunner()
+        monkeypatch.chdir(tmp_path)
+        openapi_path, _ = create_test_files(tmp_path)
+
+        result = runner.invoke(
+            main,
+            ["generate", "--api", str(openapi_path), "--project-name", "My CLI"],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "Generated CLI 'my-cli'" in result.output
+        assert (tmp_path / "my-cli" / "src" / "my_cli" / "cli.py").exists()
+        assert (tmp_path / "my-cli" / "src" / "my_cli" / "commands").exists()
+
+    def test_generate_without_any_input_uses_schema_defaults(
+        self, tmp_path, monkeypatch
+    ):
+        """Test that generate runs with neither a configuration nor a project name."""
+        runner = CliRunner()
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(main, ["generate"])
+
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "my-project" / "pyproject.toml").exists()
+
+    def test_project_name_option_overrides_the_configuration(self, tmp_path):
+        """Test that --project-name wins over ProjectName in the file."""
+        runner = CliRunner()
+        openapi_path, config_path = create_test_files(tmp_path, cli_name="from-file")
+
+        result = runner.invoke(
+            main,
+            [
+                "generate",
+                "--api",
+                str(openapi_path),
+                "--configuration",
+                str(config_path),
+                "--project-name",
+                "From Option",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "from-option" / "pyproject.toml").exists()
+        assert not (tmp_path / "from-file").exists()
 
     def test_generate_refuses_output_containing_the_config(self, tmp_path):
         """Test that an output directory holding the config file is left alone."""

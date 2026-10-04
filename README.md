@@ -82,38 +82,19 @@ paths:
           description: OK
 ```
 
-### Step 2: Create a Configuration File
+### Step 2: Generate the CLI
 
-Create a `cli-wizard.yaml` file with your CLI settings. At minimum, you need `PackageName` and `DefaultBaseUrl`:
-
-```yaml
-# Required parameters
-PackageName: "my-cli"
-DefaultBaseUrl: "https://api.example.com"
-
-# Optional: customize the splash screen
-SplashFile: "splash.txt"
-SplashColor: "#00FFFF"
-
-# Optional: filter which tags to include
-IncludeTags:
-  - Users
-  - Products
-```
-
-### Step 3: Generate the CLI
-
-Run the `generate` command, passing the configuration file and the OpenAPI spec:
+Run the `generate` command, passing the OpenAPI spec and a project name:
 
 ```shell
-cli-wizard generate --configuration cli-wizard.yaml --api openapi.yaml
+cli-wizard generate --api openapi.yaml --project-name "My CLI"
 ```
 
-This creates a complete Python CLI project in the `my-cli` directory, named
-after `CommandName` and placed next to the configuration file. Pass `--output`
-to write it elsewhere.
+This creates a complete Python CLI project in the `my-cli` directory: the
+command name derives from the project name, and every other setting takes its
+default. Pass `--output` to write it elsewhere.
 
-### Step 4: Install the Generated CLI
+### Step 3: Install the Generated CLI
 
 Navigate to the generated project and install it:
 
@@ -121,13 +102,39 @@ Navigate to the generated project and install it:
 pip install -e my-cli
 ```
 
-### Step 5: Use Your CLI
+### Step 4: Use Your CLI
 
 Your CLI is now ready to use:
 
 ```shell
 my-cli --help
 my-cli users list-users
+```
+
+### Step 5: Customize with a Configuration File
+
+To go beyond the defaults, create a `cli-wizard.yaml` file with the settings you
+want to change. Every parameter is optional:
+
+```yaml
+ProjectName: "My CLI"
+DefaultBaseUrl: "https://api.example.com"
+
+# Customize the splash screen
+SplashFile: "splash.txt"
+SplashColor: "#00FFFF"
+
+# Filter which tags to include
+IncludeTags:
+  - Users
+  - Products
+```
+
+Then generate from it. The project lands next to the configuration file, in a
+directory named after `CommandName`:
+
+```shell
+cli-wizard generate --configuration cli-wizard.yaml --api openapi.yaml
 ```
 
 ## Configuration
@@ -139,7 +146,7 @@ See the [examples](examples/) directory for complete configuration examples.
 
 ### cli-wizard generate
 
-Generate a CLI from a configuration file and an OpenAPI specification.
+Generate a CLI from an OpenAPI specification, with an optional configuration file.
 
 ```shell
 cli-wizard generate [OPTIONS]
@@ -147,8 +154,9 @@ cli-wizard generate [OPTIONS]
 
 Options:
 - `--api, -a` - Path to the OpenAPI spec file, YAML or JSON. Without it and without `Api` in the configuration, the CLI is generated without API commands
-- `--configuration, -c` - Path to the `cli-wizard.yaml` configuration file (required)
-- `--output, -o` - Output directory (default: a directory named after `CommandName` next to the configuration file). Its contents are replaced, after confirmation when it is not empty
+- `--project-name, -p` - Human-readable project name; `CommandName` and `PackageName` derive from it unless the configuration sets them
+- `--configuration, -c` - Path to the `cli-wizard.yaml` configuration file. Without it, every parameter takes its default
+- `--output, -o` - Output directory (default: a directory named after `CommandName` next to the configuration file, or in the current directory without one). Its contents are replaced, after confirmation when it is not empty
 - `--force, -f` - Skip the confirmation prompt when the output directory is not empty
 
 ## Issues

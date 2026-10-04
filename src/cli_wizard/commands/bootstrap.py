@@ -208,7 +208,7 @@ def bootstrap(
     if debug:
         logger.debug(f"Config: {cli_config}")
 
-    target_dir = resolve_output_dir(output, config_path, cli_config["CommandName"])
+    target_dir = resolve_output_dir(output, cli_config["CommandName"], config_path)
 
     if debug:
         logger.debug(f"Output directory (resolved): {target_dir}")
