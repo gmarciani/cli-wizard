@@ -12,7 +12,12 @@ from typing import Any
 
 import yaml
 
-from my_cli.constants import ENV_PREFIX, PROFILE_DEFAULTS, PROFILE_FILE
+from my_cli.constants import (
+    ENV_PREFIX,
+    PROFILE_CHOICES,
+    PROFILE_DEFAULTS,
+    PROFILE_FILE,
+)
 from my_cli.logging import (
     log_debug,
     log_error,
@@ -61,11 +66,16 @@ def _coerce(key: str, value: Any, default: Any) -> Any:
     """
     if default is None:
         return value
-    if isinstance(default, str):
-        return value if isinstance(value, str) else str(value)
 
     text = str(value).strip()
     try:
+        choices = PROFILE_CHOICES.get(key)
+        if choices is not None:
+            if text in choices:
+                return text
+            raise ValueError(f"'{value}' is not one of {', '.join(choices)}")
+        if isinstance(default, str):
+            return value if isinstance(value, str) else str(value)
         # bool is a subclass of int, so it has to be tested first.
         if isinstance(default, bool):
             if text.lower() in _TRUTHY:

@@ -14,6 +14,7 @@ from my_cli.commands.config import config
 from my_cli.commands.private import private
 from my_cli.commands.public import public
 from my_cli.constants import (
+    OUTPUT_FORMATS,
     SPLASH_COLOR,
     SPLASH_ENABLED,
     SPLASH_FILE,
@@ -62,6 +63,12 @@ def _show_splash() -> None:
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="CA certificate file for SSL verification.",
 )
+@click.option(
+    "--output",
+    "-o",
+    type=click.Choice(OUTPUT_FORMATS),
+    help="Output format, overriding the outputFormat setting.",
+)
 @click.pass_context
 def main(
     ctx: click.Context,
@@ -70,6 +77,7 @@ def main(
     base_url: str | None,
     no_verify_ssl: bool,
     ca_file: Path | None,
+    output: str | None,
 ) -> None:
     """Main CLI entry point."""
     ctx.ensure_object(dict)
@@ -89,6 +97,7 @@ def main(
     ctx.obj["base_url"] = base_url
     ctx.obj["no_verify_ssl"] = no_verify_ssl
     ctx.obj["ca_file"] = ca_file
+    ctx.obj["output"] = output
 
     # Show help when no subcommand is invoked
     if ctx.invoked_subcommand is None:

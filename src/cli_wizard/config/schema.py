@@ -411,6 +411,17 @@ class Config(BaseModel):
         return None
 
     @classmethod
+    def get_field_choices(cls, field_name: str) -> tuple[Any, ...] | None:
+        """Get the values a Literal field accepts, in declaration order.
+
+        Returns None for a field that is not a Literal, or for an unknown field.
+        """
+        field_info = cls.get_field_info(field_name)
+        if field_info is None or get_origin(field_info.annotation) is not Literal:
+            return None
+        return get_args(field_info.annotation)
+
+    @classmethod
     def parse_cli_value(cls, field_name: str, raw: str) -> Any:
         """Convert a raw CLI string argument into a value for ``field_name``.
 

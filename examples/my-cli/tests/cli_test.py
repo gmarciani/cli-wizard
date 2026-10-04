@@ -46,6 +46,7 @@ from my_cli.logging import (
 from my_cli.logging import (
     _hex_to_rgb as logging_hex_to_rgb,
 )
+from my_cli.output import render, render_table
 from my_cli.profile import (
     _create_default_profile_file,
     env_var_name,
@@ -89,6 +90,12 @@ class TestCli:
         runner = CliRunner()
         result = runner.invoke(main, ["--debug", "--help"])
         assert result.exit_code == 0
+
+    def test_main_rejects_an_unknown_output_format(self):
+        """Test --output takes the advertised formats only."""
+        result = CliRunner().invoke(main, ["--output", "xml", "config", "show"])
+        assert result.exit_code == 2
+        assert "'json', 'table', 'yaml'" in result.output
 
     def test_main_with_profile_option(self):
         """Test main with profile option."""
@@ -969,6 +976,101 @@ class TestApiClient:
 
 
 # =============================================================================
+# Output Tests
+# =============================================================================
+
+RECORDS = [{"id": 1, "name": "alpha", "tags": ["a"]}, {"id": 2, "name": "beta"}]
+
+
+class TestOutput:
+    """Tests for rendering a response in each output format."""
+
+    def test_json_is_indented_as_asked(self):
+        """Test the JSON output uses the given indentation."""
+        assert render({"a": 1}, "json", json_indent=4) == '{\n    "a": 1\n}'
+
+    def test_yaml_keeps_the_key_order(self):
+        """Test the YAML output lists keys as the API sent them."""
+        assert render({"b": 1, "a": [1, 2]}, "yaml") == "b: 1\na:\n- 1\n- 2"
+
+    def test_unknown_format_is_rejected(self):
+        """Test an unknown format raises instead of printing something else."""
+        with pytest.raises(ValueError, match="Unknown output format"):
+            render({}, "xml")
+
+    def test_unknown_table_style_is_rejected(self):
+        """Test an unknown table style raises instead of picking one."""
+        with pytest.raises(ValueError, match="Unknown table style"):
+            render_table([], "fancy")
+
+    @pytest.mark.parametrize(
+        "style,expected",
+        [
+            (
+                "rounded",
+                "╭────┬───────┬───────╮\n"
+                "│ id │ name  │ tags  │\n"
+                "├────┼───────┼───────┤\n"
+                '│ 1  │ alpha │ ["a"] │\n'
+                "│ 2  │ beta  │       │\n"
+                "╰────┴───────┴───────╯",
+            ),
+            (
+                "ascii",
+                "+----+-------+-------+\n"
+                "| id | name  | tags  |\n"
+                "+----+-------+-------+\n"
+                '| 1  | alpha | ["a"] |\n'
+                "| 2  | beta  |       |\n"
+                "+----+-------+-------+",
+            ),
+            (
+                "minimal",
+                'id  name   tags\n--  -----  -----\n1   alpha  ["a"]\n2   beta',
+            ),
+            (
+                "markdown",
+                "| id | name  | tags  |\n"
+                "|----|-------|-------|\n"
+                '| 1  | alpha | ["a"] |\n'
+                "| 2  | beta  |       |",
+            ),
+        ],
+    )
+    def test_table_styles(self, style, expected):
+        """Test each table style draws the borders it is named after."""
+        assert render(RECORDS, "table", table_style=style) == expected
+
+    def test_table_columns_are_the_union_of_the_keys(self):
+        """Test a key missing from the first record still gets a column."""
+        table = render_table([{"a": 1}, {"b": 2}], "minimal")
+        assert table.splitlines()[0] == "a  b"
+
+    def test_table_of_an_object_lists_its_fields(self):
+        """Test a single object becomes a key/value table."""
+        table = render_table({"id": 7, "owner": {"name": "ann"}}, "minimal")
+        assert table == (
+            'key    value\n-----  ---------------\nid     7\nowner  {"name": "ann"}'
+        )
+
+    def test_table_of_scalars_is_a_single_column(self):
+        """Test a list of scalars becomes a one-column table."""
+        assert render_table(["x", "y"], "minimal") == "value\n-----\nx\ny"
+
+    def test_table_of_nothing_is_empty(self):
+        """Test an empty list renders as nothing rather than a bare header."""
+        assert render_table([], "rounded") == ""
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [(None, ""), (True, "true"), (False, "false"), ("two\nlines", "two lines")],
+    )
+    def test_table_cells_stay_on_one_line(self, value, expected):
+        """Test null, boolean and multi-line values render as single-line cells."""
+        assert render_table([value], "minimal").split("\n")[-1] == expected
+
+
+# =============================================================================
 # Redaction Tests
 # =============================================================================
 
@@ -1297,6 +1399,22 @@ class TestProfile:
             with patch.dict(os.environ, {}, clear=True):
                 result = resolve_setting("timeout")
         assert result == constants.PROFILE_DEFAULTS["timeout"]
+
+    def test_resolve_setting_ignores_a_value_outside_the_choices(self):
+        """Test a setting with a fixed set of values falls back on an unknown one."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._load(tmpdir, "default:\n  outputFormat: xml")
+            with patch.dict(os.environ, {}, clear=True):
+                result = resolve_setting("outputFormat")
+        assert result == constants.PROFILE_DEFAULTS["outputFormat"]
+
+    def test_resolve_setting_accepts_a_listed_choice(self):
+        """Test a setting with a fixed set of values takes one of them."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._load(tmpdir, "default: {}")
+            with patch.dict(os.environ, {env_var_name("outputFormat"): "yaml"}):
+                result = resolve_setting("outputFormat")
+        assert result == "yaml"
 
     def test_load_profile_applies_the_log_level(self):
         """Test the resolved log level takes effect when a profile is loaded."""

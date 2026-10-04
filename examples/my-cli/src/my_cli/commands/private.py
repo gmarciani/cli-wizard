@@ -3,7 +3,6 @@
 
 """Private commands."""
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -11,13 +10,14 @@ import click
 from click.core import ParameterSource
 
 from my_cli.client import ApiClient, format_error
-from my_cli.constants import DEFAULT_CA_FILE
+from my_cli.constants import DEFAULT_CA_FILE, OUTPUT_FORMATS
 from my_cli.logging import (
     colors_enabled,
     log_debug,
     log_error,
     set_debug,
 )
+from my_cli.output import render
 from my_cli.profile import load_profile, resolve_setting
 from my_cli.redaction import redact, redact_text
 
@@ -110,6 +110,12 @@ def private(ctx: click.Context, debug: bool) -> None:
     ),
     help="CA certificate file for SSL verification.",
 )
+@click.option(
+    "--output",
+    "-o",
+    type=click.Choice(OUTPUT_FORMATS),
+    help="Output format, overriding the outputFormat setting.",
+)
 @click.pass_context
 def get_greetings(
     ctx: click.Context,
@@ -118,6 +124,7 @@ def get_greetings(
     base_url: str | None,
     no_verify_ssl: bool,
     ca_file: Path | None,
+    output: str | None,
 ) -> None:
     """get_greetings command."""
     # Options given at the root group apply unless repeated here
@@ -126,12 +133,18 @@ def get_greetings(
     base_url = _resolve_global(ctx, "base_url", base_url)
     no_verify_ssl = _resolve_global(ctx, "no_verify_ssl", no_verify_ssl)
     ca_file = _resolve_global(ctx, "ca_file", ca_file)
+    output = _resolve_global(ctx, "output", output)
 
     # Enable debug logging if --debug flag is set
     set_debug(debug)
 
     # Load profile
     load_profile(profile)
+
+    # Resolved before the request, so a bad setting fails without sending it
+    output_format = str(resolve_setting("outputFormat", output))
+    json_indent = int(resolve_setting("jsonIndent"))
+    table_style = str(resolve_setting("tableStyle"))
     # Log command execution start
     cmd_params: dict[str, Any] = {}
     cmd_name = "private get-greetings"
@@ -143,13 +156,17 @@ def get_greetings(
         response = client.get("/private/greetings")
         response.raise_for_status()
         if response.text:
-            indent = int(resolve_setting("jsonIndent"))
-            output = json.dumps(response.json(), indent=indent)
+            rendered = render(
+                response.json(),
+                output_format,
+                json_indent=json_indent,
+                table_style=table_style,
+            )
             log_debug(
                 f"Command '{cmd_name}' completed"
-                f" with output: {redact_text(output)[:500]}"
+                f" with output: {redact_text(rendered)[:500]}"
             )
-            click.echo(output)
+            click.echo(rendered)
         else:
             log_debug("Command '%s' completed successfully" % cmd_name)
             click.echo("Success")

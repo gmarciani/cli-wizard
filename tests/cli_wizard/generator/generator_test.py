@@ -1900,6 +1900,7 @@ def generated_cli(tmp_path_factory):
     try:
         constants = importlib.import_module("probe_cli.constants")
         yield SimpleNamespace(
+            main=importlib.import_module("probe_cli.cli").main,
             group=importlib.import_module("probe_cli.commands.things").things,
             constants=constants,
             profile=importlib.import_module("probe_cli.profile"),
@@ -2340,7 +2341,16 @@ class TestGeneratedReadme:
 
     def test_inert_profile_keys_are_not_advertised(self, issue50_readme):
         """Test a key no generated code reads stays out of the README."""
-        assert "tableStyle" not in issue50_readme
+        assert "retryMaxAttempts" not in issue50_readme
+
+    def test_output_settings_are_documented(self, issue50_readme):
+        """Test the output format and table style are listed with their defaults."""
+        assert "| `outputFormat` | `json` |" in issue50_readme
+        assert "| `tableStyle` | `rounded` |" in issue50_readme
+
+    def test_output_option_is_a_common_option(self, issue50_readme):
+        """Test --output is documented once, next to the other common options."""
+        assert issue50_readme.count("`--output`, `-o`") == 1
 
     def test_documented_settings_are_the_ones_the_code_resolves(self):
         """Test the documented profile keys match the resolve_setting calls."""
@@ -2372,3 +2382,150 @@ class TestGeneratedReadme:
         assert "#### config init\n" in readme
         assert "{{" not in readme
         assert "None" not in readme
+
+
+ISSUE47_RECORDS = [
+    {"id": 1, "name": "alpha", "tags": ["a", "b"]},
+    {"id": 2, "name": "beta"},
+]
+
+ISSUE47_TABLES = {
+    "rounded": (
+        "╭────┬───────┬────────────╮\n"
+        "│ id │ name  │ tags       │\n"
+        "├────┼───────┼────────────┤\n"
+        '│ 1  │ alpha │ ["a", "b"] │\n'
+        "│ 2  │ beta  │            │\n"
+        "╰────┴───────┴────────────╯\n"
+    ),
+    "markdown": (
+        "| id | name  | tags       |\n"
+        "|----|-------|------------|\n"
+        '| 1  | alpha | ["a", "b"] |\n'
+        "| 2  | beta  |            |\n"
+    ),
+}
+
+
+class TestGeneratedOutputFormats:
+    """Regression tests for #47: the advertised output formats must render."""
+
+    @staticmethod
+    def _invoke(cli, args=(), *, body=ISSUE47_RECORDS, env=None, entry=None):
+        """Run list-things against a stubbed response, through the group or main."""
+        response = MagicMock()
+        response.text = json.dumps(body)
+        response.json.return_value = body
+        with patch("requests.Session.get", return_value=response):
+            if entry is None:
+                result = CliRunner().invoke(cli.group, ["list-things", *args], env=env)
+            else:
+                result = CliRunner().invoke(entry, list(args), env=env)
+        assert result.exit_code == 0, result.output
+        return result
+
+    @staticmethod
+    def _write_profile(cli, **values):
+        """Write the default profile with the given settings."""
+        cli.profile_file.parent.mkdir(parents=True, exist_ok=True)
+        cli.profile_file.write_text(yaml.safe_dump({"default": values}))
+
+    def test_json_is_the_default_format(self, generated_cli):
+        """Test a command prints indented JSON when nothing selects a format."""
+        self._write_profile(generated_cli)
+
+        result = self._invoke(generated_cli)
+
+        assert result.stdout == json.dumps(ISSUE47_RECORDS, indent=2) + "\n"
+
+    def test_json_honours_the_indent_setting(self, generated_cli):
+        """Test jsonIndent still shapes the JSON output."""
+        self._write_profile(generated_cli, jsonIndent=4)
+
+        result = self._invoke(generated_cli, ["--output", "json"])
+
+        assert result.stdout == json.dumps(ISSUE47_RECORDS, indent=4) + "\n"
+
+    def test_yaml_output(self, generated_cli):
+        """Test --output yaml prints the response as YAML, keys in API order."""
+        self._write_profile(generated_cli)
+
+        result = self._invoke(generated_cli, ["-o", "yaml"])
+
+        assert result.stdout == (
+            "- id: 1\n  name: alpha\n  tags:\n  - a\n  - b\n- id: 2\n  name: beta\n"
+        )
+
+    def test_table_output_uses_the_default_style(self, generated_cli):
+        """Test --output table renders a rounded table by default."""
+        self._write_profile(generated_cli)
+
+        result = self._invoke(generated_cli, ["--output", "table"])
+
+        assert result.stdout == ISSUE47_TABLES["rounded"]
+
+    def test_table_style_comes_from_the_profile(self, generated_cli):
+        """Test tableStyle in the profile selects the table borders."""
+        self._write_profile(generated_cli, outputFormat="table", tableStyle="markdown")
+
+        result = self._invoke(generated_cli)
+
+        assert result.stdout == ISSUE47_TABLES["markdown"]
+
+    def test_environment_selects_the_format(self, generated_cli):
+        """Test the output format environment variable outranks the profile."""
+        self._write_profile(generated_cli, outputFormat="json")
+
+        result = self._invoke(generated_cli, env={"PROBE_CLI_OUTPUT_FORMAT": "yaml"})
+
+        assert result.stdout.startswith("- id: 1\n")
+
+    def test_flag_outranks_the_environment(self, generated_cli):
+        """Test --output beats the environment variable."""
+        self._write_profile(generated_cli)
+
+        result = self._invoke(
+            generated_cli, ["-o", "json"], env={"PROBE_CLI_OUTPUT_FORMAT": "yaml"}
+        )
+
+        assert result.stdout.startswith("[\n")
+
+    def test_output_given_at_the_root_applies_to_the_command(self, generated_cli):
+        """Test probe-cli -o yaml things list-things renders YAML."""
+        self._write_profile(generated_cli)
+
+        result = self._invoke(
+            generated_cli,
+            ["-o", "yaml", "things", "list-things"],
+            entry=generated_cli.main,
+        )
+
+        assert result.stdout.startswith("- id: 1\n")
+
+    def test_unknown_format_in_the_environment_falls_back_with_a_warning(
+        self, generated_cli
+    ):
+        """Test a value outside the choices is ignored like a malformed number."""
+        self._write_profile(generated_cli)
+
+        result = self._invoke(generated_cli, env={"PROBE_CLI_OUTPUT_FORMAT": "xml"})
+
+        assert result.stdout.startswith("[\n")
+        assert "Ignoring the value of 'outputFormat'" in result.stderr
+
+    def test_unknown_format_on_the_command_line_is_rejected(self, generated_cli):
+        """Test --output only accepts the advertised formats."""
+        result = CliRunner().invoke(
+            generated_cli.group, ["list-things", "--output", "xml"]
+        )
+
+        assert result.exit_code == 2
+        assert "'json', 'table', 'yaml'" in result.output
+
+    def test_choices_are_baked_into_the_constants(self, generated_cli):
+        """Test every Literal profile setting ships its allowed values."""
+        assert generated_cli.constants.PROFILE_CHOICES == {
+            "outputFormat": ("json", "table", "yaml"),
+            "tableStyle": ("ascii", "rounded", "minimal", "markdown"),
+            "logLevel": ("DEBUG", "INFO", "WARNING", "ERROR"),
+        }

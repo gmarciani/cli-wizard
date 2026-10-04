@@ -58,6 +58,31 @@ PROFILE_DEFAULTS: dict[str, object] = {
     "accessToken": None,
 }
 
+# The values a setting accepts, for the settings that take one of a fixed set.
+# A profile or environment value outside them is ignored with a warning.
+PROFILE_CHOICES: dict[str, tuple[str, ...]] = {
+    "outputFormat": (
+        "json",
+        "table",
+        "yaml",
+    ),
+    "tableStyle": (
+        "ascii",
+        "rounded",
+        "minimal",
+        "markdown",
+    ),
+    "logLevel": (
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+    ),
+}
+
+# The formats --output accepts, the same values the outputFormat setting takes
+OUTPUT_FORMATS = PROFILE_CHOICES["outputFormat"]
+
 # Log configuration
 LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"

@@ -267,7 +267,14 @@ PROFILE_SETTING_DOCS: dict[str, str] = {
         "Bearer token sent in the `Authorization` header of every request."
     ),
     "timeout": "Seconds to wait for a response before a request fails.",
+    "outputFormat": (
+        "How a command prints the response: `json`, `yaml` or `table`. "
+        "`--output` overrides it for one invocation."
+    ),
     "jsonIndent": "Indentation of the JSON a command prints.",
+    "tableStyle": (
+        "Borders of a `table` output: `rounded`, `ascii`, `minimal` or `markdown`."
+    ),
     "logLevel": "Lowest level of log message shown: DEBUG, INFO, WARNING or ERROR.",
     "outputColors": "Whether log messages and errors are coloured.",
 }
@@ -363,6 +370,14 @@ class CliGenerator:
         # Runtime-only profile parameters (not derived from wizard config)
         profile_defaults["accessToken"] = None
 
+        # The values a Literal-typed setting accepts, so the generated CLI can
+        # reject a profile or environment value outside them.
+        profile_choices = {
+            profile_key: Config.get_field_choices(config_key)
+            for config_key, profile_key in self.PROFILE_PARAM_FIELDS.items()
+            if Config.get_field_choices(config_key) is not None
+        }
+
         # Derived from PythonVersion so the generated classifiers, tox envlist
         # and CI matrix cannot disagree with requires-python. Falls back to the
         # schema default because the generator also accepts raw dicts that
@@ -389,6 +404,7 @@ class CliGenerator:
             "cli_name": self.cli_name,
             "package_name": self.package_name,
             "profile_defaults": profile_defaults,
+            "profile_choices": profile_choices,
             "profile_settings": profile_settings,
             # The same expression the constants module expands at runtime, so
             # the README names the file the CLI really reads.
@@ -465,6 +481,7 @@ class CliGenerator:
         self._generate_cli_main(src_dir, package_name, groups)
         self._generate_client(src_dir)
         self._generate_logging(src_dir)
+        self._generate_output(src_dir)
         self._generate_redaction(src_dir, groups)
         self._generate_profile(src_dir)
         self._generate_constants(src_dir, ca_file_name, splash_file_name, main_dir)
@@ -532,6 +549,13 @@ class CliGenerator:
         template = self.env.get_template("src/{{ PackageName }}/logging.py.j2")
         content = template.render(**self._template_context())
         with open(src_dir / "logging.py", "w") as f:
+            f.write(content)
+
+    def _generate_output(self, src_dir: Path) -> None:
+        """Generate the response rendering module."""
+        template = self.env.get_template("src/{{ PackageName }}/output.py.j2")
+        content = template.render(**self._template_context())
+        with open(src_dir / "output.py", "w") as f:
             f.write(content)
 
     def _generate_redaction(
