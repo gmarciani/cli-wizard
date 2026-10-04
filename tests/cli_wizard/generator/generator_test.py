@@ -2203,7 +2203,7 @@ class TestGeneratedReadme:
         for group in _issue50_groups().values():
             assert f"### {group.cli_name}\n\n{group.description}\n" in issue50_readme
             for op in group.operations:
-                command = f"issue50-cli {group.cli_name} {op.command_name}"
+                command = f"{group.cli_name} {op.command_name}"
                 assert f"#### {command}\n\n{op.summary}\n" in issue50_readme
 
     def test_commands_section_opens_with_an_index_of_every_command(
@@ -2213,10 +2213,17 @@ class TestGeneratedReadme:
         names = [name for name, _ in self._index(issue50_readme)]
 
         assert names == sorted(names)
-        assert "issue50-cli config init" in names
+        assert "config init" in names
         for group in _issue50_groups().values():
             for op in group.operations:
-                assert f"issue50-cli {group.cli_name} {op.command_name}" in names
+                assert f"{group.cli_name} {op.command_name}" in names
+
+    def test_reference_does_not_repeat_the_cli_name(self, issue50_readme):
+        """Test headings and index entries name the command, not the executable."""
+        commands = issue50_readme.split("## Commands\n", 1)[1].split("\n## ", 1)[0]
+
+        assert "#### issue50-cli " not in commands
+        assert "[issue50-cli " not in commands
 
     def test_index_entries_link_to_their_subsection(self, issue50_readme):
         """Test each index anchor is the slug of a heading in the reference."""
@@ -2298,8 +2305,8 @@ class TestGeneratedReadme:
 
     def test_config_commands_are_documented(self, issue50_readme):
         """Test the built-in profile commands are in the reference."""
-        assert "#### issue50-cli config init\n" in issue50_readme
-        assert "#### issue50-cli config set\n" in issue50_readme
+        assert "#### config init\n" in issue50_readme
+        assert "#### config set\n" in issue50_readme
         assert "`--param TEXT` (required)" in issue50_readme
 
     @pytest.mark.parametrize(
@@ -2319,7 +2326,7 @@ class TestGeneratedReadme:
             for name in cli_names
         }
 
-        assert [g["name"] for g in _readme_groups(groups, "test-cli")] == expected
+        assert [g["name"] for g in _readme_groups(groups)] == expected
 
     def test_profile_file_location_is_stated(self, issue50_cli, issue50_readme):
         """Test the README names the file config init creates."""
@@ -2362,6 +2369,6 @@ class TestGeneratedReadme:
 
         readme = (output_dir / "README.md").read_text()
         assert "## Commands" in readme
-        assert "#### test-cli config init\n" in readme
+        assert "#### config init\n" in readme
         assert "{{" not in readme
         assert "None" not in readme

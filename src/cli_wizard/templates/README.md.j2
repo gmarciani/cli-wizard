@@ -24,7 +24,7 @@ authenticates with:
 Then run a command, or ask any command for its options with `--help`:
 
 ```bash
-{{ first_command.name }} --help
+{{ cli_name }} {{ first_command.name }} --help
 ```
 {% else %}
 Then ask any command for its options with `--help`:
@@ -115,7 +115,7 @@ store it in the profile:
 or hand it to a single invocation through the environment:
 
 ```bash
-{{ package_name | upper }}_ACCESS_TOKEN=<token> {% if first_command %}{{ first_command.name }}{% else %}{{ cli_name }} config show{% endif %}
+{{ package_name | upper }}_ACCESS_TOKEN=<token> {{ cli_name }} {% if first_command %}{{ first_command.name }}{% else %}config show{% endif %}
 
 ```
 
