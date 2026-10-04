@@ -31,14 +31,14 @@ is only needed to reach another host. See [Configuration](#configuration) and
 
 ## Commands
 
-- [my-cli config get](#my-cli-config-get)
-- [my-cli config init](#my-cli-config-init)
-- [my-cli config list-profiles](#my-cli-config-list-profiles)
-- [my-cli config set](#my-cli-config-set)
-- [my-cli config show](#my-cli-config-show)
-- [my-cli config unset](#my-cli-config-unset)
-- [my-cli private get-greetings](#my-cli-private-get-greetings)
-- [my-cli public get-public-greetings](#my-cli-public-get-public-greetings)
+- [config get](#config-get)
+- [config init](#config-init)
+- [config list-profiles](#config-list-profiles)
+- [config set](#config-set)
+- [config show](#config-show)
+- [config unset](#config-unset)
+- [private get-greetings](#private-get-greetings)
+- [public get-public-greetings](#public-get-public-greetings)
 
 ### Common Options
 
@@ -58,32 +58,32 @@ right after `my-cli`:
 
 Configure the CLI.
 
-#### my-cli config get
+#### config get
 
 Get a configuration value from a profile.
 
 - `--param TEXT` (required) - Parameter name.
 
-#### my-cli config init
+#### config init
 
 Initialize the profile file with default profile.
 
-#### my-cli config list-profiles
+#### config list-profiles
 
 List all available profiles.
 
-#### my-cli config set
+#### config set
 
 Set a configuration value in a profile.
 
 - `--param TEXT` (required) - Parameter name.
 - `--value TEXT` (required) - Parameter value.
 
-#### my-cli config show
+#### config show
 
 Show all parameters and values for a profile.
 
-#### my-cli config unset
+#### config unset
 
 Remove a configuration value from a profile.
 
@@ -93,7 +93,7 @@ Remove a configuration value from a profile.
 
 Private commands
 
-#### my-cli private get-greetings
+#### private get-greetings
 
 Get a greeting message (authenticated)
 
@@ -101,7 +101,7 @@ Get a greeting message (authenticated)
 
 Public commands
 
-#### my-cli public get-public-greetings
+#### public get-public-greetings
 
 Get a public greeting message
 

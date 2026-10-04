@@ -209,8 +209,10 @@ _CONFIG_COMMANDS: list[tuple[str, str, list[dict[str, Any]]]] = [
 def _readme_command(name: str, summary: str, options: list[dict[str, Any]]) -> dict:
     """Describe one command for the README, with the anchor of its heading.
 
-    GitHub derives the anchor from the heading by lower-casing it and turning
-    spaces into hyphens; command names are already kebab-case, so that is all.
+    The name is the group and the command alone, without the executable, which
+    the reference would otherwise repeat on every line. GitHub derives the
+    anchor from the heading by lower-casing it and turning spaces into hyphens;
+    command names are already kebab-case, so that is all.
     """
     return {
         "name": name,
@@ -220,7 +222,7 @@ def _readme_command(name: str, summary: str, options: list[dict[str, Any]]) -> d
     }
 
 
-def _readme_groups(groups: dict[str, CommandGroup], cli_name: str) -> list[dict]:
+def _readme_groups(groups: dict[str, CommandGroup]) -> list[dict]:
     """Build the command reference of the README, groups and commands sorted by name.
 
     The built-in config group is slotted in alphabetically with the spec-derived
@@ -232,7 +234,7 @@ def _readme_groups(groups: dict[str, CommandGroup], cli_name: str) -> list[dict]
             "name": "config",
             "description": "Configure the CLI.",
             "commands": [
-                _readme_command(f"{cli_name} config {command}", summary, options)
+                _readme_command(f"config {command}", summary, options)
                 for command, summary, options in _CONFIG_COMMANDS
             ],
         }
@@ -244,7 +246,7 @@ def _readme_groups(groups: dict[str, CommandGroup], cli_name: str) -> list[dict]
                 "description": group.description,
                 "commands": [
                     _readme_command(
-                        f"{cli_name} {group.cli_name} {op.command_name}",
+                        f"{group.cli_name} {op.command_name}",
                         op.summary or op.operation_id,
                         _operation_options(op),
                     )
@@ -491,9 +493,7 @@ class CliGenerator:
         """Generate README.md, with the command reference built from the groups."""
         template = self.env.get_template("README.md.j2")
         content = template.render(
-            **self._template_context(
-                readme_groups=_readme_groups(groups, self.cli_name)
-            )
+            **self._template_context(readme_groups=_readme_groups(groups))
         )
         with open(output_dir / "README.md", "w") as f:
             f.write(content)
