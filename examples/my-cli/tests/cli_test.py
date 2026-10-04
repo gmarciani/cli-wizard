@@ -15,6 +15,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import click
 import pytest
 import requests
 from click.testing import CliRunner
@@ -23,9 +24,11 @@ from my_cli import constants
 from my_cli.cli import _hex_to_rgb, _show_splash, main
 from my_cli.client import (
     MAX_ERROR_BODY_CHARS,
+    RETRY_STATUSES,
     ApiClient,
     encode_path_param,
     format_error,
+    parse_headers,
 )
 from my_cli.logging import (
     _format_message,
@@ -781,6 +784,59 @@ class TestApiClient:
         """Test client without auth header."""
         client = ApiClient()
         assert "Authorization" not in client.session.headers
+
+    def test_client_identifies_itself(self):
+        """Test every request carries this CLI's User-Agent."""
+        client = ApiClient()
+        assert client.session.headers["User-Agent"] == constants.USER_AGENT
+        assert constants.USER_AGENT.startswith("my-cli/")
+
+    def test_client_sends_no_content_type_by_default(self):
+        """Test Content-Type is left to the requests that carry a body."""
+        client = ApiClient()
+        assert "Content-Type" not in client.session.headers
+
+    def test_client_sends_custom_headers(self):
+        """Test headers given to the client reach every request."""
+        client = ApiClient(headers={"X-Tenant": "acme", "Accept": "text/csv"})
+        assert client.session.headers["X-Tenant"] == "acme"
+        # An explicit header outranks the built-in one
+        assert client.session.headers["Accept"] == "text/csv"
+
+    def test_client_retries_as_configured(self):
+        """Test the retry settings shape the adapters mounted on the session."""
+        client = ApiClient(retry_max_attempts=5, retry_backoff_factor=0.1)
+        for scheme in ("http://", "https://"):
+            retry = client.session.get_adapter(scheme + "api").max_retries
+            assert retry.total == 5
+            assert retry.backoff_factor == 0.1
+            assert tuple(retry.status_forcelist) == RETRY_STATUSES
+            assert retry.raise_on_status is False
+
+    def test_client_retries_by_default(self):
+        """Test the generated retry defaults apply when nothing is given."""
+        retry = ApiClient().session.get_adapter("https://api").max_retries
+        assert retry.total == constants.DEFAULT_RETRY_MAX_ATTEMPTS
+        assert retry.backoff_factor == constants.DEFAULT_RETRY_BACKOFF_FACTOR
+
+    @pytest.mark.parametrize(
+        "values,expected",
+        [
+            ((), {}),
+            (("X-Tenant: acme",), {"X-Tenant": "acme"}),
+            (("X-Tenant:acme", " X-Trace : 1 "), {"X-Tenant": "acme", "X-Trace": "1"}),
+            (("X-Url: http://h:1",), {"X-Url": "http://h:1"}),
+        ],
+    )
+    def test_parse_headers(self, values, expected):
+        """Test --header values are split on the first colon and trimmed."""
+        assert parse_headers(None, None, values) == expected
+
+    @pytest.mark.parametrize("raw", ["nocolon", ": value", "  : value"])
+    def test_parse_headers_rejects_a_malformed_header(self, raw):
+        """Test a header without a name or a colon is a usage error."""
+        with pytest.raises(click.BadParameter, match="Expected 'Name: value'"):
+            parse_headers(None, None, (raw,))
 
     def test_client_url_building(self):
         """Test URL building."""

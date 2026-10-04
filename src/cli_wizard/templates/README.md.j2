@@ -55,6 +55,8 @@ right after `{{ cli_name }}`:
 - `--base-url`, `-u` - API base URL, overriding the profile and the environment.
 - `--ca-file` - CA certificate bundle to verify the server against.
 - `--no-verify-ssl` - Disable TLS certificate verification. Prints a warning.
+- `--timeout` - Seconds to wait for a response, overriding the `timeout` setting.
+- `--header`, `-H` - Extra request header as `Name: value`. Repeatable.
 - `--output`, `-o` - Print the response as `json`, `yaml` or `table`, overriding
   the `outputFormat` setting.
 - `--debug`, `-d` - Log the request and response, with credentials redacted.
@@ -98,7 +100,7 @@ than `default`.
 Each setting is resolved through four layers, highest precedence first:
 
 1. The command-line flag, for the settings that have one (`--base-url`,
-   `--output`).
+   `--timeout`, `--output`).
 2. The environment variable `{{ package_name | upper }}_<SETTING>`, the setting
    name in upper snake case: `baseUrl` reads `{{ package_name | upper }}_BASE_URL`.
 3. The value stored in the profile selected with `--profile`, or `default`.

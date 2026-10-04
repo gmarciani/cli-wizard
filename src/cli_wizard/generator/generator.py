@@ -277,6 +277,14 @@ PROFILE_SETTING_DOCS: dict[str, str] = {
     ),
     "logLevel": "Lowest level of log message shown: DEBUG, INFO, WARNING or ERROR.",
     "outputColors": "Whether log messages and errors are coloured.",
+    "retryMaxAttempts": (
+        "Retries of a request that could not connect or got a 429 or 5xx "
+        "response, after the first attempt. `0` sends every request once."
+    ),
+    "retryBackoffFactor": (
+        "Seconds waited before retry *n*: the factor times 2^(n-1), or what a "
+        "`Retry-After` header asks."
+    ),
 }
 
 

@@ -13,8 +13,10 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import tomllib
 from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -479,7 +481,8 @@ class TestCliGenerator:
             content = (
                 output_dir / "src" / "test_cli" / "commands" / "ops.py"
             ).read_text()
-            assert content.count("multiple=True") == 2
+            # The two array parameters, plus the repeatable --header common option
+            assert content.count("multiple=True") == 3
             assert "ids: tuple[int, ...]," in content
             assert "operations: tuple[str, ...]," in content
             assert 'params["ids"] = list(ids)' in content
@@ -2339,9 +2342,15 @@ class TestGeneratedReadme:
         assert "| `timeout` | `30` |" in issue50_readme
         assert "| `accessToken` | unset |" in issue50_readme
 
-    def test_inert_profile_keys_are_not_advertised(self, issue50_readme):
-        """Test a key no generated code reads stays out of the README."""
-        assert "retryMaxAttempts" not in issue50_readme
+    def test_retry_settings_are_documented(self, issue50_readme):
+        """Test the retry settings are listed with their defaults."""
+        assert "| `retryMaxAttempts` | `3` |" in issue50_readme
+        assert "| `retryBackoffFactor` | `0.5` |" in issue50_readme
+
+    def test_timeout_and_header_options_are_common_options(self, issue50_readme):
+        """Test --timeout and --header are documented once each."""
+        assert issue50_readme.count("- `--timeout`") == 1
+        assert issue50_readme.count("- `--header`, `-H`") == 1
 
     def test_output_settings_are_documented(self, issue50_readme):
         """Test the output format and table style are listed with their defaults."""
@@ -2529,3 +2538,188 @@ class TestGeneratedOutputFormats:
             "tableStyle": ("ascii", "rounded", "minimal", "markdown"),
             "logLevel": ("DEBUG", "INFO", "WARNING", "ERROR"),
         }
+
+
+class _FlakyHandler(BaseHTTPRequestHandler):
+    """Answer 503 to the first requests, then 200 with a JSON body."""
+
+    failures = 0
+    requests_seen: list[str] = []
+
+    def do_GET(self):  # noqa: N802 - the name http.server dispatches on
+        self.requests_seen.append(self.path)
+        if len(self.requests_seen) <= self.failures:
+            self.send_response(503)
+            self.end_headers()
+            return
+        body = b'{"ok": true}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        """Keep the server quiet in the test output."""
+
+
+@pytest.fixture
+def flaky_server():
+    """Serve on a free local port, failing as many times as the test asks."""
+    _FlakyHandler.failures = 0
+    _FlakyHandler.requests_seen = []
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _FlakyHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield SimpleNamespace(
+            url=f"http://127.0.0.1:{server.server_port}",
+            handler=_FlakyHandler,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+class TestGeneratedClientFeatures:
+    """Regression tests for #46: the client honours what the config advertises."""
+
+    _write_profile = staticmethod(TestGeneratedOutputFormats._write_profile)
+
+    @staticmethod
+    def _invoke(cli, args=(), *, entry=None, env=None):
+        """Run list-things against a stubbed transport, keeping the session.
+
+        autospec keeps the bound session in call_args, so the headers and the
+        adapters it carries can be asserted on.
+        """
+        response = MagicMock()
+        response.text = ""
+        with patch(
+            "requests.Session.get", autospec=True, return_value=response
+        ) as sent:
+            if entry is None:
+                result = CliRunner().invoke(cli.group, ["list-things", *args], env=env)
+            else:
+                result = CliRunner().invoke(entry, list(args), env=env)
+        return result, sent
+
+    @staticmethod
+    def _session(sent):
+        return sent.call_args.args[0]
+
+    def test_user_agent_names_the_cli_and_its_version(self, generated_cli):
+        """Test requests carry a User-Agent attributable to this CLI."""
+        self._write_profile(generated_cli)
+
+        result, sent = self._invoke(generated_cli)
+
+        assert result.exit_code == 0, result.output
+        agent = self._session(sent).headers["User-Agent"]
+        assert agent == f"probe-cli/{generated_cli.constants.__version__} (cli-wizard)"
+
+    def test_content_type_is_not_sent_without_a_body(self, generated_cli):
+        """Test a bodyless request does not claim to carry JSON."""
+        self._write_profile(generated_cli)
+
+        result, sent = self._invoke(generated_cli)
+
+        assert result.exit_code == 0, result.output
+        assert "Content-Type" not in self._session(sent).headers
+
+    def test_timeout_flag_outranks_the_profile(self, generated_cli):
+        """Test --timeout sets the request timeout for one invocation."""
+        self._write_profile(generated_cli, timeout=7)
+
+        result, sent = self._invoke(generated_cli, ["--timeout", "3"])
+
+        assert result.exit_code == 0, result.output
+        assert sent.call_args.kwargs["timeout"] == 3
+
+    def test_timeout_given_at_the_root_applies_to_the_command(self, generated_cli):
+        """Test probe-cli --timeout 5 things list-things uses that timeout."""
+        self._write_profile(generated_cli)
+
+        result, sent = self._invoke(
+            generated_cli,
+            ["--timeout", "5", "things", "list-things"],
+            entry=generated_cli.main,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert sent.call_args.kwargs["timeout"] == 5
+
+    def test_custom_headers_reach_the_request(self, generated_cli):
+        """Test --header adds each given header to the request."""
+        self._write_profile(generated_cli)
+
+        result, sent = self._invoke(
+            generated_cli, ["-H", "X-Tenant: acme", "--header", "X-Trace-Id:  42 "]
+        )
+
+        assert result.exit_code == 0, result.output
+        headers = self._session(sent).headers
+        assert headers["X-Tenant"] == "acme"
+        assert headers["X-Trace-Id"] == "42"
+
+    def test_headers_given_at_the_root_apply_to_the_command(self, generated_cli):
+        """Test probe-cli -H ... things list-things sends the header."""
+        self._write_profile(generated_cli)
+
+        result, sent = self._invoke(
+            generated_cli,
+            ["-H", "X-Tenant: acme", "things", "list-things"],
+            entry=generated_cli.main,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert self._session(sent).headers["X-Tenant"] == "acme"
+
+    def test_malformed_header_is_rejected(self, generated_cli):
+        """Test a header without a colon is a usage error, sent to no one."""
+        result, sent = self._invoke(generated_cli, ["--header", "nocolon"])
+
+        assert result.exit_code == 2
+        assert "Expected 'Name: value'" in result.output
+        sent.assert_not_called()
+
+    def test_retry_settings_configure_the_session(self, generated_cli):
+        """Test the profile's retry settings shape the mounted adapters."""
+        self._write_profile(generated_cli, retryMaxAttempts=4, retryBackoffFactor=0.25)
+
+        result, sent = self._invoke(generated_cli)
+
+        assert result.exit_code == 0, result.output
+        for scheme in ("http://", "https://"):
+            retry = self._session(sent).get_adapter(scheme + "x").max_retries
+            assert retry.total == 4
+            assert retry.backoff_factor == 0.25
+            assert {429, 500, 502, 503, 504} <= set(retry.status_forcelist)
+            assert retry.raise_on_status is False
+
+    def test_a_failing_request_is_retried(self, generated_cli, flaky_server):
+        """Test a 503 is retried until the API answers, then the answer is printed."""
+        self._write_profile(
+            generated_cli,
+            baseUrl=flaky_server.url,
+            retryMaxAttempts=2,
+            retryBackoffFactor=0,
+        )
+        flaky_server.handler.failures = 2
+
+        result = CliRunner().invoke(generated_cli.group, ["list-things"])
+
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.stdout) == {"ok": True}
+        assert flaky_server.handler.requests_seen == ["/things"] * 3
+
+    def test_retries_can_be_disabled(self, generated_cli, flaky_server):
+        """Test retryMaxAttempts 0 sends the request once and reports the failure."""
+        self._write_profile(generated_cli, baseUrl=flaky_server.url, retryMaxAttempts=0)
+        flaky_server.handler.failures = 1
+
+        result = CliRunner().invoke(generated_cli.group, ["list-things"])
+
+        assert result.exit_code == 1
+        assert "503" in result.stderr
+        assert len(flaky_server.handler.requests_seen) == 1

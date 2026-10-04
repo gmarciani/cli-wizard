@@ -192,12 +192,12 @@ PythonVersion: "3.12"
 # Default: null
 # CaFile: null
 
-# Retry max attempts
+# Retries of a request that failed to connect or got a 429 or 5xx response, after the first attempt (0 disables retrying)
 # Type: int
 # Default: 3
 # RetryMaxAttempts: 3
 
-# Retry backoff factor
+# Seconds waited before retry n: the factor times 2^(n-1), or what a Retry-After header asks
 # Type: float
 # Default: 0.5
 # RetryBackoffFactor: 0.5

@@ -11,9 +11,14 @@ from typing import Any
 
 from {{ PackageName }}.constants import DEFAULT_CA_FILE, OUTPUT_FORMATS
 {% if group.has_path_parameters %}
-from {{ PackageName }}.client import ApiClient, encode_path_param, format_error
+from {{ PackageName }}.client import (
+    ApiClient,
+    encode_path_param,
+    format_error,
+    parse_headers,
+)
 {% else %}
-from {{ PackageName }}.client import ApiClient, format_error
+from {{ PackageName }}.client import ApiClient, format_error, parse_headers
 {% endif %}
 from {{ PackageName }}.logging import (
     colors_enabled,
@@ -38,22 +43,28 @@ def _get_client(
     no_verify_ssl: bool,
     ca_file: Path | None,
     debug: bool = False,
+    timeout: int | None = None,
+    headers: dict[str, str] | None = None,
 ) -> ApiClient:
     """Create an API client with the given options.
 
-    baseUrl, timeout and accessToken are profile settings, so resolve_setting()
-    runs the precedence chain over them; --base-url is the only one with a flag
-    to outrank it. --no-verify-ssl and --ca-file have no key in
-    PROFILE_DEFAULTS and so come from the command line alone.
+    baseUrl, timeout, accessToken and the retry settings are profile settings,
+    so resolve_setting() runs the precedence chain over them; --base-url and
+    --timeout are the ones with a flag to outrank it. --no-verify-ssl,
+    --ca-file and --header have no key in PROFILE_DEFAULTS and so come from
+    the command line alone.
     """
     effective_ca_file = None if no_verify_ssl else (str(ca_file) if ca_file else DEFAULT_CA_FILE)
     return ApiClient(
         base_url=resolve_setting("baseUrl", base_url),
         access_token=resolve_setting("accessToken"),
-        timeout=int(resolve_setting("timeout")),
+        timeout=int(resolve_setting("timeout", timeout)),
         ca_file=effective_ca_file,
         verify_ssl=not no_verify_ssl,
         debug=debug,
+        headers=headers,
+        retry_max_attempts=int(resolve_setting("retryMaxAttempts")),
+        retry_backoff_factor=float(resolve_setting("retryBackoffFactor")),
     )
 
 
@@ -177,6 +188,17 @@ def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
     help="CA certificate file for SSL verification.",
 )
 @click.option(
+    "--timeout",
+    type=int,
+    help="Seconds to wait for a response, overriding the timeout setting.",
+)
+@click.option(
+    "--header", "-H",
+    multiple=True,
+    callback=parse_headers,
+    help="Extra request header as 'Name: value'. Repeatable.",
+)
+@click.option(
     "--output", "-o",
     type=click.Choice(OUTPUT_FORMATS),
     help="Output format, overriding the outputFormat setting.",
@@ -198,6 +220,8 @@ def {{ op.function_name }}(
     base_url: str | None,
     no_verify_ssl: bool,
     ca_file: Path | None,
+    timeout: int | None,
+    header: dict[str, str],
     output: str | None,
 ) -> None:
     """{{ op.function_name }} command."""
@@ -207,6 +231,8 @@ def {{ op.function_name }}(
     base_url = _resolve_global(ctx, "base_url", base_url)
     no_verify_ssl = _resolve_global(ctx, "no_verify_ssl", no_verify_ssl)
     ca_file = _resolve_global(ctx, "ca_file", ca_file)
+    timeout = _resolve_global(ctx, "timeout", timeout)
+    header = _resolve_global(ctx, "header", header)
     output = _resolve_global(ctx, "output", output)
 
     # Enable debug logging if --debug flag is set
@@ -237,7 +263,7 @@ def {{ op.function_name }}(
         f" with params: {redact(cmd_params)}"
     )
 
-    client = _get_client(base_url, no_verify_ssl, ca_file, debug)
+    client = _get_client(base_url, no_verify_ssl, ca_file, debug, timeout, header)
 {% if op.query_parameters %}
 
     params: dict[str, Any] = {}

@@ -12,13 +12,25 @@ from urllib.parse import quote
 
 import click
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-from my_cli.constants import DEFAULT_BASE_URL, DEFAULT_CA_FILE, DEFAULT_TIMEOUT
+from my_cli.constants import (
+    DEFAULT_BASE_URL,
+    DEFAULT_CA_FILE,
+    DEFAULT_RETRY_BACKOFF_FACTOR,
+    DEFAULT_RETRY_MAX_ATTEMPTS,
+    DEFAULT_TIMEOUT,
+    USER_AGENT,
+)
 from my_cli.logging import log_debug
 from my_cli.redaction import redact, redact_text
 
 # Longest error body reproduced in a message, before truncation.
 MAX_ERROR_BODY_CHARS = 2000
+
+# Responses worth another attempt: the server is throttling or briefly down.
+RETRY_STATUSES = (429, 500, 502, 503, 504)
 
 
 def format_error(error: Exception) -> str:
@@ -61,6 +73,23 @@ def _messages(payload: Any) -> list[str]:
     return [str(payload)]
 
 
+def parse_headers(
+    ctx: click.Context | None, param: click.Parameter | None, values: tuple[str, ...]
+) -> dict[str, str]:
+    """Turn repeated ``--header "Name: value"`` options into a header mapping.
+
+    A Click callback, so a malformed header is a usage error before any
+    request is sent.
+    """
+    headers: dict[str, str] = {}
+    for raw in values:
+        name, sep, value = raw.partition(":")
+        if not sep or not name.strip():
+            raise click.BadParameter(f"Expected 'Name: value', got '{raw}'.")
+        headers[name.strip()] = value.strip()
+    return headers
+
+
 def encode_path_param(value: Any) -> str:
     """Encode a value for interpolation into a single URL path segment.
 
@@ -81,6 +110,9 @@ class ApiClient:
         ca_file: str | None = DEFAULT_CA_FILE,
         verify_ssl: bool = True,
         debug: bool = False,
+        headers: dict[str, str] | None = None,
+        retry_max_attempts: int = DEFAULT_RETRY_MAX_ATTEMPTS,
+        retry_backoff_factor: float = DEFAULT_RETRY_BACKOFF_FACTOR,
     ) -> None:
         """Initialize the API client."""
         self.base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
@@ -89,17 +121,46 @@ class ApiClient:
         self.ca_file = ca_file
         self.verify_ssl = verify_ssl
         self.debug = debug
+        self.headers = headers or {}
+        self.retry_max_attempts = retry_max_attempts
+        self.retry_backoff_factor = retry_backoff_factor
         self.session = requests.Session()
         self._setup_headers()
         self._setup_ssl()
+        self._setup_retries()
 
     def _setup_headers(self) -> None:
-        """Set up default headers."""
-        self.session.headers["Content-Type"] = "application/json"
+        """Set up default headers.
+
+        Content-Type is left to requests, which sets it on the requests that
+        carry a JSON body; a bodyless GET has no content to describe.
+        """
         self.session.headers["Accept"] = "application/json"
+        self.session.headers["User-Agent"] = USER_AGENT
         if self.access_token:
             auth_header = f"Bearer {self.access_token}"
             self.session.headers["Authorization"] = auth_header
+        # Given last, so an explicit --header wins over the defaults
+        self.session.headers.update(self.headers)
+
+    def _setup_retries(self) -> None:
+        """Retry requests that failed to connect or were throttled or refused.
+
+        Attempt n waits backoff_factor * 2 ** (n - 1) seconds, or what a
+        Retry-After header asks. Only idempotent methods are retried after a
+        response; a POST that reached the server is not sent twice. The last
+        response is returned rather than raised, so the error message carries
+        the body the API sent.
+        """
+        retry = Retry(
+            total=self.retry_max_attempts,
+            backoff_factor=self.retry_backoff_factor,
+            status_forcelist=RETRY_STATUSES,
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
 
     def _setup_ssl(self) -> None:
         """Set up SSL verification with custom CA file if provided."""

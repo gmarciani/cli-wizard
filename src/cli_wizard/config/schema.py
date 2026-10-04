@@ -262,12 +262,18 @@ class Config(BaseModel):
     RetryMaxAttempts: int = Field(
         default=3,
         ge=0,
-        description="Retry max attempts",
+        description=(
+            "Retries of a request that failed to connect or got a 429 or 5xx "
+            "response, after the first attempt (0 disables retrying)"
+        ),
     )
     RetryBackoffFactor: float = Field(
         default=0.5,
         ge=0,
-        description="Retry backoff factor",
+        description=(
+            "Seconds waited before retry n: the factor times 2^(n-1), "
+            "or what a Retry-After header asks"
+        ),
     )
 
     # Generation options
