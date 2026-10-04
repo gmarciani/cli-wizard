@@ -1,4 +1,4 @@
-# {{ ProjectName | default(cli_name) }}
+# {{ ProjectName }}
 
 {{ Description }}
 
@@ -15,16 +15,16 @@ authenticates with:
 
 ```bash
 {{ cli_name }} config init
-{{ cli_name }} config set --param baseUrl --value {{ DefaultBaseUrl | default('http://localhost:8080') }}
+{{ cli_name }} config set --param baseUrl --value {{ profile_defaults.baseUrl }}
 {{ cli_name }} config set --param accessToken --value <token>
 ```
 
-{% set first_group = groups.values() | selectattr('operations') | first %}
-{% if first_group %}
+{% set first_command = (readme_groups | rejectattr('name', 'equalto', 'config') | map(attribute='commands') | sum(start=[]) | first) %}
+{% if first_command %}
 Then run a command, or ask any command for its options with `--help`:
 
 ```bash
-{{ cli_name }} {{ first_group.cli_name }} {{ first_group.operations[0].command_name }} --help
+{{ first_command.name }} --help
 ```
 {% else %}
 Then ask any command for its options with `--help`:
@@ -34,12 +34,17 @@ Then ask any command for its options with `--help`:
 ```
 {% endif %}
 
-The base URL defaults to `{{ DefaultBaseUrl | default('http://localhost:8080') }}`,
-so the second line is only needed to reach another host. See
-[Configuration](#configuration) and [Authentication](#authentication) for the
-details.
+The base URL defaults to `{{ profile_defaults.baseUrl }}`, so the second line
+is only needed to reach another host. See [Configuration](#configuration) and
+[Authentication](#authentication) for the details.
 
 ## Commands
+
+{% for group in readme_groups %}
+{% for command in group.commands %}
+- [{{ command.name }}](#{{ command.anchor }})
+{% endfor %}
+{% endfor %}
 
 Every command takes these options, which also apply to every command when given
 right after `{{ cli_name }}`:
@@ -52,42 +57,22 @@ right after `{{ cli_name }}`:
 - `--help` - Show the options of the command.
 
 `{{ cli_name }} --version` prints the version.
+{% for group in readme_groups %}
 
-### config
-
-Manage the profile file described under [Configuration](#configuration).
-
-- `{{ cli_name }} config init` - Initialize the profile file with default profile.
-- `{{ cli_name }} config list-profiles` - List all available profiles.
-- `{{ cli_name }} config show` - Show all parameters and values for a profile.
-- `{{ cli_name }} config get` - Get a configuration value from a profile.
-  - `--param TEXT` (required) - Parameter name.
-- `{{ cli_name }} config set` - Set a configuration value in a profile.
-  - `--param TEXT` (required) - Parameter name.
-  - `--value TEXT` (required) - Parameter value.
-- `{{ cli_name }} config unset` - Remove a configuration value from a profile.
-  - `--param TEXT` (required) - Parameter name.
-{% for tag, group in groups.items() %}
-
-### {{ group.cli_name }}
+### {{ group.name }}
 
 {{ group.description }}
+{% for command in group.commands %}
 
-{% for op in group.operations %}
-- `{{ cli_name }} {{ group.cli_name }} {{ op.command_name }}` - {{ op.summary or op.operation_id }}
-{% for param in op.path_parameters %}
-  - `--{{ param.cli_name }} {{ param.metavar }}` (required){{ ' - ' ~ param.description if param.description }}
+#### {{ command.name }}
+
+{{ command.summary }}
+{% if command.options %}
+
+{% for option in command.options %}
+- `{{ option.usage }}`{{ ' (required)' if option.required }}{{ ' (repeatable)' if option.repeatable }}{{ ' - ' ~ option.description if option.description }}{{ ' Default: ' ~ option.default ~ '.' if option.default is not none }}
 {% endfor %}
-{% for param in op.query_parameters %}
-  - `--{{ param.cli_name }} {{ param.metavar }}`{{ ' (required)' if param.required }}{{ ' (repeatable)' if param.is_array }}{{ ' - ' ~ param.description if param.description }}{{ ' Default: ' ~ (param.default | string | lower if param.click_type == 'bool' else param.default) ~ '.' if param.default is not none }}
-{% endfor %}
-{% for prop in op.body_properties %}
-{% if prop.click_type == 'bool' and not prop.is_array %}
-  - `--{{ prop.cli_name }}/--no-{{ prop.cli_name }}`{{ ' (required)' if prop.required }}{{ ' - ' ~ prop.description if prop.description }}{{ ' Default: ' ~ (prop.default | string | lower) ~ '.' if prop.default is not none }}
-{% else %}
-  - `--{{ prop.cli_name }} {{ prop.metavar }}`{{ ' (required)' if prop.required }}{{ ' (repeatable)' if prop.is_array }}{{ ' - ' ~ prop.description if prop.description }}{{ ' Default: ' ~ prop.default ~ '.' if prop.default is not none }}
 {% endif %}
-{% endfor %}
 {% endfor %}
 {% endfor %}
 
@@ -128,7 +113,7 @@ store it in the profile:
 or hand it to a single invocation through the environment:
 
 ```bash
-{{ package_name | upper }}_ACCESS_TOKEN=<token> {{ cli_name }} {% if first_group %}{{ first_group.cli_name }} {{ first_group.operations[0].command_name }}{% else %}config show{% endif %}
+{{ package_name | upper }}_ACCESS_TOKEN=<token> {% if first_command %}{{ first_command.name }}{% else %}{{ cli_name }} config show{% endif %}
 
 ```
 

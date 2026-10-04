@@ -25,12 +25,20 @@ Then run a command, or ask any command for its options with `--help`:
 my-cli private get-greetings --help
 ```
 
-The base URL defaults to `http://localhost:3000`,
-so the second line is only needed to reach another host. See
-[Configuration](#configuration) and [Authentication](#authentication) for the
-details.
+The base URL defaults to `http://localhost:3000`, so the second line
+is only needed to reach another host. See [Configuration](#configuration) and
+[Authentication](#authentication) for the details.
 
 ## Commands
+
+- [my-cli config get](#my-cli-config-get)
+- [my-cli config init](#my-cli-config-init)
+- [my-cli config list-profiles](#my-cli-config-list-profiles)
+- [my-cli config set](#my-cli-config-set)
+- [my-cli config show](#my-cli-config-show)
+- [my-cli config unset](#my-cli-config-unset)
+- [my-cli private get-greetings](#my-cli-private-get-greetings)
+- [my-cli public get-public-greetings](#my-cli-public-get-public-greetings)
 
 Every command takes these options, which also apply to every command when given
 right after `my-cli`:
@@ -46,30 +54,54 @@ right after `my-cli`:
 
 ### config
 
-Manage the profile file described under [Configuration](#configuration).
+Configure the CLI.
 
-- `my-cli config init` - Initialize the profile file with default profile.
-- `my-cli config list-profiles` - List all available profiles.
-- `my-cli config show` - Show all parameters and values for a profile.
-- `my-cli config get` - Get a configuration value from a profile.
-  - `--param TEXT` (required) - Parameter name.
-- `my-cli config set` - Set a configuration value in a profile.
-  - `--param TEXT` (required) - Parameter name.
-  - `--value TEXT` (required) - Parameter value.
-- `my-cli config unset` - Remove a configuration value from a profile.
-  - `--param TEXT` (required) - Parameter name.
+#### my-cli config get
+
+Get a configuration value from a profile.
+
+- `--param TEXT` (required) - Parameter name.
+
+#### my-cli config init
+
+Initialize the profile file with default profile.
+
+#### my-cli config list-profiles
+
+List all available profiles.
+
+#### my-cli config set
+
+Set a configuration value in a profile.
+
+- `--param TEXT` (required) - Parameter name.
+- `--value TEXT` (required) - Parameter value.
+
+#### my-cli config show
+
+Show all parameters and values for a profile.
+
+#### my-cli config unset
+
+Remove a configuration value from a profile.
+
+- `--param TEXT` (required) - Parameter name.
 
 ### private
 
 Private commands
 
-- `my-cli private get-greetings` - Get a greeting message (authenticated)
+#### my-cli private get-greetings
+
+Get a greeting message (authenticated)
 
 ### public
 
 Public commands
 
-- `my-cli public get-public-greetings` - Get a public greeting message
+#### my-cli public get-public-greetings
+
+Get a public greeting message
 
 ## Configuration
 
