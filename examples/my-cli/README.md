@@ -40,6 +40,8 @@ is only needed to reach another host. See [Configuration](#configuration) and
 - [my-cli private get-greetings](#my-cli-private-get-greetings)
 - [my-cli public get-public-greetings](#my-cli-public-get-public-greetings)
 
+### Common Options
+
 Every command takes these options, which also apply to every command when given
 right after `my-cli`:
 

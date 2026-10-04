@@ -2287,6 +2287,15 @@ class TestGeneratedReadme:
         for option in ("--no-verify-ssl", "--ca-file"):
             assert issue50_readme.count(option) == 1, option
 
+    def test_common_options_have_their_own_subsection(self, issue50_readme):
+        """Test the shared options sit under a heading between the index and groups."""
+        commands = issue50_readme.split("## Commands\n", 1)[1]
+        headings = re.findall(r"^### (.+)$", commands, re.M)
+
+        assert headings[0] == "Common Options"
+        subsection = commands.split("### Common Options\n", 1)[1].split("\n### ", 1)[0]
+        assert "`--base-url`" in subsection
+
     def test_config_commands_are_documented(self, issue50_readme):
         """Test the built-in profile commands are in the reference."""
         assert "#### issue50-cli config init\n" in issue50_readme
