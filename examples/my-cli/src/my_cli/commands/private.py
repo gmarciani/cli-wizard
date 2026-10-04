@@ -9,7 +9,7 @@ from typing import Any
 import click
 from click.core import ParameterSource
 
-from my_cli.client import ApiClient, format_error
+from my_cli.client import ApiClient, format_error, parse_headers
 from my_cli.constants import DEFAULT_CA_FILE, OUTPUT_FORMATS
 from my_cli.logging import (
     colors_enabled,
@@ -34,13 +34,16 @@ def _get_client(
     no_verify_ssl: bool,
     ca_file: Path | None,
     debug: bool = False,
+    timeout: int | None = None,
+    headers: dict[str, str] | None = None,
 ) -> ApiClient:
     """Create an API client with the given options.
 
-    baseUrl, timeout and accessToken are profile settings, so resolve_setting()
-    runs the precedence chain over them; --base-url is the only one with a flag
-    to outrank it. --no-verify-ssl and --ca-file have no key in
-    PROFILE_DEFAULTS and so come from the command line alone.
+    baseUrl, timeout, accessToken and the retry settings are profile settings,
+    so resolve_setting() runs the precedence chain over them; --base-url and
+    --timeout are the ones with a flag to outrank it. --no-verify-ssl,
+    --ca-file and --header have no key in PROFILE_DEFAULTS and so come from
+    the command line alone.
     """
     effective_ca_file = (
         None if no_verify_ssl else (str(ca_file) if ca_file else DEFAULT_CA_FILE)
@@ -48,10 +51,13 @@ def _get_client(
     return ApiClient(
         base_url=resolve_setting("baseUrl", base_url),
         access_token=resolve_setting("accessToken"),
-        timeout=int(resolve_setting("timeout")),
+        timeout=int(resolve_setting("timeout", timeout)),
         ca_file=effective_ca_file,
         verify_ssl=not no_verify_ssl,
         debug=debug,
+        headers=headers,
+        retry_max_attempts=int(resolve_setting("retryMaxAttempts")),
+        retry_backoff_factor=float(resolve_setting("retryBackoffFactor")),
     )
 
 
@@ -111,6 +117,18 @@ def private(ctx: click.Context, debug: bool) -> None:
     help="CA certificate file for SSL verification.",
 )
 @click.option(
+    "--timeout",
+    type=int,
+    help="Seconds to wait for a response, overriding the timeout setting.",
+)
+@click.option(
+    "--header",
+    "-H",
+    multiple=True,
+    callback=parse_headers,
+    help="Extra request header as 'Name: value'. Repeatable.",
+)
+@click.option(
     "--output",
     "-o",
     type=click.Choice(OUTPUT_FORMATS),
@@ -124,6 +142,8 @@ def get_greetings(
     base_url: str | None,
     no_verify_ssl: bool,
     ca_file: Path | None,
+    timeout: int | None,
+    header: dict[str, str],
     output: str | None,
 ) -> None:
     """get_greetings command."""
@@ -133,6 +153,8 @@ def get_greetings(
     base_url = _resolve_global(ctx, "base_url", base_url)
     no_verify_ssl = _resolve_global(ctx, "no_verify_ssl", no_verify_ssl)
     ca_file = _resolve_global(ctx, "ca_file", ca_file)
+    timeout = _resolve_global(ctx, "timeout", timeout)
+    header = _resolve_global(ctx, "header", header)
     output = _resolve_global(ctx, "output", output)
 
     # Enable debug logging if --debug flag is set
@@ -150,7 +172,7 @@ def get_greetings(
     cmd_name = "private get-greetings"
     log_debug(f"Executing command '{cmd_name}' with params: {redact(cmd_params)}")
 
-    client = _get_client(base_url, no_verify_ssl, ca_file, debug)
+    client = _get_client(base_url, no_verify_ssl, ca_file, debug, timeout, header)
 
     try:
         response = client.get("/private/greetings")

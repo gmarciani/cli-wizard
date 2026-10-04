@@ -10,6 +10,7 @@ from pathlib import Path
 
 import click
 
+from my_cli.client import parse_headers
 from my_cli.commands.config import config
 from my_cli.commands.private import private
 from my_cli.commands.public import public
@@ -64,6 +65,18 @@ def _show_splash() -> None:
     help="CA certificate file for SSL verification.",
 )
 @click.option(
+    "--timeout",
+    type=int,
+    help="Seconds to wait for a response, overriding the timeout setting.",
+)
+@click.option(
+    "--header",
+    "-H",
+    multiple=True,
+    callback=parse_headers,
+    help="Extra request header as 'Name: value'. Repeatable.",
+)
+@click.option(
     "--output",
     "-o",
     type=click.Choice(OUTPUT_FORMATS),
@@ -77,6 +90,8 @@ def main(
     base_url: str | None,
     no_verify_ssl: bool,
     ca_file: Path | None,
+    timeout: int | None,
+    header: dict[str, str],
     output: str | None,
 ) -> None:
     """Main CLI entry point."""
@@ -97,6 +112,8 @@ def main(
     ctx.obj["base_url"] = base_url
     ctx.obj["no_verify_ssl"] = no_verify_ssl
     ctx.obj["ca_file"] = ca_file
+    ctx.obj["timeout"] = timeout
+    ctx.obj["header"] = header
     ctx.obj["output"] = output
 
     # Show help when no subcommand is invoked

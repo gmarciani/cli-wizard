@@ -32,6 +32,11 @@ PROFILE_FILE = _expand_path("${HOME}/.my-cli/profiles.yaml")
 
 DEFAULT_BASE_URL = "http://localhost:3000"
 DEFAULT_TIMEOUT = 30
+DEFAULT_RETRY_MAX_ATTEMPTS = 3
+DEFAULT_RETRY_BACKOFF_FACTOR = 0.5
+
+# Identifies this CLI's traffic in the server's logs
+USER_AGENT = f"my-cli/{__version__} (cli-wizard)"
 DEFAULT_CA_FILE = None
 
 # Splash screen configuration

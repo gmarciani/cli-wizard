@@ -49,6 +49,8 @@ right after `my-cli`:
 - `--base-url`, `-u` - API base URL, overriding the profile and the environment.
 - `--ca-file` - CA certificate bundle to verify the server against.
 - `--no-verify-ssl` - Disable TLS certificate verification. Prints a warning.
+- `--timeout` - Seconds to wait for a response, overriding the `timeout` setting.
+- `--header`, `-H` - Extra request header as `Name: value`. Repeatable.
 - `--output`, `-o` - Print the response as `json`, `yaml` or `table`, overriding
   the `outputFormat` setting.
 - `--debug`, `-d` - Log the request and response, with credentials redacted.
@@ -126,11 +128,13 @@ than `default`.
 | `tableStyle` | `rounded` | Borders of a `table` output: `rounded`, `ascii`, `minimal` or `markdown`. |
 | `logLevel` | `INFO` | Lowest level of log message shown: DEBUG, INFO, WARNING or ERROR. |
 | `outputColors` | `true` | Whether log messages and errors are coloured. |
+| `retryMaxAttempts` | `3` | Retries of a request that could not connect or got a 429 or 5xx response, after the first attempt. `0` sends every request once. |
+| `retryBackoffFactor` | `0.5` | Seconds waited before retry *n*: the factor times 2^(n-1), or what a `Retry-After` header asks. |
 
 Each setting is resolved through four layers, highest precedence first:
 
 1. The command-line flag, for the settings that have one (`--base-url`,
-   `--output`).
+   `--timeout`, `--output`).
 2. The environment variable `MY_CLI_<SETTING>`, the setting
    name in upper snake case: `baseUrl` reads `MY_CLI_BASE_URL`.
 3. The value stored in the profile selected with `--profile`, or `default`.

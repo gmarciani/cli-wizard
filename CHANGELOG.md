@@ -36,6 +36,10 @@
 
 - Fixed the `OutputFormat` and `TableStyle` settings having no effect: commands always printed JSON. A command now prints the response as `json`, `yaml` or `table` as the `outputFormat` setting says, `tableStyle` picks the table borders, and the new `--output`/`-o` option selects a format for one invocation.
 - Fixed a profile or environment value that is not one of a setting's allowed values, such as `outputFormat: xml`, being accepted in silence. It is now ignored with a warning that lists the allowed values.
+- Fixed the `RetryMaxAttempts` and `RetryBackoffFactor` settings having no effect: a request that failed to connect or got a 429 or 5xx response failed at once. It is now retried as the `retryMaxAttempts` and `retryBackoffFactor` settings say.
+- Added the `--timeout` option, which sets the request timeout for one invocation.
+- Added the repeatable `--header`/`-H` option, which sends an extra `Name: value` header with the request.
+- Requests now identify the CLI by name and version in their `User-Agent` header, so its traffic can be told apart in the server's logs.
 - Fixed `--debug` printing passwords, access tokens and the `Authorization` header in cleartext, to the terminal and to `LogFile`. Request parameters, request and response bodies, and headers are now redacted to `***`, based on the `format: password` and `writeOnly: true` spec signals plus a name heuristic for `*password*`, `*token*`, `*secret*` and `*key*`. Command output on stdout is unaffected.
 - Fixed the generated test suite exercising only the scaffolding: `tests/commands_test.py` now runs every command built from the spec, asserting the HTTP method, the resolved URL and the query and body it sends.
 - Fixed a configured CA file that does not exist being ignored, so requests were silently verified against the system trust store instead of the pinned bundle. Commands now fail with `Error: CA file not found: <path>`.
