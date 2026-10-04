@@ -288,3 +288,56 @@ class TestCommandGroup:
             ],
         )
         assert group.has_path_parameters is expected
+
+
+class TestMetavar:
+    """The placeholder the README shows after an option, as Click's help does."""
+
+    @pytest.mark.parametrize(
+        ("param_type", "enum", "expected"),
+        [
+            ("string", [], "TEXT"),
+            ("integer", [], "INTEGER"),
+            ("number", [], "FLOAT"),
+            ("boolean", [], "BOOLEAN"),
+            ("string", ["json", "csv"], "[json|csv]"),
+        ],
+    )
+    def test_parameter_metavar_follows_the_type(self, param_type, enum, expected):
+        """Test a parameter's metavar names its type, or lists its choices."""
+        param = Parameter(
+            name="format",
+            location="query",
+            param_type=param_type,
+            required=False,
+            enum=enum,
+        )
+        assert param.metavar == expected
+
+    def test_parameter_array_metavar_follows_the_items(self):
+        """Test an array parameter's metavar names the type of one item."""
+        param = Parameter(
+            name="ids",
+            location="query",
+            param_type="array",
+            required=False,
+            items_type="integer",
+        )
+        assert param.metavar == "INTEGER"
+
+    @pytest.mark.parametrize(
+        ("prop_type", "items_type", "expected"),
+        [
+            ("string", None, "TEXT"),
+            ("number", None, "FLOAT"),
+            ("array", "boolean", "BOOLEAN"),
+        ],
+    )
+    def test_body_property_metavar_follows_the_type(
+        self, prop_type, items_type, expected
+    ):
+        """Test a body property's metavar names its type, or that of one item."""
+        prop = RequestBodyProperty(
+            name="ratio", prop_type=prop_type, required=False, items_type=items_type
+        )
+        assert prop.metavar == expected

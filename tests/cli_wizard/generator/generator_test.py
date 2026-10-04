@@ -2181,3 +2181,132 @@ class TestGeneratedRequiredBooleans:
         """Test the default declared for a boolean is documented, not applied."""
         result = CliRunner().invoke(issue23_cli, ["ops", "grant-beta-access", "--help"])
         assert "default: (true)" in result.output
+
+
+@pytest.fixture(scope="module")
+def issue50_readme(issue50_cli):
+    """Read the README generated for the project covering every kind of input."""
+    return (issue50_cli / "README.md").read_text()
+
+
+class TestGeneratedReadme:
+    """Regression tests for #53: the README documents the CLI it ships with."""
+
+    def test_every_command_is_listed_with_its_summary(self, issue50_readme):
+        """Test each spec-derived command appears under its group with its summary."""
+        for group in _issue50_groups().values():
+            assert f"### {group.cli_name}" in issue50_readme
+            for op in group.operations:
+                command = f"issue50-cli {group.cli_name} {op.command_name}"
+                assert f"`{command}` - {op.summary}" in issue50_readme
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            # A path parameter is required and typed
+            "`--user-id TEXT` (required)",
+            # An optional query parameter carries no marker
+            "`--limit INTEGER`\n",
+            # An enum lists its choices
+            "`--format [json|csv]` (required)",
+            "`--ratio FLOAT`\n",
+            # A boolean body property is a flag pair, with its description and
+            # the default the help advertises
+            "`--enabled/--no-enabled` - Invite outright. Default: true.",
+            "`--notify/--no-notify` (required)",
+        ],
+    )
+    def test_options_show_type_requirement_and_default(self, issue50_readme, line):
+        """Test each option is documented with what Click's help would show."""
+        assert line in issue50_readme
+
+    def test_repeatable_options_are_marked(self, tmp_path):
+        """Test an array option says it can be repeated."""
+        groups = {
+            "Ops": CommandGroup(
+                name="Ops",
+                cli_name="ops",
+                description="Operations",
+                operations=[
+                    Operation(
+                        operation_id="listThings",
+                        method="GET",
+                        path="/things",
+                        summary="List things",
+                        description="",
+                        tags=["Ops"],
+                        parameters=[
+                            Parameter(
+                                name="tag",
+                                location="query",
+                                param_type="array",
+                                required=False,
+                                items_type="string",
+                            )
+                        ],
+                    )
+                ],
+            )
+        }
+        output_dir = tmp_path / "cli"
+        config = TestCliGenerator()._default_config()
+        CliGenerator(config=config).generate(groups, output_dir, "test-cli", "test_cli")
+
+        readme = (output_dir / "README.md").read_text()
+        assert "`--tag TEXT` (repeatable)" in readme
+
+    def test_common_options_are_documented_once(self, issue50_readme):
+        """Test the options every command takes are described once, not per command."""
+        for option in ("--no-verify-ssl", "--ca-file"):
+            assert issue50_readme.count(option) == 1, option
+
+    def test_config_commands_are_documented(self, issue50_readme):
+        """Test the built-in profile commands are in the reference."""
+        assert "`issue50-cli config init`" in issue50_readme
+        assert "`issue50-cli config set`" in issue50_readme
+        assert "`--param TEXT` (required)" in issue50_readme
+
+    def test_profile_file_location_is_stated(self, issue50_cli, issue50_readme):
+        """Test the README names the file config init creates."""
+        assert f"{issue50_cli / 'home'}/profiles.yaml" in issue50_readme
+
+    def test_profile_settings_are_listed_with_their_defaults(self, issue50_readme):
+        """Test each setting the CLI reads is listed with its built-in default."""
+        assert f"| `baseUrl` | `{ISSUE23_BASE_URL}` |" in issue50_readme
+        assert "| `timeout` | `30` |" in issue50_readme
+        assert "| `accessToken` | unset |" in issue50_readme
+
+    def test_inert_profile_keys_are_not_advertised(self, issue50_readme):
+        """Test a key no generated code reads stays out of the README."""
+        assert "tableStyle" not in issue50_readme
+
+    def test_documented_settings_are_the_ones_the_code_resolves(self):
+        """Test the documented profile keys match the resolve_setting calls."""
+        from cli_wizard.generator.generator import PROFILE_SETTING_DOCS
+
+        templates = Path(cli_wizard.__file__).parent / "templates" / "src"
+        resolved = set()
+        for template in templates.rglob("*.py.j2"):
+            resolved.update(
+                re.findall(r'resolve_setting\("(\w+)"', template.read_text())
+            )
+
+        assert set(PROFILE_SETTING_DOCS) == resolved
+
+    def test_authentication_flow_is_documented(self, issue50_readme):
+        """Test the README says how a token is stored and how it is sent."""
+        assert "config set --param accessToken --value" in issue50_readme
+        assert "ISSUE50_CLI_ACCESS_TOKEN" in issue50_readme
+        assert "Authorization: Bearer" in issue50_readme
+
+    def test_readme_without_api_commands_still_renders(self, tmp_path):
+        """Test a project with no spec gets the config reference and no leftovers."""
+        output_dir = tmp_path / "cli"
+        config = TestCliGenerator()._default_config()
+        CliGenerator(config=config).generate({}, output_dir, "test-cli", "test_cli")
+
+        readme = (output_dir / "README.md").read_text()
+        assert "## Commands" in readme
+        assert "`test-cli config init`" in readme
+        assert "{{" not in readme
+        assert "None" not in readme

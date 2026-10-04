@@ -7,6 +7,10 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+# Click type -> the placeholder Click's help shows after the option, which the
+# generated README repeats so the two never disagree.
+_METAVARS = {"str": "TEXT", "int": "INTEGER", "float": "FLOAT", "bool": "BOOLEAN"}
+
 
 @dataclass
 class Parameter:
@@ -51,6 +55,17 @@ class Parameter:
         }
         source = (self.items_type or "string") if self.is_array else self.param_type
         return type_map.get(source, "str")
+
+    @property
+    def metavar(self) -> str:
+        """Get the value placeholder shown after the option in the documentation.
+
+        An enum lists its choices the way Click renders a Choice; anything else
+        names the type of one value, which for an array is the type of an item.
+        """
+        if self.enum:
+            return f"[{'|'.join(self.enum)}]"
+        return _METAVARS[self.click_type]
 
     @property
     def python_annotation(self) -> str:
@@ -109,6 +124,11 @@ class RequestBodyProperty:
         }
         source = (self.items_type or "string") if self.is_array else self.prop_type
         return type_map.get(source, "str")
+
+    @property
+    def metavar(self) -> str:
+        """Get the value placeholder shown after the option in the documentation."""
+        return _METAVARS[self.click_type]
 
     @property
     def python_annotation(self) -> str:
