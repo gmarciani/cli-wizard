@@ -125,6 +125,136 @@ def _sensitive_field_names(groups: dict[str, CommandGroup]) -> list[str]:
 logger = logging.getLogger(__name__)
 
 
+def _option_doc(
+    usage: str,
+    *,
+    required: bool,
+    repeatable: bool = False,
+    description: str = "",
+    default: Any = None,
+) -> dict[str, Any]:
+    """Describe one option for the README, the way Click's help would."""
+    return {
+        "usage": usage,
+        "required": required,
+        "repeatable": repeatable,
+        "description": description,
+        # Click shows a boolean default in lower case, so the README does too.
+        "default": (
+            None
+            if default is None
+            else str(default).lower()
+            if isinstance(default, bool)
+            else str(default)
+        ),
+    }
+
+
+def _operation_options(op: Operation) -> list[dict[str, Any]]:
+    """List the options of one spec-derived command, in the order they are declared."""
+    options = []
+    for param in op.path_parameters:
+        options.append(
+            _option_doc(
+                f"--{param.cli_name} {param.metavar}",
+                required=True,
+                description=param.description,
+            )
+        )
+    for param in op.query_parameters:
+        options.append(
+            _option_doc(
+                f"--{param.cli_name} {param.metavar}",
+                required=param.required,
+                repeatable=param.is_array,
+                description=param.description,
+                default=param.default,
+            )
+        )
+    for prop in op.body_properties:
+        # A boolean property is a flag pair, unless it repeats as an array
+        if prop.click_type == "bool" and not prop.is_array:
+            usage = f"--{prop.cli_name}/--no-{prop.cli_name}"
+        else:
+            usage = f"--{prop.cli_name} {prop.metavar}"
+        options.append(
+            _option_doc(
+                usage,
+                required=prop.required,
+                repeatable=prop.is_array,
+                description=prop.description,
+                default=prop.default,
+            )
+        )
+    return options
+
+
+# The built-in profile commands, documented next to the spec-derived ones.
+_PARAM_OPTION = _option_doc(
+    "--param TEXT", required=True, description="Parameter name."
+)
+_VALUE_OPTION = _option_doc(
+    "--value TEXT", required=True, description="Parameter value."
+)
+_CONFIG_COMMANDS: list[tuple[str, str, list[dict[str, Any]]]] = [
+    ("get", "Get a configuration value from a profile.", [_PARAM_OPTION]),
+    ("init", "Initialize the profile file with default profile.", []),
+    ("list-profiles", "List all available profiles.", []),
+    ("set", "Set a configuration value in a profile.", [_PARAM_OPTION, _VALUE_OPTION]),
+    ("show", "Show all parameters and values for a profile.", []),
+    ("unset", "Remove a configuration value from a profile.", [_PARAM_OPTION]),
+]
+
+
+def _readme_command(name: str, summary: str, options: list[dict[str, Any]]) -> dict:
+    """Describe one command for the README, with the anchor of its heading.
+
+    GitHub derives the anchor from the heading by lower-casing it and turning
+    spaces into hyphens; command names are already kebab-case, so that is all.
+    """
+    return {
+        "name": name,
+        "anchor": name.replace(" ", "-"),
+        "summary": summary,
+        "options": options,
+    }
+
+
+def _readme_groups(groups: dict[str, CommandGroup], cli_name: str) -> list[dict]:
+    """Build the command reference of the README, groups and commands sorted by name.
+
+    The built-in config group is slotted in alphabetically with the spec-derived
+    ones, so the index at the top of the section and the subsections below it
+    read in the same order.
+    """
+    reference = [
+        {
+            "name": "config",
+            "description": "Configure the CLI.",
+            "commands": [
+                _readme_command(f"{cli_name} config {command}", summary, options)
+                for command, summary, options in _CONFIG_COMMANDS
+            ],
+        }
+    ]
+    for group in groups.values():
+        reference.append(
+            {
+                "name": group.cli_name,
+                "description": group.description,
+                "commands": [
+                    _readme_command(
+                        f"{cli_name} {group.cli_name} {op.command_name}",
+                        op.summary or op.operation_id,
+                        _operation_options(op),
+                    )
+                    for op in sorted(group.operations, key=lambda o: o.command_name)
+                ],
+            }
+        )
+    return sorted(reference, key=lambda g: g["name"])
+
+
 # What each profile setting does, for the generated README. Only the keys the
 # generated code resolves belong here: PROFILE_DEFAULTS also carries keys that
 # nothing reads yet, and advertising those would document behaviour the CLI
@@ -360,7 +490,11 @@ class CliGenerator:
     ) -> None:
         """Generate README.md, with the command reference built from the groups."""
         template = self.env.get_template("README.md.j2")
-        content = template.render(**self._template_context(groups=groups))
+        content = template.render(
+            **self._template_context(
+                readme_groups=_readme_groups(groups, self.cli_name)
+            )
+        )
         with open(output_dir / "README.md", "w") as f:
             f.write(content)
 
