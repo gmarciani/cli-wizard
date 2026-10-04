@@ -125,6 +125,22 @@ def _sensitive_field_names(groups: dict[str, CommandGroup]) -> list[str]:
 logger = logging.getLogger(__name__)
 
 
+# What each profile setting does, for the generated README. Only the keys the
+# generated code resolves belong here: PROFILE_DEFAULTS also carries keys that
+# nothing reads yet, and advertising those would document behaviour the CLI
+# does not have. A test checks this against the resolve_setting() calls.
+PROFILE_SETTING_DOCS: dict[str, str] = {
+    "baseUrl": "Base URL of the API every command sends its requests to.",
+    "accessToken": (
+        "Bearer token sent in the `Authorization` header of every request."
+    ),
+    "timeout": "Seconds to wait for a response before a request fails.",
+    "jsonIndent": "Indentation of the JSON a command prints.",
+    "logLevel": "Lowest level of log message shown: DEBUG, INFO, WARNING or ERROR.",
+    "outputColors": "Whether log messages and errors are coloured.",
+}
+
+
 # Ruff invocations applied to generated code, as (args...) without the binary
 # or the target path. The generated tox.ini [testenv:format] must run the same
 # commands; test_format_recipe_matches_tox_template enforces that.
@@ -223,6 +239,13 @@ class CliGenerator:
             "PythonVersion"
         )
 
+        # Documented in the order the README should read them, with the default
+        # the generated constants module ends up holding.
+        profile_settings = [
+            (key, profile_defaults[key], text)
+            for key, text in PROFILE_SETTING_DOCS.items()
+        ]
+
         context = {
             **self.config,  # Spread all config values at top level
             # Same fallback: an absent threshold would render an empty
@@ -234,6 +257,11 @@ class CliGenerator:
             "cli_name": self.cli_name,
             "package_name": self.package_name,
             "profile_defaults": profile_defaults,
+            "profile_settings": profile_settings,
+            # The same expression the constants module expands at runtime, so
+            # the README names the file the CLI really reads.
+            "profile_file": self.config.get("ProfileFile")
+            or f"{self._compute_main_dir(self.package_name)}/profiles.yaml",
             "PythonVersions": python_versions_from(minimum_python),
         }
         context.update(extra)
@@ -282,7 +310,7 @@ class CliGenerator:
 
         # Generate root project files
         self._generate_pyproject(output_dir, cli_name, package_name)
-        self._generate_readme(output_dir, cli_name)
+        self._generate_readme(output_dir, groups)
         self._generate_version(output_dir)
         self._generate_gitignore(output_dir)
         self._generate_makefile(output_dir)
@@ -327,10 +355,12 @@ class CliGenerator:
         with open(output_dir / "pyproject.toml", "w") as f:
             f.write(content)
 
-    def _generate_readme(self, output_dir: Path, cli_name: str) -> None:
-        """Generate README.md."""
+    def _generate_readme(
+        self, output_dir: Path, groups: dict[str, CommandGroup]
+    ) -> None:
+        """Generate README.md, with the command reference built from the groups."""
         template = self.env.get_template("README.md.j2")
-        content = template.render(**self._template_context())
+        content = template.render(**self._template_context(groups=groups))
         with open(output_dir / "README.md", "w") as f:
             f.write(content)
 

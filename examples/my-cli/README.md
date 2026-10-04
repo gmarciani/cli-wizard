@@ -8,23 +8,114 @@ A CLI application
 pip install -e .
 ```
 
-## Usage
+## Quick start
+
+Create the profile file, point the CLI at the API and store the token it
+authenticates with:
 
 ```bash
-my-cli --help
+my-cli config init
+my-cli config set --param baseUrl --value http://localhost:3000
+my-cli config set --param accessToken --value <token>
 ```
+
+Then run a command, or ask any command for its options with `--help`:
+
+```bash
+my-cli private get-greetings --help
+```
+
+The base URL defaults to `http://localhost:3000`,
+so the second line is only needed to reach another host. See
+[Configuration](#configuration) and [Authentication](#authentication) for the
+details.
+
+## Commands
+
+Every command takes these options, which also apply to every command when given
+right after `my-cli`:
+
+- `--profile`, `-p` - Profile to read settings from. Default: `default`.
+- `--base-url`, `-u` - API base URL, overriding the profile and the environment.
+- `--ca-file` - CA certificate bundle to verify the server against.
+- `--no-verify-ssl` - Disable TLS certificate verification. Prints a warning.
+- `--debug`, `-d` - Log the request and response, with credentials redacted.
+- `--help` - Show the options of the command.
+
+`my-cli --version` prints the version.
+
+### config
+
+Manage the profile file described under [Configuration](#configuration).
+
+- `my-cli config init` - Initialize the profile file with default profile.
+- `my-cli config list-profiles` - List all available profiles.
+- `my-cli config show` - Show all parameters and values for a profile.
+- `my-cli config get` - Get a configuration value from a profile.
+  - `--param TEXT` (required) - Parameter name.
+- `my-cli config set` - Set a configuration value in a profile.
+  - `--param TEXT` (required) - Parameter name.
+  - `--value TEXT` (required) - Parameter value.
+- `my-cli config unset` - Remove a configuration value from a profile.
+  - `--param TEXT` (required) - Parameter name.
+
+### private
+
+Private commands
+
+- `my-cli private get-greetings` - Get a greeting message (authenticated)
+
+### public
+
+Public commands
+
+- `my-cli public get-public-greetings` - Get a public greeting message
 
 ## Configuration
 
-Settings live in named profiles, listed by `my-cli config show` and
-changed with `my-cli config set --param baseUrl --value <url>`. Each is
-resolved through four layers, highest precedence first:
+Settings live in named profiles in `${HOME}/.my-cli/profiles.yaml`. `my-cli config init`
+creates the file with an empty `default` profile, and any command creates it on
+first run if it is missing. `my-cli config show` lists a profile with the
+defaults filled in, `my-cli config set --param <setting> --value <value>`
+changes one setting and `--profile <name>` on any command selects a profile other
+than `default`.
+
+| Setting | Default | Effect |
+|---|---|---|
+| `baseUrl` | `http://localhost:3000` | Base URL of the API every command sends its requests to. |
+| `accessToken` | unset | Bearer token sent in the `Authorization` header of every request. |
+| `timeout` | `30` | Seconds to wait for a response before a request fails. |
+| `jsonIndent` | `2` | Indentation of the JSON a command prints. |
+| `logLevel` | `INFO` | Lowest level of log message shown: DEBUG, INFO, WARNING or ERROR. |
+| `outputColors` | `true` | Whether log messages and errors are coloured. |
+
+Each setting is resolved through four layers, highest precedence first:
 
 1. The command-line flag, for the settings that have one (`--base-url`).
 2. The environment variable `MY_CLI_<SETTING>`, the setting
    name in upper snake case: `baseUrl` reads `MY_CLI_BASE_URL`.
 3. The value stored in the profile selected with `--profile`, or `default`.
 4. The built-in default.
+
+## Authentication
+
+Requests are authenticated with a bearer token: when `accessToken` is set, every
+request carries an `Authorization: Bearer <token>` header. Without it, requests
+are sent anonymously. Obtaining the token is up to the API; once you have it,
+store it in the profile:
+
+```bash
+my-cli config set --param accessToken --value <token>
+```
+
+or hand it to a single invocation through the environment:
+
+```bash
+MY_CLI_ACCESS_TOKEN=<token> my-cli private get-greetings
+```
+
+The profile file is created readable by its owner only, and `--debug` output
+redacts the token.
 
 ## Development
 
