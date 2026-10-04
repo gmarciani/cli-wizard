@@ -374,6 +374,31 @@ class TestParseCliValue:
             Config.parse_cli_value("NotAField", "value")
 
 
+class TestGetFieldChoices:
+    """Tests for Config.get_field_choices."""
+
+    @pytest.mark.parametrize(
+        "field_name,expected",
+        [
+            ("OutputFormat", ("json", "table", "yaml")),
+            ("TableStyle", ("ascii", "rounded", "minimal", "markdown")),
+            ("LogLevel", ("DEBUG", "INFO", "WARNING", "ERROR")),
+        ],
+    )
+    def test_literal_fields_list_their_values(self, field_name, expected):
+        """A Literal field exposes its values in declaration order."""
+        assert Config.get_field_choices(field_name) == expected
+
+    @pytest.mark.parametrize("field_name", ["Timeout", "OutputColors", "IncludeTags"])
+    def test_other_fields_have_no_choices(self, field_name):
+        """A field that is not a Literal has no finite set of values."""
+        assert Config.get_field_choices(field_name) is None
+
+    def test_unknown_field_has_no_choices(self):
+        """An unknown field is reported as having no choices, not as an error."""
+        assert Config.get_field_choices("NotAField") is None
+
+
 class TestDeriveNamesFromProject:
     """Tests for derivation robustness."""
 

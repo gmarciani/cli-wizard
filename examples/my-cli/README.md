@@ -49,6 +49,8 @@ right after `my-cli`:
 - `--base-url`, `-u` - API base URL, overriding the profile and the environment.
 - `--ca-file` - CA certificate bundle to verify the server against.
 - `--no-verify-ssl` - Disable TLS certificate verification. Prints a warning.
+- `--output`, `-o` - Print the response as `json`, `yaml` or `table`, overriding
+  the `outputFormat` setting.
 - `--debug`, `-d` - Log the request and response, with credentials redacted.
 - `--help` - Show the options of the command.
 
@@ -119,13 +121,16 @@ than `default`.
 | `baseUrl` | `http://localhost:3000` | Base URL of the API every command sends its requests to. |
 | `accessToken` | unset | Bearer token sent in the `Authorization` header of every request. |
 | `timeout` | `30` | Seconds to wait for a response before a request fails. |
+| `outputFormat` | `json` | How a command prints the response: `json`, `yaml` or `table`. `--output` overrides it for one invocation. |
 | `jsonIndent` | `2` | Indentation of the JSON a command prints. |
+| `tableStyle` | `rounded` | Borders of a `table` output: `rounded`, `ascii`, `minimal` or `markdown`. |
 | `logLevel` | `INFO` | Lowest level of log message shown: DEBUG, INFO, WARNING or ERROR. |
 | `outputColors` | `true` | Whether log messages and errors are coloured. |
 
 Each setting is resolved through four layers, highest precedence first:
 
-1. The command-line flag, for the settings that have one (`--base-url`).
+1. The command-line flag, for the settings that have one (`--base-url`,
+   `--output`).
 2. The environment variable `MY_CLI_<SETTING>`, the setting
    name in upper snake case: `baseUrl` reads `MY_CLI_BASE_URL`.
 3. The value stored in the profile selected with `--profile`, or `default`.

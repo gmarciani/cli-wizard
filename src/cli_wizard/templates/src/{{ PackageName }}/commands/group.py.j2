@@ -3,14 +3,13 @@
 
 """{{ group.name }} commands."""
 
-import json
 from pathlib import Path
 
 import click
 from click.core import ParameterSource
 from typing import Any
 
-from {{ PackageName }}.constants import DEFAULT_CA_FILE
+from {{ PackageName }}.constants import DEFAULT_CA_FILE, OUTPUT_FORMATS
 {% if group.has_path_parameters %}
 from {{ PackageName }}.client import ApiClient, encode_path_param, format_error
 {% else %}
@@ -22,6 +21,7 @@ from {{ PackageName }}.logging import (
     log_debug,
     set_debug,
 )
+from {{ PackageName }}.output import render
 from {{ PackageName }}.profile import load_profile, resolve_setting
 from {{ PackageName }}.redaction import redact, redact_text
 
@@ -176,6 +176,11 @@ def {{ group.module_name }}(ctx: click.Context, debug: bool) -> None:
     ),
     help="CA certificate file for SSL verification.",
 )
+@click.option(
+    "--output", "-o",
+    type=click.Choice(OUTPUT_FORMATS),
+    help="Output format, overriding the outputFormat setting.",
+)
 @click.pass_context
 def {{ op.function_name }}(
     ctx: click.Context,
@@ -193,6 +198,7 @@ def {{ op.function_name }}(
     base_url: str | None,
     no_verify_ssl: bool,
     ca_file: Path | None,
+    output: str | None,
 ) -> None:
     """{{ op.function_name }} command."""
     # Options given at the root group apply unless repeated here
@@ -201,12 +207,18 @@ def {{ op.function_name }}(
     base_url = _resolve_global(ctx, "base_url", base_url)
     no_verify_ssl = _resolve_global(ctx, "no_verify_ssl", no_verify_ssl)
     ca_file = _resolve_global(ctx, "ca_file", ca_file)
+    output = _resolve_global(ctx, "output", output)
 
     # Enable debug logging if --debug flag is set
     set_debug(debug)
 
     # Load profile
     load_profile(profile)
+
+    # Resolved before the request, so a bad setting fails without sending it
+    output_format = str(resolve_setting("outputFormat", output))
+    json_indent = int(resolve_setting("jsonIndent"))
+    table_style = str(resolve_setting("tableStyle"))
     # Log command execution start
     cmd_params: dict[str, Any] = {
 {% for param in op.path_parameters %}
@@ -280,13 +292,17 @@ def {{ op.function_name }}(
 {% endif %}
         response.raise_for_status()
         if response.text:
-            indent = int(resolve_setting("jsonIndent"))
-            output = json.dumps(response.json(), indent=indent)
+            rendered = render(
+                response.json(),
+                output_format,
+                json_indent=json_indent,
+                table_style=table_style,
+            )
             log_debug(
                 f"Command '{cmd_name}' completed"
-                f" with output: {redact_text(output)[:500]}"
+                f" with output: {redact_text(rendered)[:500]}"
             )
-            click.echo(output)
+            click.echo(rendered)
         else:
             log_debug(
                 "Command '%s' completed successfully"
