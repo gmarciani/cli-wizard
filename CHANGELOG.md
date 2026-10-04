@@ -7,6 +7,7 @@
 #### cli-wizard
 
 - Added the `HomePageUrl` config parameter, which sets `Homepage` in a generated `pyproject.toml` and defaults to `RepositoryUrl`.
+- Added the `--project-name` option to `generate`. It sets `ProjectName`, from which `CommandName` and `PackageName` derive, and makes the configuration file optional: `cli-wizard generate --api openapi.yaml --project-name "My CLI"` is enough, with every other parameter taking its default.
 
 ### Changes
 

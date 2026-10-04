@@ -22,15 +22,18 @@ logger = logging.getLogger(__name__)
 
 
 @click.command(
-    help="""Generate the CLI from config and OpenAPI spec.
+    help="""Generate the CLI from an OpenAPI spec.
 
 API commands are generated from the OpenAPI spec given with --api or with the
 Api parameter of the configuration file. Without either, a functional CLI is
 generated without API commands.
 
+A configuration file is optional: without one, --project-name names the
+project and every other parameter takes its default.
+
 The project is written to the --output directory, by default a directory named
-after CommandName next to the configuration file. Its previous contents are
-deleted."""
+after CommandName next to the configuration file, or in the current directory
+when there is no configuration file. Its previous contents are deleted."""
 )
 @click.option(
     "--api",
@@ -40,10 +43,16 @@ deleted."""
     help="Path to the OpenAPI spec file, YAML or JSON",
 )
 @click.option(
+    "--project-name",
+    "-p",
+    default=None,
+    help="Human-readable project name; CommandName and PackageName derive from it",
+)
+@click.option(
     "--configuration",
     "-c",
     type=click.Path(exists=True, dir_okay=False, resolve_path=True),
-    required=True,
+    default=None,
     help=f"Path to {CONFIG_FILE_NAME} configuration file",
 )
 @click.option(
@@ -63,23 +72,27 @@ deleted."""
 def generate(
     ctx: click.Context,
     api: str | None,
-    configuration: str,
+    project_name: str | None,
+    configuration: str | None,
     output: str | None,
     force: bool,
 ) -> None:
     """Generate command implementation."""
     debug = ctx.obj.get("debug", False) if ctx.obj else False
 
-    config_path = Path(configuration)
+    config_path = Path(configuration) if configuration else None
+    config_dir = config_path.parent if config_path else Path.cwd()
 
     if debug:
         logger.debug(f"Config file: {config_path}")
+        logger.debug(f"Project name (CLI): {project_name}")
         logger.debug(f"OpenAPI spec (CLI): {api}")
         logger.debug(f"Output directory (CLI): {output}")
 
     # Load and validate configuration
-    cli_config = _load_cli_config(config_path)
-    output_path = resolve_output_dir(output, config_path, cli_config["CommandName"])
+    overrides = {"ProjectName": project_name} if project_name else {}
+    cli_config = _load_cli_config(config_path, overrides)
+    output_path = resolve_output_dir(output, cli_config["CommandName"], config_path)
 
     if debug:
         logger.debug(f"Output directory (resolved): {output_path}")
@@ -92,7 +105,7 @@ def generate(
         # Resolve relative to config file directory
         spec_path = Path(cli_config["Api"])
         if not spec_path.is_absolute():
-            spec_path = config_path.parent / spec_path
+            spec_path = config_dir / spec_path
         if spec_path.exists():
             api_path = spec_path
         else:
@@ -171,7 +184,7 @@ def generate(
     # Generate CLI project
     click.secho("⚙️  Generating CLI project: ", fg="cyan", nl=False)
     click.echo(output_path)
-    generator = CliGenerator(config=cli_config, config_dir=config_path.parent)
+    generator = CliGenerator(config=cli_config, config_dir=config_dir)
     generator.generate(groups, output_path, cli_name, package_name)
 
     # Summary
@@ -197,18 +210,22 @@ def generate(
 
 
 def resolve_output_dir(
-    output: str | None, config_path: Path, command_name: str
+    output: str | None, command_name: str, config_path: Path | None
 ) -> Path:
     """Return the directory to write the project to.
 
     Without an explicit ``--output`` it is a directory named after
     ``CommandName`` next to the configuration file, the layout ``bootstrap``
-    produces and ``examples/`` uses. The output directory is deleted before
-    generation, so one that contains the configuration file is refused rather
-    than destroying the file that describes the project.
+    produces and ``examples/`` uses, or in the current directory when there is
+    no configuration file. The output directory is deleted before generation,
+    so one that contains the configuration file is refused rather than
+    destroying the file that describes the project.
     """
-    output_path = Path(output) if output else config_path.parent / command_name
-    if output_path == config_path.parent or output_path in config_path.parents:
+    base_dir = config_path.parent if config_path else Path.cwd()
+    output_path = Path(output) if output else base_dir / command_name
+    if config_path and (
+        output_path == config_path.parent or output_path in config_path.parents
+    ):
         click.secho(
             f"✗ Output directory '{output_path}' contains the configuration "
             f"file '{config_path}'. Choose a different --output.",
@@ -219,14 +236,24 @@ def resolve_output_dir(
     return output_path
 
 
-def _load_cli_config(config_path: Path) -> dict:
-    """Load and validate CLI generator configuration from YAML file."""
-    try:
-        with open(config_path) as f:
-            raw_config = yaml.safe_load(f) or {}
-    except (yaml.YAMLError, IOError) as e:
-        click.secho(f"✗ Could not load config file: {e}", fg="red", err=True)
-        raise SystemExit(1)
+def _load_cli_config(
+    config_path: Path | None, overrides: dict[str, Any] | None = None
+) -> dict:
+    """Load and validate the generator configuration.
+
+    Without a file every parameter takes its schema default. ``overrides``
+    are the values given on the command line and win over the file; they are
+    applied before validation so the derived names follow them.
+    """
+    raw_config: dict[str, Any] = {}
+    if config_path:
+        try:
+            with open(config_path) as f:
+                raw_config = yaml.safe_load(f) or {}
+        except (yaml.YAMLError, IOError) as e:
+            click.secho(f"✗ Could not load config file: {e}", fg="red", err=True)
+            raise SystemExit(1)
+    raw_config.update(overrides or {})
 
     # Validate with Pydantic schema
     try:
