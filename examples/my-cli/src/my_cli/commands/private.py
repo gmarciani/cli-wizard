@@ -8,12 +8,7 @@ from typing import Any
 import click
 
 from my_cli.client import create_client, format_error
-from my_cli.logging import (
-    colors_enabled,
-    log_debug,
-    log_error,
-    set_debug,
-)
+from my_cli.logging import colors_enabled, log_debug, log_error
 from my_cli.options import common_options
 from my_cli.output import render
 from my_cli.profile import load_profile, resolve_setting
@@ -25,10 +20,8 @@ from my_cli.redaction import redact, redact_text
     help="Private commands",
 )
 @common_options
-@click.pass_context
-def private(ctx: click.Context) -> None:
+def private() -> None:
     """Private command group."""
-    set_debug(ctx.obj["debug"])
 
 
 @private.command(
@@ -44,11 +37,8 @@ def get_greetings(
     # The common options, from whichever level they were given at
     options = ctx.obj
 
-    # Enable debug logging if --debug flag is set
-    set_debug(options["debug"])
-
-    # Load profile
-    load_profile(options["profile"])
+    # Load the profile
+    load_profile(ctx)
 
     # Resolved before the request, so a bad setting fails without sending it
     output_format = str(resolve_setting("outputFormat", options["output"]))

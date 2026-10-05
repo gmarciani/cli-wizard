@@ -10,37 +10,23 @@ import click
 import yaml
 
 from my_cli.constants import PROFILE_DEFAULTS, PROFILE_FILE
-from my_cli.logging import log_error, log_info, set_debug
+from my_cli.logging import log_error, log_info
+from my_cli.options import common_options
 
 
 @click.group(name="config", help="Configure the CLI.")
-@click.option(
-    "--debug",
-    "-d",
-    is_flag=True,
-    help="Enable debug output.",
-)
-@click.pass_context
-def config(ctx: click.Context, debug: bool) -> None:
+@common_options
+def config() -> None:
     """Config command group."""
-    ctx.ensure_object(dict)
-    set_debug(debug)
-    ctx.obj["debug"] = debug
 
 
 @config.command(
     name="init",
     help="Initialize the profile file with default profile.",
 )
-@click.option(
-    "--debug",
-    "-d",
-    is_flag=True,
-    help="Enable debug output.",
-)
-def config_init(debug: bool) -> None:
+@common_options
+def config_init() -> None:
     """Init command implementation."""
-    set_debug(debug)
     if PROFILE_FILE.exists():
         result: dict[str, Any] = {
             "status": "exists",
@@ -81,15 +67,9 @@ def config_init(debug: bool) -> None:
     name="list-profiles",
     help="List all available profiles.",
 )
-@click.option(
-    "--debug",
-    "-d",
-    is_flag=True,
-    help="Enable debug output.",
-)
-def config_list_profiles(debug: bool) -> None:
+@common_options
+def config_list_profiles() -> None:
     """List profiles command implementation."""
-    set_debug(debug)
     if not PROFILE_FILE.exists():
         result: dict[str, Any] = {"profiles": []}
         click.echo(json.dumps(result, indent=2))
@@ -115,21 +95,11 @@ def config_list_profiles(debug: bool) -> None:
     name="show",
     help="Show all parameters and values for a profile.",
 )
-@click.option(
-    "--profile",
-    "-p",
-    default="default",
-    help="Profile name",
-)
-@click.option(
-    "--debug",
-    "-d",
-    is_flag=True,
-    help="Enable debug output.",
-)
-def config_show(profile: str, debug: bool) -> None:
+@common_options
+@click.pass_context
+def config_show(ctx: click.Context) -> None:
     """Show command implementation."""
-    set_debug(debug)
+    profile = ctx.obj["profile"]
     if not PROFILE_FILE.exists():
         click.echo(json.dumps({}, indent=2))
         return
@@ -170,25 +140,11 @@ def config_show(profile: str, debug: bool) -> None:
     required=True,
     help="Parameter name.",
 )
-@click.option(
-    "--profile",
-    "-p",
-    default="default",
-    help="Profile name",
-)
-@click.option(
-    "--debug",
-    "-d",
-    is_flag=True,
-    help="Enable debug output.",
-)
-def config_get(
-    param: str,
-    profile: str,
-    debug: bool,
-) -> None:
+@common_options
+@click.pass_context
+def config_get(ctx: click.Context, param: str) -> None:
     """Get command implementation."""
-    set_debug(debug)
+    profile = ctx.obj["profile"]
     if not PROFILE_FILE.exists():
         result: dict[str, Any] = {
             "key": param,
@@ -234,26 +190,11 @@ def config_get(
     required=True,
     help="Parameter value.",
 )
-@click.option(
-    "--profile",
-    "-p",
-    default="default",
-    help="Profile name",
-)
-@click.option(
-    "--debug",
-    "-d",
-    is_flag=True,
-    help="Enable debug output.",
-)
-def config_set(
-    param: str,
-    value: str,
-    profile: str,
-    debug: bool,
-) -> None:
+@common_options
+@click.pass_context
+def config_set(ctx: click.Context, param: str, value: str) -> None:
     """Set command implementation."""
-    set_debug(debug)
+    profile = ctx.obj["profile"]
     profiles: dict[str, Any]
     result: dict[str, Any]
     if not PROFILE_FILE.exists():
@@ -325,25 +266,11 @@ def config_set(
     required=True,
     help="Parameter name.",
 )
-@click.option(
-    "--profile",
-    "-p",
-    default="default",
-    help="Profile name",
-)
-@click.option(
-    "--debug",
-    "-d",
-    is_flag=True,
-    help="Enable debug output.",
-)
-def config_unset(
-    param: str,
-    profile: str,
-    debug: bool,
-) -> None:
+@common_options
+@click.pass_context
+def config_unset(ctx: click.Context, param: str) -> None:
     """Unset command implementation."""
-    set_debug(debug)
+    profile = ctx.obj["profile"]
     if not PROFILE_FILE.exists():
         result: dict[str, Any] = {
             "key": param,

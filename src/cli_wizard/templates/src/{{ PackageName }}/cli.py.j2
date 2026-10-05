@@ -14,9 +14,8 @@ from {{ PackageName }}.constants import (
     SPLASH_FILE,
     SPLASH_COLOR,
 )
-from {{ PackageName }}.logging import hex_to_rgb, set_debug
+from {{ PackageName }}.logging import hex_to_rgb
 from {{ PackageName }}.options import common_options
-from {{ PackageName }}.profile import load_profile
 from {{ PackageName }}.commands.config import config
 {% for tag, group in groups.items() %}
 from {{ PackageName }}.commands.{{ group.module_name }} import {{ group.module_name }}
@@ -46,12 +45,6 @@ def main(ctx: click.Context) -> None:
     # Skipped while Click is parsing for shell completion
     if not ctx.resilient_parsing:
         _show_splash()
-
-    # Enable debug logging if --debug flag is set
-    set_debug(ctx.obj["debug"])
-
-    # Load profile
-    load_profile(ctx.obj["profile"])
 
     # Show help when no subcommand is invoked
     if ctx.invoked_subcommand is None:

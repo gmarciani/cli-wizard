@@ -11,12 +11,7 @@ from {{ PackageName }}.client import create_client, encode_path_param, format_er
 {% else %}
 from {{ PackageName }}.client import create_client, format_error
 {% endif %}
-from {{ PackageName }}.logging import (
-    colors_enabled,
-    log_error,
-    log_debug,
-    set_debug,
-)
+from {{ PackageName }}.logging import colors_enabled, log_error, log_debug
 from {{ PackageName }}.options import common_options
 from {{ PackageName }}.output import render
 from {{ PackageName }}.profile import load_profile, resolve_setting
@@ -28,10 +23,8 @@ from {{ PackageName }}.redaction import redact, redact_text
     help="{{ group.description }}",
 )
 @common_options
-@click.pass_context
-def {{ group.module_name }}(ctx: click.Context) -> None:
+def {{ group.module_name }}() -> None:
     """{{ group.name }} command group."""
-    set_debug(ctx.obj["debug"])
 {% for op in group.operations %}
 
 
@@ -130,11 +123,8 @@ def {{ op.function_name }}(
     # The common options, from whichever level they were given at
     options = ctx.obj
 
-    # Enable debug logging if --debug flag is set
-    set_debug(options["debug"])
-
-    # Load profile
-    load_profile(options["profile"])
+    # Load the profile
+    load_profile(ctx)
 
     # Resolved before the request, so a bad setting fails without sending it
     output_format = str(resolve_setting("outputFormat", options["output"]))

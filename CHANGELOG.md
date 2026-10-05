@@ -29,6 +29,9 @@
 - Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.
 - Catches `OSError` instead of the redundant `(IOError, OSError)` tuple, `IOError` having been an alias of `OSError` since Python 3.3.
 - Drops the unused `MAIN_DIR`, `get_profile()`, `get_profile_name()` and `is_debug_enabled()` definitions, along with the unreachable `is not None` guards around inputs Click always supplies.
+- The options and the loaded profile live in the Click context of the invocation and die with it, so a CLI run in-process never inherits the settings of a previous run.
+- The `config` commands take the common options like every other command, so `--profile` applies to them wherever it is given, before `config` or after the subcommand.
+- The log file is opened once per invocation and closed when it ends, and the debug flag, the log level and the colour setting apply to that invocation alone.
 
 ### Bug Fixes
 

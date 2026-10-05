@@ -1726,17 +1726,16 @@ class TestGeneratedGlobalOptions:
     """Regression tests for #27: root options must reach the subcommands."""
 
     def _invoke(self, cli, root_args, command_args):
-        """Run a generated command with the transport and its effects mocked."""
+        """Run a generated command with the transport and the profile mocked."""
         args = [*root_args, "ops", "get-user", "--user-id", "42", *command_args]
         with (
             patch("requests.Session.request") as request,
             patch(f"{ISSUE23_PACKAGE}.commands.ops.load_profile") as load_profile,
-            patch(f"{ISSUE23_PACKAGE}.commands.ops.set_debug") as set_debug,
         ):
             request.return_value.text = ""
             result = CliRunner().invoke(cli, args)
         assert result.exit_code == 0, result.output
-        return request, load_profile, set_debug
+        return result, request, load_profile
 
     @pytest.mark.parametrize(
         "root_args,command_args,expected",
@@ -1753,7 +1752,7 @@ class TestGeneratedGlobalOptions:
     )
     def test_base_url_precedence(self, issue23_cli, root_args, command_args, expected):
         """Test the command uses the root base URL unless it is given its own."""
-        request, _, _ = self._invoke(issue23_cli, root_args, command_args)
+        _, request, _ = self._invoke(issue23_cli, root_args, command_args)
         assert request.call_args.args[1] == f"{expected}/users/42"
 
     @pytest.mark.parametrize(
@@ -1767,13 +1766,14 @@ class TestGeneratedGlobalOptions:
     )
     def test_profile_precedence(self, issue23_cli, root_args, command_args, expected):
         """Test the command loads the root profile unless it is given its own."""
-        _, load_profile, _ = self._invoke(issue23_cli, root_args, command_args)
-        assert load_profile.call_args.args[0] == expected
+        _, _, load_profile = self._invoke(issue23_cli, root_args, command_args)
+        ctx = load_profile.call_args.args[0]
+        assert ctx.obj["profile"] == expected
 
     def test_root_debug_survives_the_group(self, issue23_cli):
         """Test a root --debug is not undone by the group or the command."""
-        _, _, set_debug = self._invoke(issue23_cli, ["--debug"], [])
-        assert set_debug.call_args.args[0] is True
+        result, _, _ = self._invoke(issue23_cli, ["--debug"], [])
+        assert "Executing command 'ops get-user'" in result.stderr
 
 
 def _issue50_groups():
@@ -2095,10 +2095,11 @@ class TestGeneratedProfilePrecedence:
         """Test logLevel from the profile decides which messages are logged."""
         self._write_profile(generated_cli, logLevel="ERROR")
 
-        generated_cli.profile.load_profile("default")
+        with click.Context(generated_cli.main, obj={"profile": "default"}) as ctx:
+            generated_cli.profile.load_profile(ctx)
 
-        assert generated_cli.logging._should_log("WARNING") is False
-        assert generated_cli.logging._should_log("ERROR") is True
+            assert generated_cli.logging._should_log("WARNING") is False
+            assert generated_cli.logging._should_log("ERROR") is True
 
     @pytest.mark.parametrize("colors,coloured", [(True, True), (False, False)])
     def test_profile_output_colors_decides_whether_errors_are_coloured(
@@ -2798,3 +2799,166 @@ class TestGeneratedClientFeatures:
         assert result.exit_code == 1
         assert "503" in result.stderr
         assert len(flaky_server.handler.requests_seen) == 1
+
+
+class TestGeneratedInvocationState:
+    """Regression tests for #41: runtime state lives in the Click context.
+
+    Nothing an invocation resolves (the profile, the debug flag, the log level,
+    the colours, the log file handler) may survive it in a module global.
+    """
+
+    _write_profile = staticmethod(TestGeneratedOutputFormats._write_profile)
+
+    @staticmethod
+    def _invoke(cli, args=()):
+        """Run list-things against a stubbed transport."""
+        response = MagicMock()
+        response.text = ""
+        with patch("requests.Session.get", return_value=response):
+            return CliRunner().invoke(cli.main, ["things", "list-things", *args])
+
+    @pytest.mark.parametrize("module", ["profile", "logging"])
+    def test_no_module_rebinds_a_global(self, generated_cli, module):
+        """Test the profile and logging modules declare no mutable globals."""
+        source = Path(getattr(generated_cli, module).__file__).read_text()
+        tree = ast.parse(source)
+        assert not [node for node in ast.walk(tree) if isinstance(node, ast.Global)]
+
+    def test_profile_settings_do_not_outlive_the_invocation(self, generated_cli):
+        """Test a loaded profile is gone once the command has run."""
+        self._write_profile(generated_cli, baseUrl="http://profile.example")
+
+        result = self._invoke(generated_cli)
+
+        assert result.exit_code == 0, result.output
+        defaults = generated_cli.constants.PROFILE_DEFAULTS
+        assert generated_cli.profile.resolve_setting("baseUrl") == defaults["baseUrl"]
+
+    def test_debug_does_not_outlive_the_invocation(self, generated_cli, capsys):
+        """Test --debug is not still enabled once the command has run."""
+        self._write_profile(generated_cli)
+        result = self._invoke(generated_cli, ["--debug"])
+        assert result.exit_code == 0, result.output
+
+        generated_cli.logging.log_debug("leaked")
+
+        assert "leaked" not in capsys.readouterr().err
+
+    def test_log_level_does_not_outlive_the_invocation(self, generated_cli, capsys):
+        """Test a profile log level is not still applied once the command has run."""
+        self._write_profile(generated_cli, logLevel="ERROR")
+        result = self._invoke(generated_cli)
+        assert result.exit_code == 0, result.output
+
+        generated_cli.logging.log_warning("still logged")
+
+        assert "still logged" in capsys.readouterr().err
+
+    def test_colours_do_not_outlive_the_invocation(self, generated_cli):
+        """Test a profile colour setting is not still applied after the command."""
+        self._write_profile(generated_cli, outputColors=False)
+        result = self._invoke(generated_cli)
+        assert result.exit_code == 0, result.output
+
+        assert generated_cli.logging.colors_enabled() is True
+
+    def test_profile_is_read_from_the_context(self, generated_cli):
+        """Test a test can supply the profile through the context, no file needed."""
+        obj = {"settings": {"baseUrl": "http://context.example"}}
+
+        with (
+            click.Context(generated_cli.main, obj=obj),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            resolved = generated_cli.profile.resolve_setting("baseUrl")
+
+        assert resolved == "http://context.example"
+
+    def test_debug_is_read_from_the_context(self, generated_cli, capsys):
+        """Test a test can enable debug output through the context."""
+        with click.Context(generated_cli.main, obj={"debug": True}):
+            generated_cli.logging.log_debug("from the context")
+
+        assert "from the context" in capsys.readouterr().err
+
+    def test_load_profile_stores_the_settings_in_the_context(self, generated_cli):
+        """Test loading a profile records its settings on the context."""
+        self._write_profile(generated_cli, baseUrl="http://profile.example")
+
+        with click.Context(generated_cli.main, obj={"profile": "default"}) as ctx:
+            settings = generated_cli.profile.load_profile(ctx)
+
+        assert settings == {"baseUrl": "http://profile.example"}
+        assert ctx.obj["settings"] == settings
+
+    def test_log_file_handler_is_closed_with_the_invocation(
+        self, generated_cli, tmp_path
+    ):
+        """Test the log file is opened once per invocation and closed with it."""
+        self._write_profile(generated_cli)
+        response = MagicMock()
+        response.text = ""
+        log_file = tmp_path / "probe.log"
+        with (
+            patch.object(generated_cli.logging, "LOG_FILE", log_file),
+            patch("requests.Session.get", return_value=response),
+        ):
+            ctx = generated_cli.main.make_context(
+                "probe-cli", ["things", "list-things", "--debug"]
+            )
+            with ctx:
+                generated_cli.main.invoke(ctx)
+
+        handler = ctx.obj["log_file_handler"]
+        assert handler.stream is None
+        assert "Executing command 'things list-things'" in log_file.read_text()
+
+    def test_root_does_not_load_the_profile(self, generated_cli):
+        """Test the root callback leaves the profile to the command that uses it."""
+        if generated_cli.profile_file.exists():
+            generated_cli.profile_file.unlink()
+
+        result = CliRunner().invoke(generated_cli.main, ["config", "list-profiles"])
+
+        assert result.exit_code == 0, result.output
+        assert not generated_cli.profile_file.exists()
+
+
+class TestGeneratedConfigCommandOptions:
+    """The config commands take the common options like every other command."""
+
+    @staticmethod
+    def _write_profiles(cli, **profiles):
+        """Write the profile file with the given profiles."""
+        cli.profile_file.parent.mkdir(parents=True, exist_ok=True)
+        cli.profile_file.write_text(yaml.safe_dump(profiles))
+
+    @pytest.mark.parametrize(
+        "args",
+        [
+            ["--profile", "prod", "config", "show"],
+            ["config", "--profile", "prod", "show"],
+            ["config", "show", "--profile", "prod"],
+        ],
+    )
+    def test_profile_applies_wherever_it_is_given(self, generated_cli, args):
+        """Test config show reads the profile named at any level."""
+        self._write_profiles(
+            generated_cli,
+            default={"baseUrl": "http://dev"},
+            prod={"baseUrl": "http://prod"},
+        )
+
+        result = CliRunner().invoke(generated_cli.main, args)
+
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)["baseUrl"] == "http://prod"
+
+    def test_debug_is_a_common_option(self, generated_cli):
+        """Test config commands take --debug with the rest of the common options."""
+        result = CliRunner().invoke(generated_cli.main, ["config", "init", "--help"])
+
+        assert result.exit_code == 0, result.output
+        assert "--debug" in result.output
+        assert "--base-url" in result.output
