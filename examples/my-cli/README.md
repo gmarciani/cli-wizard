@@ -43,7 +43,7 @@ is only needed to reach another host. See [Configuration](#configuration) and
 ### Common Options
 
 Every command takes these options, which also apply to every command when given
-right after `my-cli`:
+right after `my-cli` or after a group name:
 
 - `--profile`, `-p` - Profile to read settings from. Default: `default`.
 - `--base-url`, `-u` - API base URL, overriding the profile and the environment.

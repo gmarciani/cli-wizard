@@ -481,8 +481,7 @@ class TestCliGenerator:
             content = (
                 output_dir / "src" / "test_cli" / "commands" / "ops.py"
             ).read_text()
-            # The two array parameters, plus the repeatable --header common option
-            assert content.count("multiple=True") == 3
+            assert content.count("multiple=True") == 2
             assert "ids: tuple[int, ...]," in content
             assert "operations: tuple[str, ...]," in content
             assert 'params["ids"] = list(ids)' in content
@@ -2506,6 +2505,30 @@ class TestGeneratedOutputFormats:
         result = self._invoke(
             generated_cli,
             ["-o", "yaml", "things", "list-things"],
+            entry=generated_cli.main,
+        )
+
+        assert result.stdout.startswith("- id: 1\n")
+
+    def test_command_option_outranks_the_root_option(self, generated_cli):
+        """Test the command's own --output wins over the one given at the root."""
+        self._write_profile(generated_cli)
+
+        result = self._invoke(
+            generated_cli,
+            ["-o", "json", "things", "list-things", "-o", "yaml"],
+            entry=generated_cli.main,
+        )
+
+        assert result.stdout.startswith("- id: 1\n")
+
+    def test_output_given_after_the_group_applies_to_the_command(self, generated_cli):
+        """Test probe-cli things -o yaml list-things renders YAML."""
+        self._write_profile(generated_cli)
+
+        result = self._invoke(
+            generated_cli,
+            ["things", "-o", "yaml", "list-things"],
             entry=generated_cli.main,
         )
 

@@ -3,41 +3,26 @@
 
 """Private commands."""
 
-from pathlib import Path
 from typing import Any
 
 import click
-from click.core import ParameterSource
 
-from my_cli.client import ApiClient, format_error, parse_headers
-from my_cli.constants import DEFAULT_CA_FILE, OUTPUT_FORMATS
+from my_cli.client import ApiClient, format_error
+from my_cli.constants import DEFAULT_CA_FILE
 from my_cli.logging import (
     colors_enabled,
     log_debug,
     log_error,
     set_debug,
 )
+from my_cli.options import common_options
 from my_cli.output import render
 from my_cli.profile import load_profile, resolve_setting
 from my_cli.redaction import redact, redact_text
 
 
-def _resolve_global(ctx: click.Context, name: str, value: Any) -> Any:
-    """Fall back to the root group's value when this level was given none."""
-    if ctx.get_parameter_source(name) is ParameterSource.DEFAULT:
-        return (ctx.obj or {}).get(name, value)
-    return value
-
-
-def _get_client(
-    base_url: str | None,
-    no_verify_ssl: bool,
-    ca_file: Path | None,
-    debug: bool = False,
-    timeout: int | None = None,
-    headers: dict[str, str] | None = None,
-) -> ApiClient:
-    """Create an API client with the given options.
+def _get_client(options: dict[str, Any]) -> ApiClient:
+    """Create an API client from the common options.
 
     baseUrl, timeout, accessToken and the retry settings are profile settings,
     so resolve_setting() runs the precedence chain over them; --base-url and
@@ -45,17 +30,20 @@ def _get_client(
     --ca-file and --header have no key in PROFILE_DEFAULTS and so come from
     the command line alone.
     """
-    effective_ca_file = (
-        None if no_verify_ssl else (str(ca_file) if ca_file else DEFAULT_CA_FILE)
-    )
+    no_verify_ssl = options["no_verify_ssl"]
+    ca_file = options["ca_file"]
+    if no_verify_ssl:
+        effective_ca_file = None
+    else:
+        effective_ca_file = str(ca_file) if ca_file else DEFAULT_CA_FILE
     return ApiClient(
-        base_url=resolve_setting("baseUrl", base_url),
+        base_url=resolve_setting("baseUrl", options["base_url"]),
         access_token=resolve_setting("accessToken"),
-        timeout=int(resolve_setting("timeout", timeout)),
+        timeout=int(resolve_setting("timeout", options["timeout"])),
         ca_file=effective_ca_file,
         verify_ssl=not no_verify_ssl,
-        debug=debug,
-        headers=headers,
+        debug=options["debug"],
+        headers=dict(options["header"]),
         retry_max_attempts=int(resolve_setting("retryMaxAttempts")),
         retry_backoff_factor=float(resolve_setting("retryBackoffFactor")),
     )
@@ -65,106 +53,34 @@ def _get_client(
     name="private",
     help="Private commands",
 )
-@click.option(
-    "--debug",
-    "-d",
-    is_flag=True,
-    help="Enable debug output.",
-)
+@common_options
 @click.pass_context
-def private(ctx: click.Context, debug: bool) -> None:
+def private(ctx: click.Context) -> None:
     """Private command group."""
-    ctx.ensure_object(dict)
-    debug = _resolve_global(ctx, "debug", debug)
-    set_debug(debug)
-    ctx.obj["debug"] = debug
+    set_debug(ctx.obj["debug"])
 
 
 @private.command(
     name="get-greetings",
     help="Get a greeting message (authenticated)",
 )
-@click.option(
-    "--profile",
-    "-p",
-    default="default",
-    help="Profile name to use.",
-)
-@click.option(
-    "--debug",
-    "-d",
-    is_flag=True,
-    help="Enable debug output.",
-)
-@click.option(
-    "--base-url",
-    "-u",
-    help="API base URL.",
-)
-@click.option(
-    "--no-verify-ssl",
-    is_flag=True,
-    default=False,
-    help="Disable SSL certificate verification.",
-)
-@click.option(
-    "--ca-file",
-    type=click.Path(
-        exists=True,
-        dir_okay=False,
-        path_type=Path,
-    ),
-    help="CA certificate file for SSL verification.",
-)
-@click.option(
-    "--timeout",
-    type=int,
-    help="Seconds to wait for a response, overriding the timeout setting.",
-)
-@click.option(
-    "--header",
-    "-H",
-    multiple=True,
-    callback=parse_headers,
-    help="Extra request header as 'Name: value'. Repeatable.",
-)
-@click.option(
-    "--output",
-    "-o",
-    type=click.Choice(OUTPUT_FORMATS),
-    help="Output format, overriding the outputFormat setting.",
-)
+@common_options
 @click.pass_context
 def get_greetings(
     ctx: click.Context,
-    profile: str,
-    debug: bool,
-    base_url: str | None,
-    no_verify_ssl: bool,
-    ca_file: Path | None,
-    timeout: int | None,
-    header: dict[str, str],
-    output: str | None,
 ) -> None:
     """get_greetings command."""
-    # Options given at the root group apply unless repeated here
-    profile = _resolve_global(ctx, "profile", profile)
-    debug = _resolve_global(ctx, "debug", debug)
-    base_url = _resolve_global(ctx, "base_url", base_url)
-    no_verify_ssl = _resolve_global(ctx, "no_verify_ssl", no_verify_ssl)
-    ca_file = _resolve_global(ctx, "ca_file", ca_file)
-    timeout = _resolve_global(ctx, "timeout", timeout)
-    header = _resolve_global(ctx, "header", header)
-    output = _resolve_global(ctx, "output", output)
+    # The common options, from whichever level they were given at
+    options = ctx.obj
 
     # Enable debug logging if --debug flag is set
-    set_debug(debug)
+    set_debug(options["debug"])
 
     # Load profile
-    load_profile(profile)
+    load_profile(options["profile"])
 
     # Resolved before the request, so a bad setting fails without sending it
-    output_format = str(resolve_setting("outputFormat", output))
+    output_format = str(resolve_setting("outputFormat", options["output"]))
     json_indent = int(resolve_setting("jsonIndent"))
     table_style = str(resolve_setting("tableStyle"))
     # Log command execution start
@@ -172,7 +88,7 @@ def get_greetings(
     cmd_name = "private get-greetings"
     log_debug(f"Executing command '{cmd_name}' with params: {redact(cmd_params)}")
 
-    client = _get_client(base_url, no_verify_ssl, ca_file, debug, timeout, header)
+    client = _get_client(options)
 
     try:
         response = client.get("/private/greetings")

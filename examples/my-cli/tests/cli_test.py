@@ -28,7 +28,6 @@ from my_cli.client import (
     ApiClient,
     encode_path_param,
     format_error,
-    parse_headers,
 )
 from my_cli.logging import (
     _format_message,
@@ -49,6 +48,7 @@ from my_cli.logging import (
 from my_cli.logging import (
     _hex_to_rgb as logging_hex_to_rgb,
 )
+from my_cli.options import HEADER
 from my_cli.output import render, render_table
 from my_cli.profile import (
     _create_default_profile_file,
@@ -820,23 +820,23 @@ class TestApiClient:
         assert retry.backoff_factor == constants.DEFAULT_RETRY_BACKOFF_FACTOR
 
     @pytest.mark.parametrize(
-        "values,expected",
+        "raw,expected",
         [
-            ((), {}),
-            (("X-Tenant: acme",), {"X-Tenant": "acme"}),
-            (("X-Tenant:acme", " X-Trace : 1 "), {"X-Tenant": "acme", "X-Trace": "1"}),
-            (("X-Url: http://h:1",), {"X-Url": "http://h:1"}),
+            ("X-Tenant: acme", ("X-Tenant", "acme")),
+            ("X-Tenant:acme", ("X-Tenant", "acme")),
+            (" X-Trace : 1 ", ("X-Trace", "1")),
+            ("X-Url: http://h:1", ("X-Url", "http://h:1")),
         ],
     )
-    def test_parse_headers(self, values, expected):
-        """Test --header values are split on the first colon and trimmed."""
-        assert parse_headers(None, None, values) == expected
+    def test_header_option_is_split_on_the_first_colon(self, raw, expected):
+        """Test a --header value is split on the first colon and trimmed."""
+        assert HEADER.convert(raw, None, None) == expected
 
     @pytest.mark.parametrize("raw", ["nocolon", ": value", "  : value"])
-    def test_parse_headers_rejects_a_malformed_header(self, raw):
+    def test_header_option_rejects_a_malformed_header(self, raw):
         """Test a header without a name or a colon is a usage error."""
         with pytest.raises(click.BadParameter, match="Expected 'Name: value'"):
-            parse_headers(None, None, (raw,))
+            HEADER.convert(raw, None, None)
 
     def test_client_url_building(self):
         """Test URL building."""
