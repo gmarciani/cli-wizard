@@ -78,7 +78,7 @@ def _should_log(level: str) -> bool:
     return level_priority >= config_priority
 
 
-def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """Convert hex color to RGB tuple."""
     hex_color = hex_color.lstrip("#")
     r = int(hex_color[0:2], 16)
@@ -155,7 +155,7 @@ def log(
         return
 
     color = LOG_COLORS.get(level, LOG_COLORS["INFO"])
-    rgb = _hex_to_rgb(color) if _colors_enabled else None
+    rgb = hex_to_rgb(color) if _colors_enabled else None
     formatted = _format_message(level, message)
 
     # Log to console with colors

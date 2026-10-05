@@ -6,11 +6,10 @@
 import click
 from typing import Any
 
-from {{ PackageName }}.constants import DEFAULT_CA_FILE
 {% if group.has_path_parameters %}
-from {{ PackageName }}.client import ApiClient, encode_path_param, format_error
+from {{ PackageName }}.client import create_client, encode_path_param, format_error
 {% else %}
-from {{ PackageName }}.client import ApiClient, format_error
+from {{ PackageName }}.client import create_client, format_error
 {% endif %}
 from {{ PackageName }}.logging import (
     colors_enabled,
@@ -22,34 +21,6 @@ from {{ PackageName }}.options import common_options
 from {{ PackageName }}.output import render
 from {{ PackageName }}.profile import load_profile, resolve_setting
 from {{ PackageName }}.redaction import redact, redact_text
-
-
-def _get_client(options: dict[str, Any]) -> ApiClient:
-    """Create an API client from the common options.
-
-    baseUrl, timeout, accessToken and the retry settings are profile settings,
-    so resolve_setting() runs the precedence chain over them; --base-url and
-    --timeout are the ones with a flag to outrank it. --no-verify-ssl,
-    --ca-file and --header have no key in PROFILE_DEFAULTS and so come from
-    the command line alone.
-    """
-    no_verify_ssl = options["no_verify_ssl"]
-    ca_file = options["ca_file"]
-    if no_verify_ssl:
-        effective_ca_file = None
-    else:
-        effective_ca_file = str(ca_file) if ca_file else DEFAULT_CA_FILE
-    return ApiClient(
-        base_url=resolve_setting("baseUrl", options["base_url"]),
-        access_token=resolve_setting("accessToken"),
-        timeout=int(resolve_setting("timeout", options["timeout"])),
-        ca_file=effective_ca_file,
-        verify_ssl=not no_verify_ssl,
-        debug=options["debug"],
-        headers=dict(options["header"]),
-        retry_max_attempts=int(resolve_setting("retryMaxAttempts")),
-        retry_backoff_factor=float(resolve_setting("retryBackoffFactor")),
-    )
 
 
 @click.group(
@@ -187,7 +158,7 @@ def {{ op.function_name }}(
         f" with params: {redact(cmd_params)}"
     )
 
-    client = _get_client(options)
+    client = create_client(options)
 {% if op.query_parameters %}
 
     params: dict[str, Any] = {}

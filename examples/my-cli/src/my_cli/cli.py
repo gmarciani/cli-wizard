@@ -17,18 +17,9 @@ from my_cli.constants import (
     SPLASH_FILE,
     __version__,
 )
-from my_cli.logging import set_debug
+from my_cli.logging import hex_to_rgb, set_debug
 from my_cli.options import common_options
 from my_cli.profile import load_profile
-
-
-def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
-    """Convert hex color to RGB tuple."""
-    hex_color = hex_color.lstrip("#")
-    r = int(hex_color[0:2], 16)
-    g = int(hex_color[2:4], 16)
-    b = int(hex_color[4:6], 16)
-    return (r, g, b)
 
 
 def _show_splash() -> None:
@@ -36,7 +27,7 @@ def _show_splash() -> None:
     if SPLASH_ENABLED and SPLASH_FILE and SPLASH_FILE.exists():
         splash_text = SPLASH_FILE.read_text()
         if SPLASH_COLOR:
-            rgb = _hex_to_rgb(SPLASH_COLOR)
+            rgb = hex_to_rgb(SPLASH_COLOR)
             click.secho(splash_text, fg=rgb)
         else:
             click.echo(splash_text)
