@@ -73,23 +73,6 @@ def _messages(payload: Any) -> list[str]:
     return [str(payload)]
 
 
-def parse_headers(
-    ctx: click.Context | None, param: click.Parameter | None, values: tuple[str, ...]
-) -> dict[str, str]:
-    """Turn repeated ``--header "Name: value"`` options into a header mapping.
-
-    A Click callback, so a malformed header is a usage error before any
-    request is sent.
-    """
-    headers: dict[str, str] = {}
-    for raw in values:
-        name, sep, value = raw.partition(":")
-        if not sep or not name.strip():
-            raise click.BadParameter(f"Expected 'Name: value', got '{raw}'.")
-        headers[name.strip()] = value.strip()
-    return headers
-
-
 def encode_path_param(value: Any) -> str:
     """Encode a value for interpolation into a single URL path segment.
 

@@ -489,6 +489,7 @@ class CliGenerator:
         self._generate_cli_main(src_dir, package_name, groups)
         self._generate_client(src_dir)
         self._generate_logging(src_dir)
+        self._generate_options(src_dir)
         self._generate_output(src_dir)
         self._generate_redaction(src_dir, groups)
         self._generate_profile(src_dir)
@@ -557,6 +558,13 @@ class CliGenerator:
         template = self.env.get_template("src/{{ PackageName }}/logging.py.j2")
         content = template.render(**self._template_context())
         with open(src_dir / "logging.py", "w") as f:
+            f.write(content)
+
+    def _generate_options(self, src_dir: Path) -> None:
+        """Generate the module defining the options every command takes."""
+        template = self.env.get_template("src/{{ PackageName }}/options.py.j2")
+        content = template.render(**self._template_context())
+        with open(src_dir / "options.py", "w") as f:
             f.write(content)
 
     def _generate_output(self, src_dir: Path) -> None:

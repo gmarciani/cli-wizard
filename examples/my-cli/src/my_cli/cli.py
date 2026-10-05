@@ -6,22 +6,19 @@
 
 """Main CLI entry point."""
 
-from pathlib import Path
-
 import click
 
-from my_cli.client import parse_headers
 from my_cli.commands.config import config
 from my_cli.commands.private import private
 from my_cli.commands.public import public
 from my_cli.constants import (
-    OUTPUT_FORMATS,
     SPLASH_COLOR,
     SPLASH_ENABLED,
     SPLASH_FILE,
     __version__,
 )
 from my_cli.logging import set_debug
+from my_cli.options import common_options
 from my_cli.profile import load_profile
 
 
@@ -50,71 +47,19 @@ def _show_splash() -> None:
     help="A CLI application",
 )
 @click.version_option(version=__version__)
-@click.option("--profile", "-p", default="default", help="Profile name.")
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output.")
-@click.option("--base-url", "-u", help="API base URL.")
-@click.option(
-    "--no-verify-ssl",
-    is_flag=True,
-    default=False,
-    help="Disable SSL certificate verification.",
-)
-@click.option(
-    "--ca-file",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="CA certificate file for SSL verification.",
-)
-@click.option(
-    "--timeout",
-    type=int,
-    help="Seconds to wait for a response, overriding the timeout setting.",
-)
-@click.option(
-    "--header",
-    "-H",
-    multiple=True,
-    callback=parse_headers,
-    help="Extra request header as 'Name: value'. Repeatable.",
-)
-@click.option(
-    "--output",
-    "-o",
-    type=click.Choice(OUTPUT_FORMATS),
-    help="Output format, overriding the outputFormat setting.",
-)
+@common_options
 @click.pass_context
-def main(
-    ctx: click.Context,
-    profile: str,
-    debug: bool,
-    base_url: str | None,
-    no_verify_ssl: bool,
-    ca_file: Path | None,
-    timeout: int | None,
-    header: dict[str, str],
-    output: str | None,
-) -> None:
+def main(ctx: click.Context) -> None:
     """Main CLI entry point."""
-    ctx.ensure_object(dict)
-
     # Skipped while Click is parsing for shell completion
     if not ctx.resilient_parsing:
         _show_splash()
 
     # Enable debug logging if --debug flag is set
-    set_debug(debug)
+    set_debug(ctx.obj["debug"])
 
     # Load profile
-    load_profile(profile)
-
-    ctx.obj["profile"] = profile
-    ctx.obj["debug"] = debug
-    ctx.obj["base_url"] = base_url
-    ctx.obj["no_verify_ssl"] = no_verify_ssl
-    ctx.obj["ca_file"] = ca_file
-    ctx.obj["timeout"] = timeout
-    ctx.obj["header"] = header
-    ctx.obj["output"] = output
+    load_profile(ctx.obj["profile"])
 
     # Show help when no subcommand is invoked
     if ctx.invoked_subcommand is None:
