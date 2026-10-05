@@ -10,6 +10,7 @@ import os
 import re
 from typing import Any
 
+import click
 import yaml
 
 from my_cli.constants import (
@@ -18,16 +19,8 @@ from my_cli.constants import (
     PROFILE_DEFAULTS,
     PROFILE_FILE,
 )
-from my_cli.logging import (
-    log_debug,
-    log_error,
-    log_info,
-    log_warning,
-    set_colors_enabled,
-    set_log_level,
-)
-
-_current_profile: dict[str, Any] = {}
+from my_cli.logging import log_debug, log_error, log_info, log_warning
+from my_cli.options import state
 
 # Splits a camelCase profile key before every capital, so "retryMaxAttempts"
 # becomes RETRY_MAX_ATTEMPTS once upper-cased.
@@ -93,7 +86,18 @@ def _coerce(key: str, value: Any, default: Any) -> Any:
     return value
 
 
-def resolve_setting(key: str, flag_value: Any = None) -> Any:
+def _settings() -> dict[str, Any]:
+    """Get the profile loaded by the running invocation, empty outside one."""
+    settings: dict[str, Any] = state().get("settings", {})
+    return settings
+
+
+def resolve_setting(
+    key: str,
+    flag_value: Any = None,
+    *,
+    settings: dict[str, Any] | None = None,
+) -> Any:
     """Resolve a setting through the precedence chain.
 
     The chain is command-line flag > environment variable > profile value >
@@ -102,6 +106,8 @@ def resolve_setting(key: str, flag_value: Any = None) -> Any:
     Args:
         key: The profile key to resolve
         flag_value: The value given on the command line, None when not given
+        settings: The profile to resolve against, the one the running
+            invocation loaded when not given
 
     Returns:
         The value of the highest-precedence layer that supplies one
@@ -115,30 +121,35 @@ def resolve_setting(key: str, flag_value: Any = None) -> Any:
     if raw is not None:
         return _coerce(key, raw, default)
 
-    if key in _current_profile:
-        return _coerce(key, _current_profile[key], default)
+    if settings is None:
+        settings = _settings()
+    if key in settings:
+        return _coerce(key, settings[key], default)
 
     return default
 
 
-def load_profile(profile_name: str = "default") -> dict[str, Any]:
-    """Load a profile from the profiles file.
+def load_profile(ctx: click.Context) -> dict[str, Any]:
+    """Load the profile the --profile option names into the invocation's state.
+
+    The log level and the colour setting are resolved here and stored with it:
+    the logging module cannot resolve them itself without importing this
+    module, which imports it.
 
     Args:
-        profile_name: Name of the profile to load (default: "default")
+        ctx: The context of the running invocation
 
     Returns:
         Profile settings as a dictionary, empty dict if profile not found
     """
-    global _current_profile
-    _current_profile = _read_profile(profile_name)
+    current = state(ctx)
+    settings = _read_profile(current.get("profile", "default"))
 
-    # The logging module cannot resolve these itself without importing this
-    # module, which imports it, so the resolved values are pushed to it.
-    set_log_level(str(resolve_setting("logLevel")))
-    set_colors_enabled(bool(resolve_setting("outputColors")))
+    current["settings"] = settings
+    current["log_level"] = str(resolve_setting("logLevel", settings=settings))
+    current["colors"] = bool(resolve_setting("outputColors", settings=settings))
 
-    return _current_profile
+    return settings
 
 
 def _read_profile(profile_name: str) -> dict[str, Any]:
@@ -178,7 +189,7 @@ def _create_default_profile_file() -> None:
 
 
 def get_profile_value(key: str, default: Any = None) -> Any:
-    """Get a value from the current profile, ignoring flags and the environment.
+    """Get a value from the loaded profile, ignoring flags and the environment.
 
     Use resolve_setting() to apply the full precedence chain; this reads the
     profile alone.
@@ -191,6 +202,7 @@ def get_profile_value(key: str, default: Any = None) -> Any:
         The value from the profile, the profile default,
         or the provided default if not found
     """
-    if key in _current_profile:
-        return _current_profile[key]
+    settings = _settings()
+    if key in settings:
+        return settings[key]
     return PROFILE_DEFAULTS.get(key, default)

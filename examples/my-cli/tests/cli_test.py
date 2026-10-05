@@ -11,7 +11,8 @@ import importlib.metadata
 import json
 import os
 import tempfile
-from logging.handlers import RotatingFileHandler
+from contextlib import contextmanager
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -43,9 +44,6 @@ from my_cli.logging import (
     log_error,
     log_info,
     log_warning,
-    set_colors_enabled,
-    set_debug,
-    set_log_level,
 )
 from my_cli.options import HEADER
 from my_cli.output import render, render_table
@@ -57,6 +55,17 @@ from my_cli.profile import (
     resolve_setting,
 )
 from my_cli.redaction import REDACTED, redact, redact_text
+
+
+def invocation(**obj):
+    """A context carrying the given invocation state, as a command runs in.
+
+    The generated code keeps no state in module globals: what an invocation
+    resolves lives in ctx.obj, so a test sets it there and nothing leaks into
+    the next test.
+    """
+    return click.Context(main, obj=obj)
+
 
 # =============================================================================
 # CLI Tests
@@ -82,8 +91,7 @@ class TestCli:
     def test_main_no_subcommand(self):
         """Test main without subcommand shows help."""
         runner = CliRunner()
-        with patch("my_cli.cli.load_profile"):
-            result = runner.invoke(main, [])
+        result = runner.invoke(main, [])
         assert result.exit_code == 0
         assert "Usage:" in result.output
 
@@ -214,13 +222,11 @@ class TestConfigCommands:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.commands.config.PROFILE_FILE",
-                    profile_path,
-                ):
-                    with patch("my_cli.cli.load_profile"):
-                        result = runner.invoke(main, ["config", "init"])
+            with patch(
+                "my_cli.commands.config.PROFILE_FILE",
+                profile_path,
+            ):
+                result = runner.invoke(main, ["config", "init"])
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output["status"] == "exists"
@@ -230,13 +236,11 @@ class TestConfigCommands:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "nonexistent.yaml"
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.commands.config.PROFILE_FILE",
-                    profile_path,
-                ):
-                    with patch("my_cli.cli.load_profile"):
-                        result = runner.invoke(main, ["config", "list-profiles"])
+            with patch(
+                "my_cli.commands.config.PROFILE_FILE",
+                profile_path,
+            ):
+                result = runner.invoke(main, ["config", "list-profiles"])
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output["profiles"] == []
@@ -247,13 +251,11 @@ class TestConfigCommands:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}\nproduction: {}")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.commands.config.PROFILE_FILE",
-                    profile_path,
-                ):
-                    with patch("my_cli.cli.load_profile"):
-                        result = runner.invoke(main, ["config", "list-profiles"])
+            with patch(
+                "my_cli.commands.config.PROFILE_FILE",
+                profile_path,
+            ):
+                result = runner.invoke(main, ["config", "list-profiles"])
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert "default" in output["profiles"]
@@ -265,13 +267,11 @@ class TestConfigCommands:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default:\n  key: value")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.commands.config.PROFILE_FILE",
-                    profile_path,
-                ):
-                    with patch("my_cli.cli.load_profile"):
-                        result = runner.invoke(main, ["config", "show"])
+            with patch(
+                "my_cli.commands.config.PROFILE_FILE",
+                profile_path,
+            ):
+                result = runner.invoke(main, ["config", "show"])
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output["key"] == "value"
@@ -282,15 +282,11 @@ class TestConfigCommands:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.commands.config.PROFILE_FILE",
-                    profile_path,
-                ):
-                    with patch("my_cli.cli.load_profile"):
-                        result = runner.invoke(
-                            main, ["config", "show", "-p", "nonexistent"]
-                        )
+            with patch(
+                "my_cli.commands.config.PROFILE_FILE",
+                profile_path,
+            ):
+                result = runner.invoke(main, ["config", "show", "-p", "nonexistent"])
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output == {}
@@ -301,16 +297,14 @@ class TestConfigCommands:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default:\n  mykey: myvalue")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.commands.config.PROFILE_FILE",
-                    profile_path,
-                ):
-                    with patch("my_cli.cli.load_profile"):
-                        result = runner.invoke(
-                            main,
-                            ["config", "get", "--param", "mykey"],
-                        )
+            with patch(
+                "my_cli.commands.config.PROFILE_FILE",
+                profile_path,
+            ):
+                result = runner.invoke(
+                    main,
+                    ["config", "get", "--param", "mykey"],
+                )
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output["key"] == "mykey"
@@ -322,21 +316,19 @@ class TestConfigCommands:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.commands.config.PROFILE_FILE",
-                    profile_path,
-                ):
-                    with patch("my_cli.cli.load_profile"):
-                        result = runner.invoke(
-                            main,
-                            [
-                                "config",
-                                "get",
-                                "--param",
-                                "nonexistent",
-                            ],
-                        )
+            with patch(
+                "my_cli.commands.config.PROFILE_FILE",
+                profile_path,
+            ):
+                result = runner.invoke(
+                    main,
+                    [
+                        "config",
+                        "get",
+                        "--param",
+                        "nonexistent",
+                    ],
+                )
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output["value"] is None
@@ -471,11 +463,10 @@ class TestConfigCommands:
                 "my_cli.commands.config.PROFILE_FILE",
                 profile_path,
             ):
-                with patch("my_cli.cli.load_profile"):
-                    result = runner.invoke(
-                        main,
-                        ["config", "unset", "--param", "mykey"],
-                    )
+                result = runner.invoke(
+                    main,
+                    ["config", "unset", "--param", "mykey"],
+                )
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output["oldValue"] is None
@@ -490,18 +481,17 @@ class TestConfigCommands:
                 "my_cli.commands.config.PROFILE_FILE",
                 profile_path,
             ):
-                with patch("my_cli.cli.load_profile"):
-                    result = runner.invoke(
-                        main,
-                        [
-                            "config",
-                            "unset",
-                            "--param",
-                            "mykey",
-                            "-p",
-                            "nonexistent",
-                        ],
-                    )
+                result = runner.invoke(
+                    main,
+                    [
+                        "config",
+                        "unset",
+                        "--param",
+                        "mykey",
+                        "-p",
+                        "nonexistent",
+                    ],
+                )
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output["oldValue"] is None
@@ -519,8 +509,7 @@ class TestConfigCommands:
                     "my_cli.commands.config.PROFILE_FILE",
                     profile_path,
                 ):
-                    with patch("my_cli.cli.load_profile"):
-                        result = runner.invoke(main, ["config", "init"])
+                    result = runner.invoke(main, ["config", "init"])
                 assert result.exit_code in [0, 1]
             finally:
                 os.chmod(readonly_dir, 0o755)
@@ -535,8 +524,7 @@ class TestConfigCommands:
                 "my_cli.commands.config.PROFILE_FILE",
                 profile_path,
             ):
-                with patch("my_cli.cli.load_profile"):
-                    result = runner.invoke(main, ["config", "list-profiles"])
+                result = runner.invoke(main, ["config", "list-profiles"])
             assert result.exit_code == 1
 
     def test_config_show_yaml_error(self):
@@ -549,8 +537,7 @@ class TestConfigCommands:
                 "my_cli.commands.config.PROFILE_FILE",
                 profile_path,
             ):
-                with patch("my_cli.cli.load_profile"):
-                    result = runner.invoke(main, ["config", "show"])
+                result = runner.invoke(main, ["config", "show"])
             assert result.exit_code == 1
 
     def test_config_show_file_not_exists(self):
@@ -562,8 +549,7 @@ class TestConfigCommands:
                 "my_cli.commands.config.PROFILE_FILE",
                 profile_path,
             ):
-                with patch("my_cli.cli.load_profile"):
-                    result = runner.invoke(main, ["config", "show"])
+                result = runner.invoke(main, ["config", "show"])
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output == {}
@@ -578,16 +564,15 @@ class TestConfigCommands:
                 "my_cli.commands.config.PROFILE_FILE",
                 profile_path,
             ):
-                with patch("my_cli.cli.load_profile"):
-                    result = runner.invoke(
-                        main,
-                        [
-                            "config",
-                            "get",
-                            "--param",
-                            "mykey",
-                        ],
-                    )
+                result = runner.invoke(
+                    main,
+                    [
+                        "config",
+                        "get",
+                        "--param",
+                        "mykey",
+                    ],
+                )
             assert result.exit_code == 1
 
     def test_config_get_file_not_exists(self):
@@ -599,16 +584,15 @@ class TestConfigCommands:
                 "my_cli.commands.config.PROFILE_FILE",
                 profile_path,
             ):
-                with patch("my_cli.cli.load_profile"):
-                    result = runner.invoke(
-                        main,
-                        [
-                            "config",
-                            "get",
-                            "--param",
-                            "mykey",
-                        ],
-                    )
+                result = runner.invoke(
+                    main,
+                    [
+                        "config",
+                        "get",
+                        "--param",
+                        "mykey",
+                    ],
+                )
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output["value"] is None
@@ -623,18 +607,17 @@ class TestConfigCommands:
                 "my_cli.commands.config.PROFILE_FILE",
                 profile_path,
             ):
-                with patch("my_cli.cli.load_profile"):
-                    result = runner.invoke(
-                        main,
-                        [
-                            "config",
-                            "get",
-                            "--param",
-                            "mykey",
-                            "-p",
-                            "nonexistent",
-                        ],
-                    )
+                result = runner.invoke(
+                    main,
+                    [
+                        "config",
+                        "get",
+                        "--param",
+                        "mykey",
+                        "-p",
+                        "nonexistent",
+                    ],
+                )
             assert result.exit_code == 0
             output = json.loads(result.output)
             assert output["value"] is None
@@ -649,18 +632,17 @@ class TestConfigCommands:
                 "my_cli.commands.config.PROFILE_FILE",
                 profile_path,
             ):
-                with patch("my_cli.cli.load_profile"):
-                    result = runner.invoke(
-                        main,
-                        [
-                            "config",
-                            "set",
-                            "--param",
-                            "mykey",
-                            "--value",
-                            "myvalue",
-                        ],
-                    )
+                result = runner.invoke(
+                    main,
+                    [
+                        "config",
+                        "set",
+                        "--param",
+                        "mykey",
+                        "--value",
+                        "myvalue",
+                    ],
+                )
             assert result.exit_code == 1
 
     def test_config_set_creates_profile(self):
@@ -727,16 +709,15 @@ class TestConfigCommands:
                 "my_cli.commands.config.PROFILE_FILE",
                 profile_path,
             ):
-                with patch("my_cli.cli.load_profile"):
-                    result = runner.invoke(
-                        main,
-                        [
-                            "config",
-                            "unset",
-                            "--param",
-                            "mykey",
-                        ],
-                    )
+                result = runner.invoke(
+                    main,
+                    [
+                        "config",
+                        "unset",
+                        "--param",
+                        "mykey",
+                    ],
+                )
             assert result.exit_code == 1
 
 
@@ -1330,24 +1311,24 @@ class TestProfile:
         """Test loading profile when file doesn't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "nonexistent" / "profiles.yaml"
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.profile.PROFILE_FILE",
-                    profile_path,
-                ):
-                    result = load_profile("default")
+            with patch(
+                "my_cli.profile.PROFILE_FILE",
+                profile_path,
+            ):
+                with invocation(profile="default") as ctx:
+                    result = load_profile(ctx)
             assert result == {}
 
     def test_load_profile_restricts_permissions(self):
         """Test the created default profile file is owner-only."""
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "home" / "profiles.yaml"
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.profile.PROFILE_FILE",
-                    profile_path,
-                ):
-                    load_profile("default")
+            with patch(
+                "my_cli.profile.PROFILE_FILE",
+                profile_path,
+            ):
+                with invocation(profile="default") as ctx:
+                    load_profile(ctx)
             assert profile_path.stat().st_mode & 0o777 == 0o600
             assert profile_path.parent.stat().st_mode & 0o777 == 0o700
 
@@ -1356,12 +1337,12 @@ class TestProfile:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default:\n  key: value")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.profile.PROFILE_FILE",
-                    profile_path,
-                ):
-                    result = load_profile("default")
+            with patch(
+                "my_cli.profile.PROFILE_FILE",
+                profile_path,
+            ):
+                with invocation(profile="default") as ctx:
+                    result = load_profile(ctx)
             assert result == {"key": "value"}
 
     def test_load_profile_not_found(self):
@@ -1369,12 +1350,12 @@ class TestProfile:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.profile.PROFILE_FILE",
-                    profile_path,
-                ):
-                    result = load_profile("nonexistent")
+            with patch(
+                "my_cli.profile.PROFILE_FILE",
+                profile_path,
+            ):
+                with invocation(profile="nonexistent") as ctx:
+                    result = load_profile(ctx)
             assert result == {}
 
     def test_get_profile_value(self):
@@ -1382,12 +1363,12 @@ class TestProfile:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default:\n  mykey: myvalue")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.profile.PROFILE_FILE",
-                    profile_path,
-                ):
-                    load_profile("default")
+            with patch(
+                "my_cli.profile.PROFILE_FILE",
+                profile_path,
+            ):
+                with invocation(profile="default") as ctx:
+                    load_profile(ctx)
                     result = get_profile_value("mykey")
             assert result == "myvalue"
 
@@ -1396,12 +1377,12 @@ class TestProfile:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.profile.PROFILE_FILE",
-                    profile_path,
-                ):
-                    load_profile("default")
+            with patch(
+                "my_cli.profile.PROFILE_FILE",
+                profile_path,
+            ):
+                with invocation(profile="default") as ctx:
+                    load_profile(ctx)
                     result = get_profile_value("nonexistent", "default_value")
             assert result == "default_value"
 
@@ -1410,25 +1391,27 @@ class TestProfile:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("invalid: yaml: content: [")
-            with patch.object(constants, "PROFILE_FILE", profile_path):
-                with patch(
-                    "my_cli.profile.PROFILE_FILE",
-                    profile_path,
-                ):
-                    result = load_profile("default")
-            assert result == {}
-
-    @staticmethod
-    def _load(tmpdir, body):
-        """Load a profile from a file written just for the test."""
-        profile_path = Path(tmpdir) / "profiles.yaml"
-        profile_path.write_text(body)
-        with patch.object(constants, "PROFILE_FILE", profile_path):
             with patch(
                 "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
-                load_profile("default")
+                with invocation(profile="default") as ctx:
+                    result = load_profile(ctx)
+            assert result == {}
+
+    @staticmethod
+    @contextmanager
+    def _loaded(tmpdir, body):
+        """Run the block in an invocation that loaded the given profile file."""
+        profile_path = Path(tmpdir) / "profiles.yaml"
+        profile_path.write_text(body)
+        with patch(
+            "my_cli.profile.PROFILE_FILE",
+            profile_path,
+        ):
+            with invocation(profile="default") as ctx:
+                load_profile(ctx)
+                yield ctx
 
     def test_env_var_name_derives_from_the_key(self):
         """Test the environment variable name is the prefixed, upper-cased key."""
@@ -1439,110 +1422,103 @@ class TestProfile:
     def test_resolve_setting_prefers_the_flag(self):
         """Test a flag value outranks every other layer."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            self._load(tmpdir, "default:\n  baseUrl: https://profile.example")
-            env = {env_var_name("baseUrl"): "https://env.example"}
-            with patch.dict(os.environ, env):
-                result = resolve_setting("baseUrl", "https://flag.example")
+            with self._loaded(tmpdir, "default:\n  baseUrl: https://profile.example"):
+                env = {env_var_name("baseUrl"): "https://env.example"}
+                with patch.dict(os.environ, env):
+                    result = resolve_setting("baseUrl", "https://flag.example")
         assert result == "https://flag.example"
 
     def test_resolve_setting_prefers_the_environment_over_the_profile(self):
         """Test the environment outranks the profile."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            self._load(tmpdir, "default:\n  baseUrl: https://profile.example")
-            env = {env_var_name("baseUrl"): "https://env.example"}
-            with patch.dict(os.environ, env):
-                result = resolve_setting("baseUrl")
+            with self._loaded(tmpdir, "default:\n  baseUrl: https://profile.example"):
+                env = {env_var_name("baseUrl"): "https://env.example"}
+                with patch.dict(os.environ, env):
+                    result = resolve_setting("baseUrl")
         assert result == "https://env.example"
 
     def test_resolve_setting_prefers_the_profile_over_the_default(self):
         """Test the profile outranks the built-in default."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            self._load(tmpdir, "default:\n  baseUrl: https://profile.example")
-            with patch.dict(os.environ, {}, clear=True):
-                result = resolve_setting("baseUrl")
+            with self._loaded(tmpdir, "default:\n  baseUrl: https://profile.example"):
+                with patch.dict(os.environ, {}, clear=True):
+                    result = resolve_setting("baseUrl")
         assert result == "https://profile.example"
 
     def test_resolve_setting_falls_back_to_the_default(self):
         """Test the built-in default applies when no other layer supplies one."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            self._load(tmpdir, "default: {}")
-            with patch.dict(os.environ, {}, clear=True):
-                result = resolve_setting("baseUrl")
+            with self._loaded(tmpdir, "default: {}"):
+                with patch.dict(os.environ, {}, clear=True):
+                    result = resolve_setting("baseUrl")
         assert result == constants.PROFILE_DEFAULTS["baseUrl"]
 
     def test_resolve_setting_coerces_the_environment_to_the_default_type(self):
         """Test environment strings are converted to the type of the default."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            self._load(tmpdir, "default: {}")
-            env = {
-                env_var_name("timeout"): "45",
-                env_var_name("outputColors"): "false",
-                env_var_name("retryBackoffFactor"): "1.5",
-            }
-            with patch.dict(os.environ, env):
-                assert resolve_setting("timeout") == 45
-                assert resolve_setting("outputColors") is False
-                assert resolve_setting("retryBackoffFactor") == 1.5
+            with self._loaded(tmpdir, "default: {}"):
+                env = {
+                    env_var_name("timeout"): "45",
+                    env_var_name("outputColors"): "false",
+                    env_var_name("retryBackoffFactor"): "1.5",
+                }
+                with patch.dict(os.environ, env):
+                    assert resolve_setting("timeout") == 45
+                    assert resolve_setting("outputColors") is False
+                    assert resolve_setting("retryBackoffFactor") == 1.5
 
     def test_resolve_setting_ignores_an_unconvertible_environment_value(self):
         """Test a malformed environment value falls back to the default."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            self._load(tmpdir, "default: {}")
-            with patch.dict(os.environ, {env_var_name("timeout"): "soon"}):
-                result = resolve_setting("timeout")
+            with self._loaded(tmpdir, "default: {}"):
+                with patch.dict(os.environ, {env_var_name("timeout"): "soon"}):
+                    result = resolve_setting("timeout")
         assert result == constants.PROFILE_DEFAULTS["timeout"]
 
     def test_resolve_setting_coerces_the_profile_to_the_default_type(self):
         """Test a quoted number in the profile file is still read as a number."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            self._load(tmpdir, 'default:\n  timeout: "45"')
-            with patch.dict(os.environ, {}, clear=True):
-                result = resolve_setting("timeout")
+            with self._loaded(tmpdir, 'default:\n  timeout: "45"'):
+                with patch.dict(os.environ, {}, clear=True):
+                    result = resolve_setting("timeout")
         assert result == 45
 
     def test_resolve_setting_ignores_an_unconvertible_profile_value(self):
         """Test a malformed profile value falls back to the default."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            self._load(tmpdir, "default:\n  timeout: soon")
-            with patch.dict(os.environ, {}, clear=True):
-                result = resolve_setting("timeout")
+            with self._loaded(tmpdir, "default:\n  timeout: soon"):
+                with patch.dict(os.environ, {}, clear=True):
+                    result = resolve_setting("timeout")
         assert result == constants.PROFILE_DEFAULTS["timeout"]
 
     def test_resolve_setting_ignores_a_value_outside_the_choices(self):
         """Test a setting with a fixed set of values falls back on an unknown one."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            self._load(tmpdir, "default:\n  outputFormat: xml")
-            with patch.dict(os.environ, {}, clear=True):
-                result = resolve_setting("outputFormat")
+            with self._loaded(tmpdir, "default:\n  outputFormat: xml"):
+                with patch.dict(os.environ, {}, clear=True):
+                    result = resolve_setting("outputFormat")
         assert result == constants.PROFILE_DEFAULTS["outputFormat"]
 
     def test_resolve_setting_accepts_a_listed_choice(self):
         """Test a setting with a fixed set of values takes one of them."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            self._load(tmpdir, "default: {}")
-            with patch.dict(os.environ, {env_var_name("outputFormat"): "yaml"}):
-                result = resolve_setting("outputFormat")
+            with self._loaded(tmpdir, "default: {}"):
+                with patch.dict(os.environ, {env_var_name("outputFormat"): "yaml"}):
+                    result = resolve_setting("outputFormat")
         assert result == "yaml"
 
     def test_load_profile_applies_the_log_level(self):
         """Test the resolved log level takes effect when a profile is loaded."""
-        set_debug(False)
-        try:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                self._load(tmpdir, "default:\n  logLevel: ERROR")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self._loaded(tmpdir, "default:\n  logLevel: ERROR"):
                 assert _should_log("WARNING") is False
                 assert _should_log("ERROR") is True
-        finally:
-            set_log_level(constants.LOG_LEVEL)
 
     def test_load_profile_applies_the_colour_setting(self):
         """Test the resolved colour setting takes effect when a profile is loaded."""
-        try:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                self._load(tmpdir, "default:\n  outputColors: false")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self._loaded(tmpdir, "default:\n  outputColors: false"):
                 assert colors_enabled() is False
-        finally:
-            set_colors_enabled(True)
 
     def test_create_default_profile_file_error(self):
         """Test creating default profile file with error."""
@@ -1552,12 +1528,11 @@ class TestProfile:
             profile_path = readonly_dir / "subdir" / "profiles.yaml"
             os.chmod(readonly_dir, 0o444)
             try:
-                with patch.object(constants, "PROFILE_FILE", profile_path):
-                    with patch(
-                        "my_cli.profile.PROFILE_FILE",
-                        profile_path,
-                    ):
-                        _create_default_profile_file()
+                with patch(
+                    "my_cli.profile.PROFILE_FILE",
+                    profile_path,
+                ):
+                    _create_default_profile_file()
             finally:
                 os.chmod(readonly_dir, 0o755)
 
@@ -1572,31 +1547,23 @@ class TestLogging:
 
     def test_should_log_debug_enabled(self):
         """Test log filtering with debug enabled."""
-        set_debug(True)
-        assert _should_log("DEBUG") is True
-        assert _should_log("INFO") is True
-        set_debug(False)
+        with invocation(debug=True):
+            assert _should_log("DEBUG") is True
+            assert _should_log("INFO") is True
 
     def test_should_log_by_level(self):
         """Test log filtering by level."""
-        set_debug(False)
-        try:
-            set_log_level("WARNING")
+        with invocation(log_level="WARNING"):
             assert _should_log("INFO") is False
             assert _should_log("WARNING") is True
             assert _should_log("ERROR") is True
-        finally:
-            set_log_level(constants.LOG_LEVEL)
 
     def test_colours_can_be_disabled(self):
         """Test disabling colours drops the escape codes from a log line."""
-        try:
-            set_colors_enabled(False)
+        with invocation(colors=False):
             with patch("click.secho") as mock_secho:
                 log_error("boom")
-            assert mock_secho.call_args.kwargs["fg"] is None
-        finally:
-            set_colors_enabled(True)
+        assert mock_secho.call_args.kwargs["fg"] is None
 
     @pytest.mark.parametrize(
         ("hex_color", "rgb"),
@@ -1627,75 +1594,73 @@ class TestLogging:
 
     def test_log_debug(self):
         """Test debug logging."""
-        set_debug(True)
-        with patch("click.echo"):
-            with patch("click.secho"):
-                log_debug("Debug message")
-        set_debug(False)
+        with invocation(debug=True):
+            with patch("click.echo"):
+                with patch("click.secho"):
+                    log_debug("Debug message")
 
     def test_log_info(self):
         """Test info logging."""
-        set_debug(True)
-        with patch("click.echo"):
-            with patch("click.secho"):
-                log_info("Info message")
-        set_debug(False)
+        with invocation(debug=True):
+            with patch("click.echo"):
+                with patch("click.secho"):
+                    log_info("Info message")
 
     def test_log_warning(self):
         """Test warning logging."""
-        set_debug(True)
-        with patch("click.echo"):
-            with patch("click.secho"):
-                log_warning("Warning message")
-        set_debug(False)
+        with invocation(debug=True):
+            with patch("click.echo"):
+                with patch("click.secho"):
+                    log_warning("Warning message")
 
     def test_log_error(self):
         """Test error logging."""
-        set_debug(True)
-        with patch("click.echo"):
-            with patch("click.secho"):
-                log_error("Error message")
-        set_debug(False)
+        with invocation(debug=True):
+            with patch("click.echo"):
+                with patch("click.secho"):
+                    log_error("Error message")
 
     def test_log_full_color_style(self):
         """Test logging with full color style."""
-        set_debug(True)
-        with patch.object(constants, "LOG_COLOR_STYLE", "full"):
-            with patch("click.secho"):
-                with patch(
-                    "my_cli.logging.LOG_COLOR_STYLE",
-                    "full",
-                ):
-                    log("INFO", "Test message")
-        set_debug(False)
+        with invocation(debug=True):
+            with patch.object(constants, "LOG_COLOR_STYLE", "full"):
+                with patch("click.secho"):
+                    with patch(
+                        "my_cli.logging.LOG_COLOR_STYLE",
+                        "full",
+                    ):
+                        log("INFO", "Test message")
 
     def test_log_level_color_style(self):
         """Test logging with level color style."""
-        set_debug(True)
-        with patch.object(constants, "LOG_COLOR_STYLE", "level"):
-            with patch(
-                "my_cli.logging.LOG_COLOR_STYLE",
-                "level",
-            ):
-                with patch("click.echo"):
-                    with patch("click.secho"):
-                        log("INFO", "Test message")
-        set_debug(False)
-
-    def test_log_to_file(self):
-        """Test logging to file."""
-        set_debug(True)
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_file = Path(tmpdir) / "test.log"
-            with patch("my_cli.logging.LOG_FILE", log_file):
+        with invocation(debug=True):
+            with patch.object(constants, "LOG_COLOR_STYLE", "level"):
                 with patch(
-                    "my_cli.logging._file_handler",
-                    None,
+                    "my_cli.logging.LOG_COLOR_STYLE",
+                    "level",
                 ):
                     with patch("click.echo"):
                         with patch("click.secho"):
+                            log("INFO", "Test message")
+
+    def test_log_to_file(self):
+        """Test a logged line is written to LOG_FILE."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_file = Path(tmpdir) / "test.log"
+            with patch("my_cli.logging.LOG_FILE", log_file):
+                with invocation(debug=True):
+                    with patch("click.echo"):
+                        with patch("click.secho"):
                             log_info("Test file logging")
-        set_debug(False)
+            assert "Test file logging" in log_file.read_text()
+
+    def test_log_to_file_outside_an_invocation(self):
+        """Test a line logged outside an invocation still reaches LOG_FILE."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_file = Path(tmpdir) / "test.log"
+            with patch("my_cli.logging.LOG_FILE", log_file):
+                _log_to_file("Test file logging")
+            assert "Test file logging" in log_file.read_text()
 
     def test_log_to_file_rotates_by_size(self):
         """Test file logging rotates once the configured size is exceeded."""
@@ -1703,49 +1668,46 @@ class TestLogging:
             log_file = Path(tmpdir) / "test.log"
             handler = RotatingFileHandler(log_file, maxBytes=100, backupCount=1)
             try:
-                with patch("my_cli.logging._file_handler", handler):
-                    for _ in range(10):
-                        _log_to_file("x" * 50)
+                with patch("my_cli.logging.LOG_FILE", log_file):
+                    with invocation(log_file_handler=handler):
+                        for _ in range(10):
+                            _log_to_file("x" * 50)
             finally:
                 handler.close()
             assert (Path(tmpdir) / "test.log.1").exists()
 
-    def test_get_file_handler_size_rotation(self):
-        """Test file handler with size rotation."""
+    @pytest.mark.parametrize(
+        ("rotation", "handler_type"),
+        [("size", RotatingFileHandler), ("days", TimedRotatingFileHandler)],
+    )
+    def test_get_file_handler_rotation(self, rotation, handler_type):
+        """Test the file handler rotates the way LOG_ROTATION_TYPE says."""
         with tempfile.TemporaryDirectory() as tmpdir:
             log_file = Path(tmpdir) / "test.log"
             with patch("my_cli.logging.LOG_FILE", log_file):
                 with patch(
                     "my_cli.logging.LOG_ROTATION_TYPE",
-                    "size",
+                    rotation,
                 ):
-                    with patch(
-                        "my_cli.logging._file_handler",
-                        None,
-                    ):
-                        _get_file_handler()
+                    handler = _get_file_handler(None)
+            assert isinstance(handler, handler_type)
+            handler.close()
 
-    def test_get_file_handler_days_rotation(self):
-        """Test file handler with days rotation."""
+    def test_get_file_handler_is_kept_by_the_invocation(self):
+        """Test an invocation opens the log file once and closes it on exit."""
         with tempfile.TemporaryDirectory() as tmpdir:
             log_file = Path(tmpdir) / "test.log"
             with patch("my_cli.logging.LOG_FILE", log_file):
-                with patch(
-                    "my_cli.logging.LOG_ROTATION_TYPE",
-                    "days",
-                ):
-                    with patch(
-                        "my_cli.logging._file_handler",
-                        None,
-                    ):
-                        _get_file_handler()
+                with invocation() as ctx:
+                    handler = _get_file_handler(ctx)
+                    assert _get_file_handler(ctx) is handler
+                    assert handler.stream is not None
+            assert handler.stream is None
 
     def test_get_file_handler_none(self):
         """Test file handler when LOG_FILE is None."""
         with patch("my_cli.logging.LOG_FILE", None):
-            with patch("my_cli.logging._file_handler", None):
-                handler = _get_file_handler()
-                assert handler is None
+            assert _get_file_handler(None) is None
 
     def test_log_to_file_io_error(self):
         """Test logging to file handles IO errors gracefully."""

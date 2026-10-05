@@ -17,9 +17,8 @@ from my_cli.constants import (
     SPLASH_FILE,
     __version__,
 )
-from my_cli.logging import hex_to_rgb, set_debug
+from my_cli.logging import hex_to_rgb
 from my_cli.options import common_options
-from my_cli.profile import load_profile
 
 
 def _show_splash() -> None:
@@ -45,12 +44,6 @@ def main(ctx: click.Context) -> None:
     # Skipped while Click is parsing for shell completion
     if not ctx.resilient_parsing:
         _show_splash()
-
-    # Enable debug logging if --debug flag is set
-    set_debug(ctx.obj["debug"])
-
-    # Load profile
-    load_profile(ctx.obj["profile"])
 
     # Show help when no subcommand is invoked
     if ctx.invoked_subcommand is None:
