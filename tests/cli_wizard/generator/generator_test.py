@@ -505,13 +505,65 @@ class TestCliGenerator:
             with _import_generated(output_dir, "test_cli", "commands.users") as module:
                 client = MagicMock()
                 client.get.return_value = response
-                with patch.object(module, "_get_client", return_value=client):
+                with patch.object(module, "create_client", return_value=client):
                     with patch.object(module, "load_profile"):
                         result = CliRunner().invoke(module.users, ["list-users"])
 
         assert result.exit_code == 1
         assert "Error: 422 Unprocessable Entity" in result.output
         assert "name: Field required" in result.output
+
+    def test_generated_command_modules_share_one_client_factory(self):
+        """Test every command module calls the factory client.py defines."""
+        groups = {
+            name: CommandGroup(
+                name=name,
+                cli_name=name.lower(),
+                description="",
+                operations=[
+                    Operation(
+                        operation_id=f"list{name}",
+                        method="GET",
+                        path=f"/{name.lower()}",
+                        summary="",
+                        description="",
+                        tags=[name],
+                        parameters=[],
+                    )
+                ],
+            )
+            for name in ("Users", "Orders")
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate(groups, output_dir, "test-cli", "test_cli")
+
+            commands_dir = output_dir / "src" / "test_cli" / "commands"
+            for module_file in ("users.py", "orders.py"):
+                assert "def _get_client" not in (commands_dir / module_file).read_text()
+
+            with _import_generated(output_dir, "test_cli", "client") as client_module:
+                users = importlib.import_module("test_cli.commands.users")
+                orders = importlib.import_module("test_cli.commands.orders")
+                assert users.create_client is client_module.create_client
+                assert orders.create_client is client_module.create_client
+
+    def test_generated_cli_reuses_the_logging_hex_to_rgb(self):
+        """Test the splash colour conversion is the logging module's, not a copy."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            package_dir = output_dir / "src" / "test_cli"
+            assert "def _hex_to_rgb" not in (package_dir / "cli.py").read_text()
+
+            with _import_generated(output_dir, "test_cli", "logging") as logging_module:
+                cli = importlib.import_module("test_cli.cli")
+                assert cli.hex_to_rgb is logging_module.hex_to_rgb
+                assert cli.hex_to_rgb("#FF0000") == (255, 0, 0)
 
     def test_generated_client_rejects_a_missing_ca_file(self):
         """Test that a CA file that does not exist fails instead of un-pinning."""

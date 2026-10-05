@@ -14,7 +14,7 @@ from {{ PackageName }}.constants import (
     SPLASH_FILE,
     SPLASH_COLOR,
 )
-from {{ PackageName }}.logging import set_debug
+from {{ PackageName }}.logging import hex_to_rgb, set_debug
 from {{ PackageName }}.options import common_options
 from {{ PackageName }}.profile import load_profile
 from {{ PackageName }}.commands.config import config
@@ -23,21 +23,12 @@ from {{ PackageName }}.commands.{{ group.module_name }} import {{ group.module_n
 {% endfor %}
 
 
-def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
-    """Convert hex color to RGB tuple."""
-    hex_color = hex_color.lstrip("#")
-    r = int(hex_color[0:2], 16)
-    g = int(hex_color[2:4], 16)
-    b = int(hex_color[4:6], 16)
-    return (r, g, b)
-
-
 def _show_splash() -> None:
     """Display splash screen if enabled."""
     if SPLASH_ENABLED and SPLASH_FILE and SPLASH_FILE.exists():
         splash_text = SPLASH_FILE.read_text()
         if SPLASH_COLOR:
-            rgb = _hex_to_rgb(SPLASH_COLOR)
+            rgb = hex_to_rgb(SPLASH_COLOR)
             click.secho(splash_text, fg=rgb)
         else:
             click.echo(splash_text)

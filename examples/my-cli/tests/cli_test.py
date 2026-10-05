@@ -21,11 +21,12 @@ import requests
 from click.testing import CliRunner
 
 from my_cli import constants
-from my_cli.cli import _hex_to_rgb, _show_splash, main
+from my_cli.cli import _show_splash, main
 from my_cli.client import (
     MAX_ERROR_BODY_CHARS,
     RETRY_STATUSES,
     ApiClient,
+    create_client,
     encode_path_param,
     format_error,
 )
@@ -36,6 +37,7 @@ from my_cli.logging import (
     _log_to_file,
     _should_log,
     colors_enabled,
+    hex_to_rgb,
     log,
     log_debug,
     log_error,
@@ -44,9 +46,6 @@ from my_cli.logging import (
     set_colors_enabled,
     set_debug,
     set_log_level,
-)
-from my_cli.logging import (
-    _hex_to_rgb as logging_hex_to_rgb,
 )
 from my_cli.options import HEADER
 from my_cli.output import render, render_table
@@ -105,13 +104,6 @@ class TestCli:
         runner = CliRunner()
         result = runner.invoke(main, ["--profile", "test", "--help"])
         assert result.exit_code == 0
-
-    def test_hex_to_rgb(self):
-        """Test hex color to RGB conversion."""
-        assert _hex_to_rgb("#FFFFFF") == (255, 255, 255)
-        assert _hex_to_rgb("#000000") == (0, 0, 0)
-        assert _hex_to_rgb("#FF0000") == (255, 0, 0)
-        assert _hex_to_rgb("00FF00") == (0, 255, 0)
 
     def test_show_splash_disabled(self):
         """Test splash screen when disabled."""
@@ -1038,6 +1030,66 @@ class TestApiClient:
 RECORDS = [{"id": 1, "name": "alpha", "tags": ["a"]}, {"id": 2, "name": "beta"}]
 
 
+class TestCreateClient:
+    """Tests for building the client out of the common options."""
+
+    def _options(self, **overrides):
+        """The common options as a command receives them, nothing given."""
+        options = {
+            "base_url": None,
+            "timeout": None,
+            "no_verify_ssl": False,
+            "ca_file": None,
+            "header": (),
+            "debug": False,
+        }
+        options.update(overrides)
+        return options
+
+    def test_defaults_come_from_the_profile_chain(self):
+        """Test the client takes its settings from resolve_setting."""
+        with patch.dict(os.environ, {env_var_name("timeout"): "7"}):
+            client = create_client(self._options())
+        assert client.base_url == constants.DEFAULT_BASE_URL
+        assert client.timeout == 7
+        assert client.ca_file == constants.DEFAULT_CA_FILE
+        assert client.verify_ssl is True
+        assert client.retry_max_attempts == constants.DEFAULT_RETRY_MAX_ATTEMPTS
+
+    def test_flags_outrank_the_profile_chain(self):
+        """Test --base-url, --timeout, --header and --debug reach the client."""
+        with patch.dict(os.environ, {env_var_name("timeout"): "7"}):
+            client = create_client(
+                self._options(
+                    base_url="https://flag.example.com",
+                    timeout=3,
+                    header=(("X-Tenant", "acme"),),
+                    debug=True,
+                )
+            )
+        assert client.base_url == "https://flag.example.com"
+        assert client.timeout == 3
+        assert client.session.headers["X-Tenant"] == "acme"
+        assert client.debug is True
+
+    def test_ca_file_pins_the_trust_store(self, tmp_path):
+        """Test --ca-file replaces the bundled CA file."""
+        ca_path = tmp_path / "ca.pem"
+        ca_path.write_text("cert")
+        client = create_client(self._options(ca_file=ca_path))
+        assert client.ca_file == str(ca_path)
+        assert client.session.verify == str(ca_path)
+
+    def test_no_verify_ssl_drops_the_ca_file(self, tmp_path):
+        """Test --no-verify-ssl disables verification and ignores --ca-file."""
+        client = create_client(
+            self._options(no_verify_ssl=True, ca_file=tmp_path / "absent.pem")
+        )
+        assert client.verify_ssl is False
+        assert client.ca_file is None
+        assert client.session.verify is False
+
+
 class TestOutput:
     """Tests for rendering a response in each output format."""
 
@@ -1546,11 +1598,20 @@ class TestLogging:
         finally:
             set_colors_enabled(True)
 
-    def test_hex_to_rgb_logging(self):
-        """Test hex to RGB conversion in logging."""
-        assert logging_hex_to_rgb("#FF0000") == (255, 0, 0)
-        assert logging_hex_to_rgb("#00FF00") == (0, 255, 0)
-        assert logging_hex_to_rgb("#0000FF") == (0, 0, 255)
+    @pytest.mark.parametrize(
+        ("hex_color", "rgb"),
+        [
+            ("#FFFFFF", (255, 255, 255)),
+            ("#000000", (0, 0, 0)),
+            ("#FF0000", (255, 0, 0)),
+            ("#00FF00", (0, 255, 0)),
+            ("#0000FF", (0, 0, 255)),
+            ("00FF00", (0, 255, 0)),
+        ],
+    )
+    def test_hex_to_rgb(self, hex_color, rgb):
+        """Test hex colour to RGB conversion, with or without the hash."""
+        assert hex_to_rgb(hex_color) == rgb
 
     def test_get_timestamp(self):
         """Test timestamp generation."""
