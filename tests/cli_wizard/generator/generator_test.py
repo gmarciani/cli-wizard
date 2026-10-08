@@ -2953,6 +2953,14 @@ class TestGeneratedExitCodes:
         assert error["exitCode"] == generated_cli.errors.EXIT_RESPONSE
         assert error["message"].startswith("200 OK response is not valid JSON")
 
+    def test_an_auth_error_is_a_client_error_with_its_own_code(self, generated_cli):
+        """Test a 401 or 403 is a client error, told apart by exit code 4."""
+        errors = generated_cli.errors
+
+        assert issubclass(errors.AuthError, errors.ClientError)
+        assert errors.AuthError.exit_code == errors.EXIT_AUTH
+        assert errors.ClientError.exit_code == errors.EXIT_CLIENT_ERROR
+
     def test_the_exit_codes_are_distinct_and_leave_clicks_alone(self, generated_cli):
         """Test no two failure classes share a code, and 2 stays the usage error."""
         errors = generated_cli.errors
