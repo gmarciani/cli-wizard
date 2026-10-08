@@ -27,12 +27,26 @@ from click.testing import CliRunner
 from my_cli import constants
 from my_cli.cli import _show_splash, main
 from my_cli.client import (
+    EXIT_AUTH,
+    EXIT_CLIENT_ERROR,
+    EXIT_FAILURE,
+    EXIT_NETWORK,
+    EXIT_SERVER_ERROR,
+    EXIT_USAGE,
     MAX_ERROR_BODY_CHARS,
     RETRY_STATUSES,
     ApiClient,
+    AuthError,
+    ClientError,
+    CommandError,
+    NetworkError,
+    ServerError,
     create_client,
     encode_path_param,
+    failure_class,
     format_error,
+    request_error,
+    response_error,
 )
 from my_cli.log import (
     _file_handler,
@@ -1297,6 +1311,103 @@ class TestFormatError:
         assert format_error(requests.ConnectionError("connection refused")) == (
             "connection refused"
         )
+
+
+# =============================================================================
+# Exit Code Tests
+# =============================================================================
+
+
+class TestExitCodes:
+    """Tests for the exit code each failure class maps to."""
+
+    def test_every_failure_class_has_its_own_code(self):
+        """Test no two classes share a code, and none is success."""
+        codes = [
+            EXIT_FAILURE,
+            EXIT_USAGE,
+            EXIT_NETWORK,
+            EXIT_AUTH,
+            EXIT_CLIENT_ERROR,
+            EXIT_SERVER_ERROR,
+        ]
+        assert len(set(codes)) == len(codes)
+        assert 0 not in codes
+
+    def test_usage_errors_keep_clicks_code(self):
+        """Test the usage code is the one Click exits with on its own."""
+        assert EXIT_USAGE == click.UsageError.exit_code
+
+    @pytest.mark.parametrize(
+        "error,expected",
+        [
+            (_http_error(401, "Unauthorized", ""), AuthError),
+            (_http_error(403, "Forbidden", ""), AuthError),
+            (_http_error(400, "Bad Request", ""), ClientError),
+            (_http_error(404, "Not Found", ""), ClientError),
+            (_http_error(500, "Internal Server Error", ""), ServerError),
+            (_http_error(503, "Service Unavailable", ""), ServerError),
+            (requests.ConnectionError("connection refused"), NetworkError),
+            (requests.ReadTimeout("read timed out"), NetworkError),
+            (requests.exceptions.SSLError("verify failed"), NetworkError),
+            (requests.HTTPError("no response attached"), NetworkError),
+            (ValueError("Expecting value"), CommandError),
+        ],
+    )
+    def test_failure_class_names_the_class_of_an_error(self, error, expected):
+        """Test an error maps to the failure class it belongs to."""
+        assert failure_class(error) is expected
+
+    @pytest.mark.parametrize(
+        "cls,expected",
+        [
+            (CommandError, EXIT_FAILURE),
+            (NetworkError, EXIT_NETWORK),
+            (AuthError, EXIT_AUTH),
+            (ClientError, EXIT_CLIENT_ERROR),
+            (ServerError, EXIT_SERVER_ERROR),
+        ],
+    )
+    def test_each_failure_class_exits_with_its_code(self, cls, expected):
+        """Test the error carries the code Click exits with."""
+        assert cls("boom").exit_code == expected
+
+    def test_failures_are_reported_by_click(self):
+        """Test every failure is one Click shows and exits on by itself."""
+        for cls in (NetworkError, AuthError, ClientError, ServerError):
+            assert issubclass(cls, CommandError)
+        assert issubclass(CommandError, click.ClickException)
+
+    def test_command_error_show_prints_to_stderr(self, capsys):
+        """Test showing the error prints it the way a failed command does."""
+        CommandError("404 Not Found").show()
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert captured.err == "Error: 404 Not Found\n"
+
+    def test_request_error_describes_the_response_and_keeps_its_class(self):
+        """Test a failed request becomes an error with the body and the code."""
+        error = request_error("things list", _http_error(404, "Not Found", "gone"))
+
+        assert isinstance(error, ClientError)
+        assert error.message == "404 Not Found\n  gone"
+
+    def test_request_error_logs_the_failure(self, capsys):
+        """Test the failure is logged under the name of the command."""
+        request_error("things list", requests.ConnectionError("refused"))
+
+        assert "Command 'things list' failed: refused" in capsys.readouterr().err
+
+    def test_response_error_names_the_response_it_could_not_decode(self):
+        """Test a malformed body is reported with the status it came with."""
+        response = requests.Response()
+        response.status_code = 200
+        response.reason = "OK"
+        error = response_error("things list", response, ValueError("Expecting value"))
+
+        assert type(error) is CommandError
+        assert error.message == "200 OK response is not valid JSON: Expecting value"
 
 
 # =============================================================================

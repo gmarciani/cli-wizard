@@ -6,9 +6,10 @@
 from typing import Any
 
 import click
+import requests
 
-from my_cli.client import create_client, format_error
-from my_cli.log import colors_enabled, log_debug, log_error
+from my_cli.client import create_client, request_error, response_error
+from my_cli.log import log_debug
 from my_cli.options import common_options
 from my_cli.output import render
 from my_cli.profile import load_profile, resolve_setting
@@ -54,27 +55,25 @@ def get_greetings(
     try:
         response = client.get("/private/greetings")
         response.raise_for_status()
-        if response.text:
-            rendered = render(
-                response.json(),
-                output_format,
-                json_indent=json_indent,
-                table_style=table_style,
-            )
-            log_debug(
-                f"Command '{cmd_name}' completed"
-                f" with output: {redact_text(rendered)[:500]}"
-            )
-            click.echo(rendered)
-        else:
-            log_debug(f"Command '{cmd_name}' completed successfully")
-            click.echo("Success")
-    except Exception as e:
-        message = format_error(e)
-        log_error(f"Command '{cmd_name}' failed: {message}")
-        click.secho(
-            f"Error: {message}",
-            fg="red" if colors_enabled() else None,
-            err=True,
-        )
-        raise SystemExit(1) from e
+    except requests.RequestException as e:
+        raise request_error(cmd_name, e) from e
+    if not response.text:
+        log_debug(f"Command '{cmd_name}' completed successfully")
+        click.echo("Success")
+        return
+    # Past the request: a body that does not decode is a response, not a
+    # failed request, and is reported as such with its own exit code.
+    try:
+        payload = response.json()
+    except ValueError as e:
+        raise response_error(cmd_name, response, e) from e
+    rendered = render(
+        payload,
+        output_format,
+        json_indent=json_indent,
+        table_style=table_style,
+    )
+    log_debug(
+        f"Command '{cmd_name}' completed with output: {redact_text(rendered)[:500]}"
+    )
+    click.echo(rendered)

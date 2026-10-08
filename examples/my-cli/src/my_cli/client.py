@@ -7,7 +7,7 @@
 """HTTP client for API requests."""
 
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 from urllib.parse import quote
 
 import click
@@ -23,7 +23,7 @@ from my_cli.constants import (
     DEFAULT_TIMEOUT,
     USER_AGENT,
 )
-from my_cli.log import log_debug
+from my_cli.log import colors_enabled, log_debug, log_error
 from my_cli.profile import resolve_setting
 from my_cli.redaction import redact, redact_text
 
@@ -32,6 +32,112 @@ MAX_ERROR_BODY_CHARS = 2000
 
 # Responses worth another attempt: the server is throttling or briefly down.
 RETRY_STATUSES = (429, 500, 502, 503, 504)
+
+# Exit codes of a failed command, one per failure class, so a calling script
+# can tell them apart and branch or retry accordingly. 2 is Click's own, for
+# a usage error, and 1 is what is left: a response that could not be decoded.
+EXIT_FAILURE = 1
+EXIT_USAGE = 2
+EXIT_NETWORK = 3
+EXIT_AUTH = 4
+EXIT_CLIENT_ERROR = 5
+EXIT_SERVER_ERROR = 6
+
+# Responses refusing the credentials, or the lack of them
+AUTH_STATUSES = (401, 403)
+
+
+class CommandError(click.ClickException):
+    """A failed command, reported by Click and exited with its class's code.
+
+    Each failure class is a subclass carrying its own exit code; this base one
+    is what is left, a response the command could not decode above all.
+    """
+
+    exit_code = EXIT_FAILURE
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        # Decided now, inside the invocation: Click shows the error after the
+        # context, and the colour setting the profile put there, is gone.
+        self.colored = colors_enabled()
+
+    def show(self, file: IO[Any] | None = None) -> None:
+        """Print the error to stderr, in red when colours are on."""
+        click.secho(
+            f"Error: {self.format_message()}",
+            fg="red" if self.colored else None,
+            file=file,
+            err=True,
+        )
+
+
+class NetworkError(CommandError):
+    """The request got no response: refused, unknown host, timeout, TLS."""
+
+    exit_code = EXIT_NETWORK
+
+
+class AuthError(CommandError):
+    """The API refused the credentials, or their absence: a 401 or 403."""
+
+    exit_code = EXIT_AUTH
+
+
+class ClientError(CommandError):
+    """The API rejected the request: any other 4xx."""
+
+    exit_code = EXIT_CLIENT_ERROR
+
+
+class ServerError(CommandError):
+    """The API failed: a 5xx."""
+
+    exit_code = EXIT_SERVER_ERROR
+
+
+def failure_class(error: Exception) -> type[CommandError]:
+    """Pick the class of a failed request's error, and with it the exit code.
+
+    An error response is classed by its status; a request that got no
+    response at all is a network error.
+    """
+    response = error.response if isinstance(error, requests.HTTPError) else None
+    if response is not None:
+        if response.status_code in AUTH_STATUSES:
+            return AuthError
+        if 400 <= response.status_code < 500:
+            return ClientError
+        if response.status_code >= 500:
+            return ServerError
+    if isinstance(error, requests.RequestException):
+        return NetworkError
+    return CommandError
+
+
+def request_error(cmd_name: str, error: requests.RequestException) -> CommandError:
+    """Build the error a command raises when its request failed.
+
+    Logged here, inside the invocation, since Click reports the error only
+    after the context - and the logger kept in it - has been closed.
+    """
+    message = format_error(error)
+    log_error(f"Command '{cmd_name}' failed: {message}")
+    return failure_class(error)(message)
+
+
+def response_error(
+    cmd_name: str, response: requests.Response, error: ValueError
+) -> CommandError:
+    """Build the error a command raises for a response it could not decode.
+
+    The request succeeded, so the message says which response came back
+    rather than passing the decoding error off as a failed request.
+    """
+    status = f"{response.status_code} {response.reason or ''}".strip()
+    message = f"{status} response is not valid JSON: {error}"
+    log_error(f"Command '{cmd_name}' failed: {message}")
+    return CommandError(message)
 
 
 def format_error(error: Exception) -> str:
