@@ -107,17 +107,18 @@ class NetworkError(RequestError):
     exit_code = EXIT_NETWORK
 
 
-class AuthError(RequestError):
-    """The API refused the credentials, or their absence: a 401 or 403."""
-
-    exit_code = EXIT_AUTH
-
-
 class ClientError(RequestError):
-    """The request is wrong: the API rejected it with any other 4xx, or a
-    --header the CLI could not send, one that is not ``Name: value``."""
+    """The request is wrong: the API rejected it with a 4xx, or a --header
+    the CLI could not send, one that is not ``Name: value``."""
 
     exit_code = EXIT_CLIENT_ERROR
+
+
+class AuthError(ClientError):
+    """The API refused the credentials, or their absence: a 401 or 403, the
+    client error worth telling apart, since a new token is the fix."""
+
+    exit_code = EXIT_AUTH
 
 
 class ServerError(RequestError):

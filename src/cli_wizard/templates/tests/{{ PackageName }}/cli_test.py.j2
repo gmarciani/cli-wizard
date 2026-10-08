@@ -1399,6 +1399,12 @@ class TestExitCodes:
         assert issubclass(cls, CliError)
         assert issubclass(CliError, click.ClickException)
 
+    def test_auth_error_is_a_client_error(self):
+        """Test a 401 or 403 is a client error, with an exit code of its own."""
+        assert issubclass(AuthError, ClientError)
+        assert AuthError("boom").exit_code == EXIT_AUTH
+        assert ClientError("boom").exit_code == EXIT_CLIENT_ERROR
+
     def test_usage_error_is_clicks_too(self):
         """Test a bad invocation is a usage error to Click as well."""
         assert issubclass(UsageError, click.UsageError)
