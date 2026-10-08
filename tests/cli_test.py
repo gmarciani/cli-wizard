@@ -83,11 +83,11 @@ def test_an_unexpected_error_is_reported_as_json(tmp_path):
             main, ["generate", "--project-name", "X", "--output", str(tmp_path / "o")]
         )
 
-    assert result.exit_code == 1
+    assert result.exit_code == 9
     assert _error(result) == {
         "type": "UnexpectedError",
         "message": "RuntimeError: a bug",
-        "exitCode": 1,
+        "exitCode": 9,
     }
 
 
@@ -102,7 +102,7 @@ def test_an_unexpected_errors_traceback_is_logged_under_debug(tmp_path, caplog):
             ["--debug", "generate", "--project-name", "X", "--output", str(tmp_path)],
         )
 
-    assert result.exit_code == 1
+    assert result.exit_code == 9
     assert "Traceback (most recent call last)" in caplog.text
     assert "RuntimeError: a bug" in caplog.text
 

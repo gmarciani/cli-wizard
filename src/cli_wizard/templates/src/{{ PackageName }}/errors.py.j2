@@ -28,16 +28,18 @@ import click
 
 from {{ PackageName }}.constants import PROFILE_DEFAULTS
 
-# Exit codes of a failed command, one per failure class, so a calling script
+# Exit codes of a failed command, one per error class, so a calling script
 # can tell them apart and branch or retry accordingly. 2 is Click's own, for
-# a usage error, and 1 is what is left: a response that could not be decoded,
-# a setting the CLI cannot work with, or a bug.
+# a usage error, and 1 is what is left: a Click error that is not about usage.
 EXIT_FAILURE = 1
 EXIT_USAGE = 2
 EXIT_NETWORK = 3
 EXIT_AUTH = 4
 EXIT_CLIENT_ERROR = 5
 EXIT_SERVER_ERROR = 6
+EXIT_RESPONSE = 7
+EXIT_CONFIG = 8
+EXIT_UNEXPECTED = 9
 
 
 def _state() -> dict[str, Any]:
@@ -86,9 +88,13 @@ class ConfigError(CliError):
     """A setting the CLI cannot work with: the profile file could not be read
     or written, or a configured file does not exist."""
 
+    exit_code = EXIT_CONFIG
+
 
 class ResponseError(CliError):
     """A successful response the CLI could not decode."""
+
+    exit_code = EXIT_RESPONSE
 
 
 class RequestError(CliError):
@@ -132,6 +138,8 @@ class UsageError(CliError, click.UsageError):
 
 class UnexpectedError(CliError):
     """An error that is not the CLI's own: a bug, reported with its type."""
+
+    exit_code = EXIT_UNEXPECTED
 
     def __init__(self, error: BaseException) -> None:
         super().__init__(f"{type(error).__name__}: {error}")

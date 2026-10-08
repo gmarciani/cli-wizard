@@ -70,8 +70,11 @@ as JSON on stdout and everything else, progress, prompts, hints and logs, on
 stderr. A failure is `{"error": {"type", "message", "exitCode"}}` on stdout,
 printed by the error's `show()`. cli-wizard raises the `CliWizardError`
 subclasses in `errors.py`; generated code raises the `CliError` subclasses in
-the generated `errors.py`. Both are `click.ClickException`s, so Click shows them
-and exits with their code, but no code raises a Click class, `SystemExit` or
+the generated `errors.py`. Every class has its own exit code, a class attribute
+(Click declares `exit_code` a `ClassVar`); 1 is the base, raised only for a Click
+error that is not about usage, and 2 stays Click's usage error. Both are
+`click.ClickException`s, so Click shows them and exits with their code, but no
+code raises a Click class, `SystemExit` or
 `self.fail()`, and `click.confirm(abort=True)` is replaced by raising `Aborted`;
 `TestOnlyProjectErrorsAreRaised` scans the sources and templates for those
 patterns. What Click raises on its own, a bad option or an unknown command, and
@@ -79,8 +82,7 @@ any unexpected exception are wrapped by `reported()` in `RootGroup.make_context`
 and `invoke`, the one choke point inside Click's `main()`, into `UsageError` and
 `UnexpectedError`; the traceback goes to the debug log there. A generated
 command catches `requests.RequestException` only and raises the matching
-`RequestError` subclass, which carries the exit code as a class attribute (Click
-declares `exit_code` a `ClassVar`). The JSON decode sits outside that `try`, so
+`RequestError` subclass. The JSON decode sits outside that `try`, so
 a malformed 200 body is a `ResponseError`, not a failed request. Log the failure
 *before* raising: by the time Click shows the error, the context, and with it
 the logger and the profile settings, is gone, which is also why `CliError`

@@ -40,9 +40,12 @@ from my_cli.client import (
 from my_cli.errors import (
     EXIT_AUTH,
     EXIT_CLIENT_ERROR,
+    EXIT_CONFIG,
     EXIT_FAILURE,
     EXIT_NETWORK,
+    EXIT_RESPONSE,
     EXIT_SERVER_ERROR,
+    EXIT_UNEXPECTED,
     EXIT_USAGE,
     AuthError,
     ClientError,
@@ -532,7 +535,7 @@ class TestConfigCommands:
                     profile_path,
                 ):
                     result = runner.invoke(main, ["config", "init"])
-                assert result.exit_code in [0, 1]
+                assert result.exit_code in [0, EXIT_CONFIG]
             finally:
                 os.chmod(readonly_dir, 0o700)
 
@@ -547,7 +550,7 @@ class TestConfigCommands:
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "list-profiles"])
-            assert result.exit_code == 1
+            assert result.exit_code == EXIT_CONFIG
 
     def test_config_show_yaml_error(self):
         """Test show with invalid YAML."""
@@ -560,7 +563,7 @@ class TestConfigCommands:
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "show"])
-            assert result.exit_code == EXIT_FAILURE
+            assert result.exit_code == EXIT_CONFIG
             error = json.loads(result.stdout)["error"]
             assert error["type"] == "ConfigError"
             assert error["message"].startswith("Failed to load profile file")
@@ -598,7 +601,7 @@ class TestConfigCommands:
                         "mykey",
                     ],
                 )
-            assert result.exit_code == 1
+            assert result.exit_code == EXIT_CONFIG
 
     def test_config_get_file_not_exists(self):
         """Test get when profile file doesn't exist."""
@@ -668,7 +671,7 @@ class TestConfigCommands:
                         "myvalue",
                     ],
                 )
-            assert result.exit_code == 1
+            assert result.exit_code == EXIT_CONFIG
 
     def test_config_set_creates_profile(self):
         """Test set creates profile if it doesn't exist."""
@@ -743,7 +746,7 @@ class TestConfigCommands:
                         "mykey",
                     ],
                 )
-            assert result.exit_code == 1
+            assert result.exit_code == EXIT_CONFIG
 
 
 # =============================================================================
@@ -1356,9 +1359,12 @@ class TestExitCodes:
             EXIT_AUTH,
             EXIT_CLIENT_ERROR,
             EXIT_SERVER_ERROR,
+            EXIT_RESPONSE,
+            EXIT_CONFIG,
+            EXIT_UNEXPECTED,
         ]
         assert len(set(codes)) == len(codes)
-        assert 0 not in codes
+        assert min(codes) >= 1
 
     def test_usage_errors_keep_clicks_code(self):
         """Test the usage code is the one Click exits with on its own."""
@@ -1388,8 +1394,8 @@ class TestExitCodes:
         "cls,expected",
         [
             (CliError, EXIT_FAILURE),
-            (ConfigError, EXIT_FAILURE),
-            (ResponseError, EXIT_FAILURE),
+            (ConfigError, EXIT_CONFIG),
+            (ResponseError, EXIT_RESPONSE),
             (NetworkError, EXIT_NETWORK),
             (AuthError, EXIT_AUTH),
             (ClientError, EXIT_CLIENT_ERROR),
@@ -1451,7 +1457,7 @@ class TestExitCodes:
         error = UnexpectedError(RuntimeError("a bug"))
 
         assert error.format_message() == "RuntimeError: a bug"
-        assert error.exit_code == EXIT_FAILURE
+        assert error.exit_code == EXIT_UNEXPECTED
 
     def test_request_error_describes_the_response_and_keeps_its_class(self):
         """Test a failed request becomes an error with the body and the code."""
