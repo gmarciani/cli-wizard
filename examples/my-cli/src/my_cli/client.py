@@ -23,7 +23,7 @@ from my_cli.constants import (
     DEFAULT_TIMEOUT,
     USER_AGENT,
 )
-from my_cli.logging import log_debug
+from my_cli.log import log_debug
 from my_cli.profile import resolve_setting
 from my_cli.redaction import redact, redact_text
 

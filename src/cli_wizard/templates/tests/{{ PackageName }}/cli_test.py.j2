@@ -9,8 +9,11 @@
 import importlib
 import importlib.metadata
 import json
+import logging
 import os
+import re
 import tempfile
+import time
 from contextlib import contextmanager
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
@@ -38,19 +41,16 @@ from {{ PackageName }}.profile import (
     resolve_setting,
     _create_default_profile_file,
 )
-from {{ PackageName }}.logging import (
+from {{ PackageName }}.log import (
     colors_enabled,
-    log_debug,
+    get_logger,
+    log,
     log_info,
     log_warning,
     log_error,
-    log,
-    _should_log,
     hex_to_rgb,
-    _get_timestamp,
-    _format_message,
-    _get_file_handler,
-    _log_to_file,
+    _file_handler,
+    _formatter,
 )
 from {{ PackageName }}.output import render, render_table
 from {{ PackageName }}.redaction import REDACTED, redact, redact_text
@@ -1480,12 +1480,18 @@ class TestProfile:
                     result = resolve_setting("outputFormat")
         assert result == "yaml"
 
-    def test_load_profile_applies_the_log_level(self):
+    def test_load_profile_applies_the_log_level(self, capsys):
         """Test the resolved log level takes effect when a profile is loaded."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            with self._loaded(tmpdir, "default:\n  logLevel: ERROR"):
-                assert _should_log("WARNING") is False
-                assert _should_log("ERROR") is True
+            with (
+                patch("{{ PackageName }}.log.LOG_FILE", None),
+                self._loaded(tmpdir, "default:\n  logLevel: ERROR"),
+            ):
+                log_warning("dropped")
+                log_error("kept")
+        err = capsys.readouterr().err
+        assert "dropped" not in err
+        assert "kept" in err
 
     def test_load_profile_applies_the_colour_setting(self):
         """Test the resolved colour setting takes effect when a profile is loaded."""
@@ -1515,27 +1521,78 @@ class TestProfile:
 # =============================================================================
 
 class TestLogging:
-    """Tests for logging utilities."""
+    """Tests for the log module."""
 
-    def test_should_log_debug_enabled(self):
-        """Test log filtering with debug enabled."""
-        with invocation(debug=True):
-            assert _should_log("DEBUG") is True
-            assert _should_log("INFO") is True
+    @pytest.fixture(autouse=True)
+    def no_log_file(self):
+        """Keep the tests off the configured log file."""
+        with patch("{{ PackageName }}.log.LOG_FILE", None):
+            yield
 
-    def test_should_log_by_level(self):
-        """Test log filtering by level."""
-        with invocation(log_level="WARNING"):
-            assert _should_log("INFO") is False
-            assert _should_log("WARNING") is True
-            assert _should_log("ERROR") is True
+    @staticmethod
+    def _record(level="ERROR", message="ERROR ahead"):
+        """A record at the given level."""
+        return logging.makeLogRecord(
+            {"levelname": level, "levelno": logging.getLevelName(level), "msg": message}
+        )
 
-    def test_colours_can_be_disabled(self):
-        """Test disabling colours drops the escape codes from a log line."""
-        with invocation(colors=False):
-            with patch("click.secho") as mock_secho:
-                log_error("boom")
-        assert mock_secho.call_args.kwargs["fg"] is None
+    @pytest.mark.parametrize(
+        ("obj", "kept", "dropped"),
+        [
+            ({}, "INFO", "DEBUG"),
+            ({"log_level": "WARNING"}, "WARNING", "INFO"),
+            ({"debug": True, "log_level": "ERROR"}, "DEBUG", None),
+        ],
+    )
+    def test_level_filters_messages(self, capsys, obj, kept, dropped):
+        """Test a message below the invocation's level is dropped, none with --debug."""
+        with invocation(**obj):
+            log(kept, "kept")
+            if dropped:
+                log(dropped, "dropped")
+        err = capsys.readouterr().err
+        assert "kept" in err
+        assert "dropped" not in err
+
+    @pytest.mark.parametrize(
+        ("style", "colors", "expected"),
+        [
+            ("level", True, "ERROR ahead " + click.style("ERROR", fg=(255, 0, 0))),
+            ("full", True, click.style("ERROR ahead ERROR", fg=(255, 0, 0))),
+            ("level", False, "ERROR ahead ERROR"),
+        ],
+    )
+    def test_colour_style(self, style, colors, expected):
+        """Test the level field alone, or the whole line, is coloured, wherever
+        the level sits in the format and whatever the message says."""
+        with (
+            invocation(colors=colors),
+            patch("{{ PackageName }}.log.LOG_FORMAT", "%(message)s %(levelname)s"),
+            patch("{{ PackageName }}.log.LOG_COLOR_STYLE", style),
+            patch.dict("{{ PackageName }}.log.LOG_COLORS", {"ERROR": "#FF0000"}),
+        ):
+            assert _formatter(colors=True).format(self._record()) == expected
+
+    def test_format_placeholders(self, capsys):
+        """Test every logging placeholder is rendered, not only the three basic ones."""
+        with patch("{{ PackageName }}.log.LOG_FORMAT", "%(name)s:%(lineno)d %(message)s"):
+            log_info("hello")
+        assert re.fullmatch(r"\w+:\d+ hello\n", capsys.readouterr().err)
+
+    @pytest.mark.parametrize(
+        ("timezone", "converter"), [("UTC", time.gmtime), ("Local", time.localtime)]
+    )
+    def test_timestamp_timezone(self, timezone, converter):
+        """Test the timestamp is in LOG_TIMEZONE, in LOG_TIMESTAMP_FORMAT."""
+        record = self._record()
+        with (
+            patch("{{ PackageName }}.log.LOG_FORMAT", "%(asctime)s"),
+            patch("{{ PackageName }}.log.LOG_TIMEZONE", timezone),
+        ):
+            timestamp = _formatter(colors=False).format(record)
+        assert timestamp == time.strftime(
+            constants.LOG_TIMESTAMP_FORMAT, converter(record.created)
+        )
 
     @pytest.mark.parametrize(
         ("hex_color", "rgb"),
@@ -1552,146 +1609,64 @@ class TestLogging:
         """Test hex colour to RGB conversion, with or without the hash."""
         assert hex_to_rgb(hex_color) == rgb
 
-    def test_get_timestamp(self):
-        """Test timestamp generation."""
-        timestamp = _get_timestamp()
-        assert isinstance(timestamp, str)
-        assert len(timestamp) > 0
+    def test_log_to_file(self, tmp_path):
+        """Test a logged line is written to LOG_FILE, without colours."""
+        log_file = tmp_path / "test.log"
+        with patch("{{ PackageName }}.log.LOG_FILE", log_file):
+            with invocation(colors=True):
+                log_info("Test file logging")
+        assert "Test file logging" in log_file.read_text()
+        assert "\x1b" not in log_file.read_text()
 
-    def test_format_message(self):
-        """Test message formatting."""
-        formatted = _format_message("INFO", "Test message")
-        assert "INFO" in formatted
-        assert "Test message" in formatted
-
-    def test_log_debug(self):
-        """Test debug logging."""
-        with invocation(debug=True):
-            with patch("click.echo"):
-                with patch("click.secho"):
-                    log_debug("Debug message")
-
-    def test_log_info(self):
-        """Test info logging."""
-        with invocation(debug=True):
-            with patch("click.echo"):
-                with patch("click.secho"):
-                    log_info("Info message")
-
-    def test_log_warning(self):
-        """Test warning logging."""
-        with invocation(debug=True):
-            with patch("click.echo"):
-                with patch("click.secho"):
-                    log_warning("Warning message")
-
-    def test_log_error(self):
-        """Test error logging."""
-        with invocation(debug=True):
-            with patch("click.echo"):
-                with patch("click.secho"):
-                    log_error("Error message")
-
-    def test_log_full_color_style(self):
-        """Test logging with full color style."""
-        with invocation(debug=True):
-            with patch.object(constants, "LOG_COLOR_STYLE", "full"):
-                with patch("click.secho"):
-                    with patch(
-                        "{{ PackageName }}.logging.LOG_COLOR_STYLE",
-                        "full",
-                    ):
-                        log("INFO", "Test message")
-
-    def test_log_level_color_style(self):
-        """Test logging with level color style."""
-        with invocation(debug=True):
-            with patch.object(constants, "LOG_COLOR_STYLE", "level"):
-                with patch(
-                    "{{ PackageName }}.logging.LOG_COLOR_STYLE",
-                    "level",
-                ):
-                    with patch("click.echo"):
-                        with patch("click.secho"):
-                            log("INFO", "Test message")
-
-    def test_log_to_file(self):
-        """Test a logged line is written to LOG_FILE."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_file = Path(tmpdir) / "test.log"
-            with patch("{{ PackageName }}.logging.LOG_FILE", log_file):
-                with invocation(debug=True):
-                    with patch("click.echo"):
-                        with patch("click.secho"):
-                            log_info("Test file logging")
-            assert "Test file logging" in log_file.read_text()
-
-    def test_log_to_file_outside_an_invocation(self):
+    def test_log_to_file_outside_an_invocation(self, tmp_path):
         """Test a line logged outside an invocation still reaches LOG_FILE."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_file = Path(tmpdir) / "test.log"
-            with patch("{{ PackageName }}.logging.LOG_FILE", log_file):
-                _log_to_file("Test file logging")
-            assert "Test file logging" in log_file.read_text()
+        log_file = tmp_path / "test.log"
+        with patch("{{ PackageName }}.log.LOG_FILE", log_file):
+            log_info("Test file logging")
+        assert "Test file logging" in log_file.read_text()
 
-    def test_log_to_file_rotates_by_size(self):
+    def test_log_to_file_rotates_by_size(self, tmp_path):
         """Test file logging rotates once the configured size is exceeded."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_file = Path(tmpdir) / "test.log"
-            handler = RotatingFileHandler(log_file, maxBytes=100, backupCount=1)
-            try:
-                with patch("{{ PackageName }}.logging.LOG_FILE", log_file):
-                    with invocation(log_file_handler=handler):
-                        for _ in range(10):
-                            _log_to_file("x" * 50)
-            finally:
-                handler.close()
-            assert (Path(tmpdir) / "test.log.1").exists()
+        log_file = tmp_path / "test.log"
+        handler = RotatingFileHandler(log_file, maxBytes=100, backupCount=1)
+        with (
+            patch("{{ PackageName }}.log.LOG_FILE", log_file),
+            patch("{{ PackageName }}.log._file_handler", return_value=handler),
+            invocation(),
+        ):
+            for _ in range(10):
+                log_info("x" * 50)
+        assert (tmp_path / "test.log.1").exists()
 
     @pytest.mark.parametrize(
         ("rotation", "handler_type"),
         [("size", RotatingFileHandler), ("days", TimedRotatingFileHandler)],
     )
-    def test_get_file_handler_rotation(self, rotation, handler_type):
+    def test_file_handler_rotation(self, tmp_path, rotation, handler_type):
         """Test the file handler rotates the way LOG_ROTATION_TYPE says."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_file = Path(tmpdir) / "test.log"
-            with patch("{{ PackageName }}.logging.LOG_FILE", log_file):
-                with patch(
-                    "{{ PackageName }}.logging.LOG_ROTATION_TYPE",
-                    rotation,
-                ):
-                    handler = _get_file_handler(None)
-            assert isinstance(handler, handler_type)
-            handler.close()
+        with (
+            patch("{{ PackageName }}.log.LOG_FILE", tmp_path / "test.log"),
+            patch("{{ PackageName }}.log.LOG_ROTATION_TYPE", rotation),
+        ):
+            handler = _file_handler()
+        handler.close()
+        assert isinstance(handler, handler_type)
 
-    def test_get_file_handler_is_kept_by_the_invocation(self):
+    def test_logger_is_kept_by_the_invocation(self, tmp_path):
         """Test an invocation opens the log file once and closes it on exit."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_file = Path(tmpdir) / "test.log"
-            with patch("{{ PackageName }}.logging.LOG_FILE", log_file):
-                with invocation() as ctx:
-                    handler = _get_file_handler(ctx)
-                    assert _get_file_handler(ctx) is handler
-                    assert handler.stream is not None
-            assert handler.stream is None
+        with patch("{{ PackageName }}.log.LOG_FILE", tmp_path / "test.log"):
+            with invocation() as ctx:
+                logger = get_logger(ctx)
+                assert get_logger(ctx) is logger
+                handler = logger.handlers[-1]
+                assert isinstance(handler, logging.FileHandler)
+                assert handler.stream is not None
+        assert handler.stream is None
 
-    def test_get_file_handler_none(self):
-        """Test file handler when LOG_FILE is None."""
-        with patch("{{ PackageName }}.logging.LOG_FILE", None):
-            assert _get_file_handler(None) is None
-
-    def test_log_to_file_io_error(self):
-        """Test logging to file handles IO errors gracefully."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_file = Path(tmpdir) / "readonly" / "test.log"
-            with patch("{{ PackageName }}.logging.LOG_FILE", log_file):
-                mock_handler = MagicMock()
-                with patch(
-                    "{{ PackageName }}.logging._get_file_handler",
-                    return_value=mock_handler,
-                ):
-                    _log_to_file("Test message")
+    def test_no_file_handler_without_log_file(self):
+        """Test only the console is written when LOG_FILE is None."""
+        handlers = get_logger(None).handlers
+        assert not [h for h in handlers if isinstance(h, logging.FileHandler)]
 
 
 # =============================================================================

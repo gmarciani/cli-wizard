@@ -14,7 +14,7 @@ from {{ PackageName }}.constants import (
     SPLASH_FILE,
     SPLASH_COLOR,
 )
-from {{ PackageName }}.logging import hex_to_rgb
+from {{ PackageName }}.log import hex_to_rgb
 from {{ PackageName }}.options import common_options
 from {{ PackageName }}.commands.config import config
 {% for tag, group in groups.items() %}

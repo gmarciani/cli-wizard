@@ -8,6 +8,7 @@ import configparser
 import importlib
 import importlib.util
 import json
+import logging
 import os
 import re
 import subprocess
@@ -550,8 +551,8 @@ class TestCliGenerator:
                 assert users.create_client is client_module.create_client
                 assert orders.create_client is client_module.create_client
 
-    def test_generated_cli_reuses_the_logging_hex_to_rgb(self):
-        """Test the splash colour conversion is the logging module's, not a copy."""
+    def test_generated_cli_reuses_the_log_hex_to_rgb(self):
+        """Test the splash colour conversion is the log module's, not a copy."""
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "test-cli"
             generator = CliGenerator(config=self._default_config())
@@ -560,9 +561,9 @@ class TestCliGenerator:
             package_dir = output_dir / "src" / "test_cli"
             assert "def _hex_to_rgb" not in (package_dir / "cli.py").read_text()
 
-            with _import_generated(output_dir, "test_cli", "logging") as logging_module:
+            with _import_generated(output_dir, "test_cli", "log") as log_module:
                 cli = importlib.import_module("test_cli.cli")
-                assert cli.hex_to_rgb is logging_module.hex_to_rgb
+                assert cli.hex_to_rgb is log_module.hex_to_rgb
                 assert cli.hex_to_rgb("#FF0000") == (255, 0, 0)
 
     def test_generated_client_rejects_a_missing_ca_file(self):
@@ -1958,7 +1959,7 @@ def generated_cli(tmp_path_factory):
             group=importlib.import_module("probe_cli.commands.things").things,
             constants=constants,
             profile=importlib.import_module("probe_cli.profile"),
-            logging=importlib.import_module("probe_cli.logging"),
+            log=importlib.import_module("probe_cli.log"),
             profile_file=constants.PROFILE_FILE,
         )
     finally:
@@ -2091,15 +2092,18 @@ class TestGeneratedProfilePrecedence:
         assert result.exit_code == 0
         assert result.output == '{\n    "id": 1\n}\n'
 
-    def test_profile_log_level_silences_lower_levels(self, generated_cli):
+    def test_profile_log_level_silences_lower_levels(self, generated_cli, capsys):
         """Test logLevel from the profile decides which messages are logged."""
         self._write_profile(generated_cli, logLevel="ERROR")
 
         with click.Context(generated_cli.main, obj={"profile": "default"}) as ctx:
             generated_cli.profile.load_profile(ctx)
+            generated_cli.log.log_warning("dropped")
+            generated_cli.log.log_error("kept")
 
-            assert generated_cli.logging._should_log("WARNING") is False
-            assert generated_cli.logging._should_log("ERROR") is True
+        err = capsys.readouterr().err
+        assert "dropped" not in err
+        assert "kept" in err
 
     @pytest.mark.parametrize("colors,coloured", [(True, True), (False, False)])
     def test_profile_output_colors_decides_whether_errors_are_coloured(
@@ -2818,7 +2822,7 @@ class TestGeneratedInvocationState:
         with patch("requests.Session.get", return_value=response):
             return CliRunner().invoke(cli.main, ["things", "list-things", *args])
 
-    @pytest.mark.parametrize("module", ["profile", "logging"])
+    @pytest.mark.parametrize("module", ["profile", "log"])
     def test_no_module_rebinds_a_global(self, generated_cli, module):
         """Test the profile and logging modules declare no mutable globals."""
         source = Path(getattr(generated_cli, module).__file__).read_text()
@@ -2841,7 +2845,7 @@ class TestGeneratedInvocationState:
         result = self._invoke(generated_cli, ["--debug"])
         assert result.exit_code == 0, result.output
 
-        generated_cli.logging.log_debug("leaked")
+        generated_cli.log.log_debug("leaked")
 
         assert "leaked" not in capsys.readouterr().err
 
@@ -2851,7 +2855,7 @@ class TestGeneratedInvocationState:
         result = self._invoke(generated_cli)
         assert result.exit_code == 0, result.output
 
-        generated_cli.logging.log_warning("still logged")
+        generated_cli.log.log_warning("still logged")
 
         assert "still logged" in capsys.readouterr().err
 
@@ -2861,7 +2865,7 @@ class TestGeneratedInvocationState:
         result = self._invoke(generated_cli)
         assert result.exit_code == 0, result.output
 
-        assert generated_cli.logging.colors_enabled() is True
+        assert generated_cli.log.colors_enabled() is True
 
     def test_profile_is_read_from_the_context(self, generated_cli):
         """Test a test can supply the profile through the context, no file needed."""
@@ -2878,7 +2882,7 @@ class TestGeneratedInvocationState:
     def test_debug_is_read_from_the_context(self, generated_cli, capsys):
         """Test a test can enable debug output through the context."""
         with click.Context(generated_cli.main, obj={"debug": True}):
-            generated_cli.logging.log_debug("from the context")
+            generated_cli.log.log_debug("from the context")
 
         assert "from the context" in capsys.readouterr().err
 
@@ -2901,7 +2905,7 @@ class TestGeneratedInvocationState:
         response.text = ""
         log_file = tmp_path / "probe.log"
         with (
-            patch.object(generated_cli.logging, "LOG_FILE", log_file),
+            patch.object(generated_cli.log, "LOG_FILE", log_file),
             patch("requests.Session.get", return_value=response),
         ):
             ctx = generated_cli.main.make_context(
@@ -2910,7 +2914,9 @@ class TestGeneratedInvocationState:
             with ctx:
                 generated_cli.main.invoke(ctx)
 
-        handler = ctx.obj["log_file_handler"]
+        handler = next(
+            h for h in ctx.obj["logger"].handlers if isinstance(h, logging.FileHandler)
+        )
         assert handler.stream is None
         assert "Executing command 'things list-things'" in log_file.read_text()
 

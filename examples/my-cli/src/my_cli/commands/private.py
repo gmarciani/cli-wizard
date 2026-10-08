@@ -8,7 +8,7 @@ from typing import Any
 import click
 
 from my_cli.client import create_client, format_error
-from my_cli.logging import colors_enabled, log_debug, log_error
+from my_cli.log import colors_enabled, log_debug, log_error
 from my_cli.options import common_options
 from my_cli.output import render
 from my_cli.profile import load_profile, resolve_setting
