@@ -6,79 +6,72 @@
 
 #### cli-wizard
 
-- Added the `HomePageUrl` config parameter, which sets `Homepage` in a generated `pyproject.toml` and defaults to `RepositoryUrl`.
-- Added the `--project-name` option to `generate`. It sets `ProjectName`, from which `CommandName` and `PackageName` derive, and makes the configuration file optional: `cli-wizard generate --api openapi.yaml --project-name "My CLI"` is enough, with every other parameter taking its default.
+- Added the `HomePageUrl` configuration parameter, the `Homepage` of the generated `pyproject.toml`; it defaults to `RepositoryUrl`.
+- Added `--project-name` to `generate`, which makes the configuration file optional: `cli-wizard generate --api openapi.yaml --project-name "My CLI"` is enough.
+- Added the `CoverageThreshold` configuration parameter: a generated project's checks fail when its test coverage drops below it, 80% by default.
 
 #### Generated code
 
-- The generated `README.md` documents the CLI it ships with instead of pointing at `--help`: a quick start, a reference of every command group and command with its options, the profile file and the settings it holds with their defaults, the flag, environment, profile and default precedence, and how the access token is stored and sent.
+- The generated `README.md` documents the CLI itself: a quick start, every command with its options, the settings with their defaults and precedence, and how the access token is stored and sent.
+- Added `--timeout`, which sets the request timeout for one invocation.
+- Added the repeatable `--header`/`-H` option, which sends an extra `Name: value` header with the request.
+- Requests identify the CLI by name and version in their `User-Agent` header, so its traffic can be told apart in the server's logs.
 
 ### Changes
 
 #### cli-wizard
 
-- [Breaking] `generate` and `bootstrap` take the output directory with `--output` instead of a positional argument. It defaults to a directory named after `CommandName` next to the configuration file, and both commands refuse an output directory that contains the configuration file.
-- [Breaking] Renamed the `OpenapiSpec` configuration parameter to `Api`, matching the `--api` option of the `generate` command. A configuration still using `OpenapiSpec` is rejected.
-- Publishes no extras: the dev, test and docs toolchains are [PEP 735](https://peps.python.org/pep-0735/) groups, `dev` including the other two.
-- Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.
-- Logging is based on the standard library's `logging` module.
-- Lints its own code and tests with the `B` (bugbear), `S` (bandit) and `UP` (pyupgrade) ruff rule sets, on top of `E`, `F`, `W` and `I`.
-- [Breaking] Every command prints one JSON document on stdout. `generate` and `bootstrap` print a summary of what they produced, with the CLI and package names, the output directory, the configuration file and, for `generate`, the spec and the command groups; their progress, the `bootstrap` prompts and the hints go to stderr.
-- [Breaking] Every failure is one JSON document on stdout, `{"error": {"type": "<class>", "message": "...", "exitCode": <code>}}`, in place of `✗ <message>` or `Error: <message>` on stderr. The type is one of cli-wizard's own error classes, `ConfigError`, `SpecError`, `OutputDirError`, `RuffNotFoundError`, `FormattingError` and `Aborted` under `CliWizardError`, plus `UsageError` for what Click rejects itself and `UnexpectedError` for a bug, whose traceback `--debug` logs. Each class has its own exit code: 1 for any other failure, 2 usage, 3 configuration, 4 spec, 5 output directory, 6 ruff missing, 7 formatting, 8 aborted, 9 unexpected. Nothing raises a Click exception class or exits on its own.
+- [Breaking] `generate` and `bootstrap` take the output directory with `--output`, defaulting to `CommandName` next to the configuration file; one holding that file is refused.
+- [Breaking] Renamed the `OpenapiSpec` configuration parameter to `Api`, matching `--api`; a configuration still using `OpenapiSpec` is rejected.
+- [Breaking] Every command prints one JSON document on stdout: `generate` and `bootstrap` print a summary of what they produced, while progress, prompts and hints go to stderr.
+- [Breaking] Every failure is a JSON document on stdout, `{"error": {"type", "message", "exitCode"}}`, in place of a message on stderr.
+- A malformed OpenAPI spec and a failing ruff run are reported as errors instead of tracebacks; `--debug` logs the traceback of an unexpected error.
+- The development toolchain installs with `pip install -e . --group dev`, a [PEP 735](https://peps.python.org/pep-0735/) dependency group needing pip 25.1 or newer, instead of extras.
+- Logs through the standard library's `logging` module.
 
 #### Generated code
 
-- `PythonVersion` defaults to 3.14, the newest supported version, instead of 3.12. Set it explicitly to keep generating projects for older interpreters.
-- Publishes no extras: the dev, test and docs toolchains are PEP 735 dependency groups, and `dev` includes the other two.
-- Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.
-- Catches `OSError` instead of the redundant `(IOError, OSError)` tuple, `IOError` having been an alias of `OSError` since Python 3.3.
-- Drops the unused `MAIN_DIR`, `get_profile()`, `get_profile_name()` and `is_debug_enabled()` definitions, along with the unreachable `is not None` guards around inputs Click always supplies.
-- The options and the loaded profile live in the Click context of the invocation and die with it, so a CLI run in-process never inherits the settings of a previous run.
-- The `config` commands take the common options like every other command, so `--profile` applies to them wherever it is given, before `config` or after the subcommand.
-- The log file is opened once per invocation and closed when it ends, and the debug flag, the log level and the colour setting apply to that invocation alone.
-- Logging is based on the standard library's `logging` module.
-- The ruff configuration also enables the `B` (bugbear), `S` (bandit) and `UP` (pyupgrade) rule sets, and the generated code passes them.
-- [Breaking] A failed command exits with the code of its error class instead of always 1, so a script can branch on it: 3 when no response came back (connection refused, timeout, TLS), 4 on a 4xx or a malformed `--header`, 5 on a 5xx, 6 on a response body that is not valid JSON, 7 on a profile file that cannot be read or written, 8 on a bug. 2 stays Click's usage error and 1 is any other failure. A script testing for exit code 1 must test for a non-zero code instead. The generated `README.md` documents the codes.
-- A successful response whose body is not valid JSON is reported as such, `200 OK response is not valid JSON: ...` with exit code 6, instead of passing the decoding error off as a failed request.
-- [Breaking] A command whose response has no body prints `{"status": "success"}`, in the selected output format, instead of the bare word `Success`, so stdout is one JSON document on success too.
-- [Breaking] Every failure is one JSON document on stdout, `{"error": {"type": "<class>", "message": "...", "exitCode": <code>}}`, indented as `jsonIndent` says, in place of `Error: <message>` on stderr; logs stay on stderr. The type is one of the CLI's own error classes in the new `errors.py` module, `NetworkError`, `ClientError` (a 4xx, or a `--header` that is not `Name: value`), `ServerError`, `ResponseError` and `ConfigError` under `CliError`, plus `UsageError` for what Click rejects itself, an unknown command, a missing option or a bad value, with exit code 2, and `UnexpectedError` for a bug, whose traceback `--debug` logs. Nothing exits with `SystemExit` or raises a Click class, and errors are never coloured.
+- [Breaking] A failed command exits with the code of its failure instead of always 1: 3 no response, 4 request rejected, 5 server error, 6 undecodable response, 7 profile file, 8 bug; 2 stays usage.
+- [Breaking] Every failure is a JSON document on stdout, `{"error": {"type", "message", "exitCode"}}`, never coloured and indented as `jsonIndent` says; logs stay on stderr.
+- [Breaking] A response with no body prints `{"status": "success"}` in the selected output format instead of the word `Success`.
+- A script that tested for exit code 1 must test for a non-zero code; the generated `README.md` documents every code.
+- A 200 whose body is not valid JSON is reported as an undecodable response rather than as a failed request.
+- `PythonVersion` defaults to 3.14 instead of 3.12; set it explicitly to keep targeting older interpreters.
+- The development toolchain installs with `pip install -e . --group dev`, a PEP 735 dependency group needing pip 25.1 or newer, instead of extras.
+- Linted with the `B` (bugbear), `S` (bandit) and `UP` (pyupgrade) ruff rule sets on top of `E`, `F`, `W` and `I`.
+- Logs through the standard library's `logging` module.
+- The `config` commands accept the common options, so `--profile` applies to them whether given before `config` or after the subcommand.
+- The settings, the loaded profile and the log file belong to one invocation: a CLI run in-process starts clean, and the log file is closed when the run ends.
 
 ### Bug Fixes
 
 #### Generated code
 
-- Fixed the `OutputFormat` and `TableStyle` settings having no effect: commands always printed JSON. A command now prints the response as `json`, `yaml` or `table` as the `outputFormat` setting says, `tableStyle` picks the table borders, and the new `--output`/`-o` option selects a format for one invocation.
-- Fixed a profile or environment value that is not one of a setting's allowed values, such as `outputFormat: xml`, being accepted in silence. It is now ignored with a warning that lists the allowed values.
-- Fixed the `RetryMaxAttempts` and `RetryBackoffFactor` settings having no effect: a request that failed to connect or got a 429 or 5xx response failed at once. It is now retried as the `retryMaxAttempts` and `retryBackoffFactor` settings say.
-- Added the `--timeout` option, which sets the request timeout for one invocation.
-- Added the repeatable `--header`/`-H` option, which sends an extra `Name: value` header with the request.
-- Requests now identify the CLI by name and version in their `User-Agent` header, so its traffic can be told apart in the server's logs.
-- Fixed `--debug` printing passwords, access tokens and the `Authorization` header in cleartext, to the terminal and to `LogFile`. Request parameters, request and response bodies, and headers are now redacted to `***`, based on the `format: password` and `writeOnly: true` spec signals plus a name heuristic for `*password*`, `*token*`, `*secret*` and `*key*`. Command output on stdout is unaffected.
-- Fixed the generated test suite exercising only the scaffolding: `tests/commands_test.py` now runs every command built from the spec, asserting the HTTP method, the resolved URL and the query and body it sends.
-- Fixed a configured CA file that does not exist being ignored, so requests were silently verified against the system trust store instead of the pinned bundle. Commands now fail with `Error: CA file not found: <path>`.
-- Fixed the profile file, which may hold secrets, being created world-readable; it is now created `0600` inside a `0700` directory, and `config set` tightens a file left loose by an older version.
-- Fixed `--no-verify-ssl` turning off TLS certificate verification silently. Every invocation that uses it now prints `WARNING: TLS certificate verification is DISABLED. Traffic can be intercepted.` to stderr.
-- Fixed commands ignoring the values passed for path and query parameters: `get-user --user-id 42` requested `/users/{userId}`, and only GET sent a query string. Both now reach the request, with path values URL-encoded.
-- Fixed `--profile`, `--debug`, `--base-url`, `--no-verify-ssl` and `--ca-file` given at the root being silently ignored by the subcommands. The subcommands now inherit them, and still take precedence when the option is repeated at their own level.
-- Fixed nullable parameters and body properties, declared as an `anyOf`/`oneOf` with a single non-null member, being typed as strings: an `Optional[int]` now yields `type=int` and is sent as a JSON number.
-- Fixed array parameters becoming single-value options, which kept only the last value and sent a bare string where the API expects a list. They are now repeatable (`--tag a --tag b`) and sent as a JSON list, with `items.type` setting the element type.
-- Fixed profile settings other than `accessToken` being saved and shown but never applied, so `config set baseUrl` changed nothing. Every setting now takes effect, from a command-line flag, then an environment variable named after it under a per-CLI prefix (`API_BASE_URL` is replaced by `<PACKAGE>_BASE_URL`), then the profile, then the built-in default.
-- Fixed `${HOME}` in `MainDir`, `ProfileFile` and `LogFile` staying literal wherever `HOME` is unset. Home now resolves through `Path.home()`.
-- Fixed `--version` reporting `0.0.0` when installed from a wheel; the version now comes from the installed package metadata instead of a `VERSION` file next to the source.
-- Fixed the log file growing without bound: `LogRotationType`, `LogRotationSize`, `LogRotationDays` and `LogRotationBackupCount` now take effect, since messages are written through the rotating handler instead of bypassing it.
-- Fixed `tox` running the tests only, because ruff and mypy were left out of the default `envlist`.
-- Fixed test coverage being printed but never enforced: the test run now fails below 80%, or below the new `CoverageThreshold` config parameter.
+- Fixed `OutputFormat` and `TableStyle` having no effect: responses print as `json`, `yaml` or `table` as configured, and `--output`/`-o` picks a format for one invocation.
+- Fixed a profile or environment value outside a setting's allowed values, such as `outputFormat: xml`, being accepted silently; it is ignored with a warning listing the allowed values.
+- Fixed `RetryMaxAttempts` and `RetryBackoffFactor` having no effect: connection failures and 429 or 5xx responses are retried as configured.
+- Fixed `--debug` printing passwords, tokens and the `Authorization` header in cleartext; they are redacted to `***` in the terminal and in the log file.
+- Fixed a configured CA file that does not exist being ignored in favour of the system trust store; the command now fails with a configuration error.
+- Fixed the profile file, which may hold secrets, being created world-readable; it is now `0600` in a `0700` directory, and `config set` tightens a file left loose by an older version.
+- Fixed `--no-verify-ssl` disabling TLS verification silently; every run using it prints a warning on stderr.
+- Fixed path and query parameter values never reaching the request: `get-user --user-id 42` now requests `/users/42`, and every method sends its query string.
+- Fixed `--profile`, `--debug`, `--base-url`, `--no-verify-ssl` and `--ca-file` given at the root being ignored by subcommands; they are inherited, and a repeat at the subcommand level wins.
+- Fixed nullable parameters and body properties, an `anyOf`/`oneOf` with a single non-null member, being typed as strings; an optional integer is now an integer.
+- Fixed array parameters keeping only the last value; they are repeatable, `--tag a --tag b`, and sent as a JSON list of the declared element type.
+- Fixed profile settings other than `accessToken` never applying; every setting is resolved from the flag, then `<PACKAGE>_<SETTING>` in the environment, then the profile, then the default.
+- Fixed `${HOME}` in `MainDir`, `ProfileFile` and `LogFile` staying literal when `HOME` is unset.
+- Fixed `--version` reporting `0.0.0` when installed from a wheel.
+- Fixed the log file growing without bound; the `LogRotation*` settings now take effect.
+- Fixed a bare `tox` running the tests only; it now lints and type-checks too.
 - Fixed the PR validation workflow measuring coverage of `cli_wizard` instead of the generated package.
-- Fixed `Jinja2` and `pydantic` being published as runtime dependencies; neither is imported by the generated code.
-- Fixed that workflow and `DEVELOPMENT.md` calling `tox -e test`, `type` and `coverage`, which `tox.ini` never defined.
-- Fixed `DEVELOPMENT.md` documenting `make setup`, a target the generated `Makefile` never defined.
+- Fixed `Jinja2` and `pydantic` being installed as runtime dependencies the generated code never imports.
+- Fixed `DEVELOPMENT.md` and the workflows calling a `make setup` target and tox environments that did not exist.
 - Fixed the docs workflow installing a `[docs]` extra the generated `pyproject.toml` does not declare.
-- Fixed the splash screen printing at import time, which put it in `--help` and `--version` output and corrupted the shell completion stream. It now prints from the CLI callback.
-- Fixed command errors reporting only the status line, discarding the response body naming the rejected fields; it is now printed, redacted, falling back to the raw body when it is not JSON and truncating past 2000 characters.
-- Fixed the generated `CHANGELOG.md` shipping an empty `### Features` section reading `Add features here ...`, which could end up verbatim in published release notes. The section is gone; `### Commands` still lists every command.
-- Fixed boolean body fields always reaching the request: leaving `--enabled` off sent `"enabled": false` instead of omitting the field, so a `PATCH` could not leave a flag untouched. They are now `--enabled/--no-enabled`, sent only when one of the two is given.
-- Fixed a required boolean field being accepted when omitted, which sent `"enabled": null` for the API to reject; it is now demanded up front. A boolean's declared default is shown in `--help` instead of being invisible.
-
+- Fixed the splash screen printing on import, which corrupted `--help`, `--version` and shell completion output.
+- Fixed command errors dropping the response body; the fields the API rejected are now reported, redacted and truncated past 2000 characters.
+- Fixed the generated `CHANGELOG.md` shipping an empty `### Features` placeholder that could reach published release notes.
+- Fixed boolean body fields always being sent: `--enabled/--no-enabled` is sent only when given, so a `PATCH` can leave a flag untouched.
+- Fixed a required boolean field being accepted when omitted and sent as `null`; it is now required up front, and its default shows in `--help`.
 
 ## 2.1.0
 
