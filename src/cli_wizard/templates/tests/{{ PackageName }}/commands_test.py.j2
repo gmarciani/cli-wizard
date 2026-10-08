@@ -22,7 +22,7 @@ def request_mock(tmp_path):
     with (
         patch("requests.Session.request") as request,
         patch("{{ PackageName }}.profile.PROFILE_FILE", tmp_path / "profiles.yaml"),
-        patch("{{ PackageName }}.logging.LOG_FILE", None),
+        patch("{{ PackageName }}.log.LOG_FILE", None),
     ):
         request.return_value.text = ""
         yield request

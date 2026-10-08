@@ -11,7 +11,7 @@ from {{ PackageName }}.client import create_client, encode_path_param, format_er
 {% else %}
 from {{ PackageName }}.client import create_client, format_error
 {% endif %}
-from {{ PackageName }}.logging import colors_enabled, log_error, log_debug
+from {{ PackageName }}.log import colors_enabled, log_error, log_debug
 from {{ PackageName }}.options import common_options
 from {{ PackageName }}.output import render
 from {{ PackageName }}.profile import load_profile, resolve_setting

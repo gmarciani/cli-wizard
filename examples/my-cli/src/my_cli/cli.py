@@ -17,7 +17,7 @@ from my_cli.constants import (
     SPLASH_FILE,
     __version__,
 )
-from my_cli.logging import hex_to_rgb
+from my_cli.log import hex_to_rgb
 from my_cli.options import common_options
 
 

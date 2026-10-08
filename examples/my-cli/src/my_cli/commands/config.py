@@ -10,7 +10,7 @@ import click
 import yaml
 
 from my_cli.constants import PROFILE_DEFAULTS, PROFILE_FILE
-from my_cli.logging import log_error, log_info
+from my_cli.log import log_error, log_info
 from my_cli.options import common_options
 
 

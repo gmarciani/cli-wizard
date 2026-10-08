@@ -19,8 +19,7 @@ parameter names, it holds what the commands derive from them:
 - ``settings``: the profile ``load_profile()`` read, as a mapping
 - ``log_level`` and ``colors``: the resolved ``logLevel`` and ``outputColors``
   settings, pushed there for the logging module
-- ``log_file_handler``: the handler writing ``LOG_FILE``, closed with the
-  invocation
+- ``logger``: the logger of the invocation, its handlers closed with it
 """
 
 from pathlib import Path

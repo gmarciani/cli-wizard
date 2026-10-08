@@ -19,7 +19,7 @@ from my_cli.constants import (
     PROFILE_DEFAULTS,
     PROFILE_FILE,
 )
-from my_cli.logging import log_debug, log_error, log_info, log_warning
+from my_cli.log import log_debug, log_error, log_info, log_warning
 from my_cli.options import state
 
 # Splits a camelCase profile key before every capital, so "retryMaxAttempts"

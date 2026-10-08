@@ -488,7 +488,7 @@ class CliGenerator:
         self._generate_package_init(src_dir, package_name)
         self._generate_cli_main(src_dir, package_name, groups)
         self._generate_client(src_dir)
-        self._generate_logging(src_dir)
+        self._generate_log(src_dir)
         self._generate_options(src_dir)
         self._generate_output(src_dir)
         self._generate_redaction(src_dir, groups)
@@ -553,11 +553,11 @@ class CliGenerator:
         with open(src_dir / "client.py", "w") as f:
             f.write(content)
 
-    def _generate_logging(self, src_dir: Path) -> None:
-        """Generate logging module."""
-        template = self.env.get_template("src/{{ PackageName }}/logging.py.j2")
+    def _generate_log(self, src_dir: Path) -> None:
+        """Generate the log module."""
+        template = self.env.get_template("src/{{ PackageName }}/log.py.j2")
         content = template.render(**self._template_context())
-        with open(src_dir / "logging.py", "w") as f:
+        with open(src_dir / "log.py", "w") as f:
             f.write(content)
 
     def _generate_options(self, src_dir: Path) -> None:
