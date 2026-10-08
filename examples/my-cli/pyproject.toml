@@ -75,7 +75,12 @@ line-length = 88
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]
+# E/W pycodestyle, F pyflakes, I isort, B bugbear, S bandit, UP pyupgrade
+select = ["E", "F", "W", "I", "B", "S", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert by design.
+"tests/**" = ["S101"]
 
 [tool.mypy]
 python_version = "3.12"

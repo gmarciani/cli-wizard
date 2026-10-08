@@ -512,7 +512,7 @@ class TestConfigCommands:
                     result = runner.invoke(main, ["config", "init"])
                 assert result.exit_code in [0, 1]
             finally:
-                os.chmod(readonly_dir, 0o755)
+                os.chmod(readonly_dir, 0o700)
 
     def test_config_list_profiles_yaml_error(self):
         """Test list profiles with invalid YAML."""
@@ -739,18 +739,18 @@ class TestApiClient:
         """Test client initialization with custom values."""
         client = ApiClient(
             base_url="https://api.example.com/",
-            access_token="test-token",
+            access_token="test-token",  # noqa: S106 - fake credential
             timeout=60,
             verify_ssl=False,
         )
         assert client.base_url == "https://api.example.com"
-        assert client.access_token == "test-token"
+        assert client.access_token == "test-token"  # noqa: S105 - fake credential
         assert client.timeout == 60
         assert client.verify_ssl is False
 
     def test_client_headers_with_token(self):
         """Test client sets auth header with token."""
-        client = ApiClient(access_token="my-token")
+        client = ApiClient(access_token="my-token")  # noqa: S106 - fake credential
         assert client.session.headers["Authorization"] == "Bearer my-token"
 
     def test_client_headers_without_token(self):
@@ -971,7 +971,7 @@ class TestApiClient:
 
     def test_client_debug_redacts_the_request(self):
         """Test a request credential never reaches debug output."""
-        client = ApiClient(debug=True, access_token="eyJTOKEN")
+        client = ApiClient(debug=True, access_token="eyJTOKEN")  # noqa: S106 - fake credential
         with patch("my_cli.client.log_debug") as mock_log:
             client._log_request(
                 "POST",
@@ -1540,7 +1540,7 @@ class TestProfile:
                 ):
                     _create_default_profile_file()
             finally:
-                os.chmod(readonly_dir, 0o755)
+                os.chmod(readonly_dir, 0o700)
 
 
 # =============================================================================
@@ -1672,11 +1672,8 @@ class TestLogging:
     )
     def test_file_handler_rotation(self, tmp_path, rotation, handler_type):
         """Test the file handler rotates the way LOG_ROTATION_TYPE says."""
-        with (
-            patch("my_cli.log.LOG_FILE", tmp_path / "test.log"),
-            patch("my_cli.log.LOG_ROTATION_TYPE", rotation),
-        ):
-            handler = _file_handler()
+        with patch("my_cli.log.LOG_ROTATION_TYPE", rotation):
+            handler = _file_handler(tmp_path / "test.log")
         handler.close()
         assert isinstance(handler, handler_type)
 

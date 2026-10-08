@@ -146,7 +146,7 @@ def _draw(columns: list[str], rows: list[list[str]], style: dict[str, Any]) -> s
             lines.append(lead + joint.join(fill * w for w in widths) + end)
 
     def row(cells: list[str]) -> None:
-        padded = [cell.ljust(w) for cell, w in zip(cells, widths)]
+        padded = [cell.ljust(w) for cell, w in zip(cells, widths, strict=True)]
         lines.append((left + between.join(padded) + right).rstrip())
 
     rule(style["top"])

@@ -68,9 +68,9 @@ next to it covers what no spec describes, response bodies above all. Redact
 ## Formatting
 
 Ruff is the only formatter and linter, for this repo and for generated code,
-under identical settings (line-length 88, `select = ["E", "F", "W", "I"]`, no
-ignores) in `pyproject.toml` and `templates/pyproject.toml.j2` — keep the two in
-sync. Ruff is a runtime dependency and `resolve_ruff()` prefers the bundled copy
+under identical settings (line-length 88, `select = ["E", "F", "W", "I", "B",
+"S", "UP"]` with `S101` ignored under `tests/`, no other ignores) in `pyproject.toml`
+and `templates/pyproject.toml.j2` — keep the two in sync. Ruff is a runtime dependency and `resolve_ruff()` prefers the bundled copy
 over `PATH`, so the pinned version formats. Nothing passes `--line-length`; ruff
 reads it from the generated `pyproject.toml`.
 

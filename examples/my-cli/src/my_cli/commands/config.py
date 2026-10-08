@@ -60,7 +60,7 @@ def config_init() -> None:
             json.dumps(result, indent=2),
             err=True,
         )
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @config.command(
@@ -85,7 +85,7 @@ def config_list_profiles() -> None:
             json.dumps(result, indent=2),
             err=True,
         )
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     result = {"profiles": list(profiles.keys())}
     click.echo(json.dumps(result, indent=2))
@@ -117,7 +117,7 @@ def config_show(ctx: click.Context) -> None:
             json.dumps(result, indent=2),
             err=True,
         )
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if profile not in profiles:
         click.echo(json.dumps({}, indent=2))
@@ -163,7 +163,7 @@ def config_get(ctx: click.Context, param: str) -> None:
             json.dumps(result, indent=2),
             err=True,
         )
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if profile not in profiles:
         result = {"key": param, "value": None}
@@ -213,7 +213,7 @@ def config_set(ctx: click.Context, param: str, value: str) -> None:
                 json.dumps(result, indent=2),
                 err=True,
             )
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
     if profile not in profiles:
         profiles[profile] = {}
@@ -254,7 +254,7 @@ def config_set(ctx: click.Context, param: str, value: str) -> None:
             json.dumps(result, indent=2),
             err=True,
         )
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @config.command(
@@ -289,7 +289,7 @@ def config_unset(ctx: click.Context, param: str) -> None:
             json.dumps(result, indent=2),
             err=True,
         )
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     if profile not in profiles:
         result = {"key": param, "oldValue": None}
@@ -319,7 +319,7 @@ def config_unset(ctx: click.Context, param: str) -> None:
                 json.dumps(result, indent=2),
                 err=True,
             )
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
     result = {"key": param, "oldValue": old_value}
     click.echo(json.dumps(result, indent=2))

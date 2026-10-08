@@ -113,7 +113,7 @@ def _load_existing_config(config_path: Path) -> dict[str, Any] | None:
             if result is None:
                 return {}
             return dict(result)
-    except (yaml.YAMLError, IOError) as e:
+    except (OSError, yaml.YAMLError) as e:
         logger.warning(f"Could not load existing config: {e}")
         return None
 
@@ -304,7 +304,7 @@ def _generate_config_file(config_path: Path, config: dict) -> None:
     """Generate the cli-wizard.yaml configuration file."""
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
-    env = Environment(
+    env = Environment(  # noqa: S701 - renders Python and YAML, not HTML
         loader=PackageLoader("cli_wizard", "templates"),
         trim_blocks=True,
         lstrip_blocks=True,
@@ -332,9 +332,9 @@ def _load_cli_config(config_path: Path) -> dict:
     try:
         with open(config_path) as f:
             raw_config = yaml.safe_load(f) or {}
-    except (yaml.YAMLError, IOError) as e:
+    except (OSError, yaml.YAMLError) as e:
         click.secho(f"✗ Could not load config file: {e}", fg="red", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     # Validate with Pydantic schema
     try:
@@ -345,7 +345,7 @@ def _load_cli_config(config_path: Path) -> dict:
         for error in e.errors():
             field = ".".join(str(loc) for loc in error["loc"])
             click.secho(f"  • {field}: {error['msg']}", fg="red", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     # Expand #[Param] references
     try:
@@ -353,7 +353,7 @@ def _load_cli_config(config_path: Path) -> dict:
     except ValueError as e:
         click.secho("✗ Invalid configuration:", fg="red", err=True)
         click.secho(f"  • {e}", fg="red", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 def _expand_config_references(config: dict[str, Any]) -> dict[str, Any]:

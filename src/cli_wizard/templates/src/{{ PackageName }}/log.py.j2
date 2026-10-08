@@ -17,6 +17,7 @@ import copy
 import logging
 import time
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
+from pathlib import Path
 from typing import Literal
 
 import click
@@ -107,18 +108,17 @@ def _formatter(colors: bool) -> logging.Formatter:
     return formatter
 
 
-def _file_handler() -> logging.FileHandler:
-    """Open LOG_FILE with the configured rotation policy."""
-    assert LOG_FILE is not None
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+def _file_handler(log_file: Path) -> logging.FileHandler:
+    """Open log_file with the configured rotation policy."""
+    log_file.parent.mkdir(parents=True, exist_ok=True)
     if LOG_ROTATION_TYPE == "size":
         return RotatingFileHandler(
-            LOG_FILE,
+            log_file,
             maxBytes=LOG_ROTATION_SIZE_MB * 1024 * 1024,
             backupCount=LOG_ROTATION_BACKUP_COUNT,
         )
     return TimedRotatingFileHandler(
-        LOG_FILE,
+        log_file,
         when="D",
         interval=LOG_ROTATION_DAYS,
         backupCount=LOG_ROTATION_BACKUP_COUNT,
@@ -134,7 +134,7 @@ def _build_logger() -> logging.Logger:
     console.setFormatter(_formatter(colors=True))
     logger.addHandler(console)
     if LOG_FILE is not None:
-        file = _file_handler()
+        file = _file_handler(LOG_FILE)
         file.setFormatter(_formatter(colors=False))
         logger.addHandler(file)
     return logger

@@ -642,7 +642,7 @@ class TestCliGenerator:
             assert "[tool.ruff]" in content
             assert "line-length = 88" in content
             assert 'target-version = "py312"' in content
-            assert '["E", "F", "W", "I"]' in content
+            assert '["E", "F", "W", "I", "B", "S", "UP"]' in content
 
             assert "[tool.black]" not in content
             assert "black" not in content
@@ -773,7 +773,7 @@ class TestCliGenerator:
 
             ruff = resolve_ruff()
             for args in (("check",), ("format", "--check")):
-                result = subprocess.run(
+                result = subprocess.run(  # noqa: S603 - fixed argv, no shell
                     [*ruff, *args, str(output_dir)],
                     capture_output=True,
                 )

@@ -22,6 +22,7 @@
 - Publishes no extras: the dev, test and docs toolchains are [PEP 735](https://peps.python.org/pep-0735/) groups, `dev` including the other two.
 - Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.
 - Logging is based on the standard library's `logging` module.
+- Lints its own code and tests with the `B` (bugbear), `S` (bandit) and `UP` (pyupgrade) ruff rule sets, on top of `E`, `F`, `W` and `I`.
 
 #### Generated code
 
@@ -34,6 +35,7 @@
 - The `config` commands take the common options like every other command, so `--profile` applies to them wherever it is given, before `config` or after the subcommand.
 - The log file is opened once per invocation and closed when it ends, and the debug flag, the log level and the colour setting apply to that invocation alone.
 - Logging is based on the standard library's `logging` module.
+- The ruff configuration also enables the `B` (bugbear), `S` (bandit) and `UP` (pyupgrade) rule sets, and the generated code passes them.
 
 ### Bug Fixes
 

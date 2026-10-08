@@ -13,7 +13,7 @@ default.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
@@ -30,7 +30,7 @@ def get_config_path() -> Path:
     return config_dir / CONFIG_FILE_NAME
 
 
-def load_stored_config() -> Dict[str, Any]:
+def load_stored_config() -> dict[str, Any]:
     """Load only the values explicitly stored in the config file.
 
     A file that cannot be read, parsed or validated degrades to an empty
@@ -43,13 +43,13 @@ def load_stored_config() -> Dict[str, Any]:
         return {}
 
     try:
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             stored = yaml.safe_load(f)
         if not isinstance(stored, dict):
             raise ValueError("file does not contain a mapping")
         Config(**stored)  # Validate only; load_config() builds the merged view.
         return stored
-    except (yaml.YAMLError, IOError, ValueError) as e:
+    except (OSError, yaml.YAMLError, ValueError) as e:
         # Pydantic's ValidationError is a ValueError.
         logger.warning(
             f"Ignoring invalid configuration file '{config_path}' ({e}). "
@@ -58,12 +58,12 @@ def load_stored_config() -> Dict[str, Any]:
         return {}
 
 
-def load_config() -> Dict[str, Any]:
+def load_config() -> dict[str, Any]:
     """Load configuration from file, using schema defaults for missing values."""
     return Config(**load_stored_config()).model_dump()
 
 
-def save_config(config: Dict[str, Any]) -> None:
+def save_config(config: dict[str, Any]) -> None:
     """Save configuration to file, validating and coercing it first.
 
     Only the keys present in ``config`` are persisted: writing back the full

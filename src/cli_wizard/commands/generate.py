@@ -150,7 +150,7 @@ def generate(
         resolve_ruff()
     except RuffNotFoundError as e:
         click.secho(f"✗ {e}", fg="red", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     # Clean up output directory before generating
     if output_path.exists():
@@ -196,7 +196,7 @@ def generate(
     if groups:
         click.secho("  🔧 Commands: ", fg="white", nl=False)
         click.echo(f"{len(groups)} groups")
-        for tag, group in groups.items():
+        for group in groups.values():
             click.secho(f"     • {group.cli_name}", fg="yellow", nl=False)
             click.echo(f" ({len(group.operations)} commands)")
     else:
@@ -250,9 +250,9 @@ def _load_cli_config(
         try:
             with open(config_path) as f:
                 raw_config = yaml.safe_load(f) or {}
-        except (yaml.YAMLError, IOError) as e:
+        except (OSError, yaml.YAMLError) as e:
             click.secho(f"✗ Could not load config file: {e}", fg="red", err=True)
-            raise SystemExit(1)
+            raise SystemExit(1) from e
     raw_config.update(overrides or {})
 
     # Validate with Pydantic schema
@@ -264,7 +264,7 @@ def _load_cli_config(
         for error in e.errors():
             field = ".".join(str(loc) for loc in error["loc"])
             click.secho(f"  • {field}: {error['msg']}", fg="red", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     # Expand #[Param] references
     try:
@@ -272,7 +272,7 @@ def _load_cli_config(
     except ValueError as e:
         click.secho("✗ Invalid configuration:", fg="red", err=True)
         click.secho(f"  • {e}", fg="red", err=True)
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 def _expand_config_references(config: dict[str, Any]) -> dict[str, Any]:
