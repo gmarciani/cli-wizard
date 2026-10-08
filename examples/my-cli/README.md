@@ -67,7 +67,7 @@ is printed to stderr.
 | Code | Meaning |
 |---|---|
 | 0 | The command succeeded. |
-| 1 | Any other failure, such as a response whose body is not valid JSON. |
+| 1 | Any other failure: a response whose body is not valid JSON, or a profile file that cannot be read or written. |
 | 2 | Usage error: an unknown command, a missing option or a bad value. |
 | 3 | No response: connection refused, unknown host, timeout or TLS failure. |
 | 4 | The API refused the credentials, with a 401 or 403. |

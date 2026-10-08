@@ -15,8 +15,9 @@ from pydantic import ValidationError
 
 from cli_wizard.config.schema import Config
 from cli_wizard.constants import CONFIG_FILE_NAME
+from cli_wizard.errors import Aborted, ConfigError, OutputDirError
 from cli_wizard.generator import CliGenerator, OpenApiParser
-from cli_wizard.generator.generator import RuffNotFoundError, resolve_ruff
+from cli_wizard.generator.generator import resolve_ruff
 
 logger = logging.getLogger(__name__)
 
@@ -146,36 +147,29 @@ def generate(
         )
 
     # Verify the formatter before deleting the previous output
-    try:
-        resolve_ruff()
-    except RuffNotFoundError as e:
-        click.secho(f"✗ {e}", fg="red", err=True)
-        raise SystemExit(1) from e
+    resolve_ruff()
 
     # Clean up output directory before generating
     if output_path.exists():
         # Check if we're inside the output directory
         try:
-            cwd = Path.cwd()
-            if output_path in cwd.parents or output_path == cwd:
-                click.secho(
-                    "✗ Cannot clean output directory while inside it. "
-                    "Please run from a different directory.",
-                    fg="red",
-                    err=True,
-                )
-                raise SystemExit(1)
+            cwd: Path | None = Path.cwd()
         except OSError:
             # Current directory may already be deleted
-            pass
+            cwd = None
+        if cwd is not None and (output_path in cwd.parents or output_path == cwd):
+            raise OutputDirError(
+                "Cannot clean output directory while inside it. "
+                "Please run from a different directory."
+            )
 
         # Confirm before destroying a directory that holds work
         if not force and any(output_path.iterdir()):
-            click.confirm(
+            if not click.confirm(
                 f"⚠️  Output directory '{output_path}' is not empty. "
-                "Its entire contents will be deleted. Continue?",
-                abort=True,
-            )
+                "Its entire contents will be deleted. Continue?"
+            ):
+                raise Aborted()
 
         click.secho("🧹 Cleaning output directory: ", fg="cyan", nl=False)
         click.echo(output_path)
@@ -226,13 +220,10 @@ def resolve_output_dir(
     if config_path and (
         output_path == config_path.parent or output_path in config_path.parents
     ):
-        click.secho(
-            f"✗ Output directory '{output_path}' contains the configuration "
-            f"file '{config_path}'. Choose a different --output.",
-            fg="red",
-            err=True,
+        raise OutputDirError(
+            f"Output directory '{output_path}' contains the configuration "
+            f"file '{config_path}'. Choose a different --output."
         )
-        raise SystemExit(1)
     return output_path
 
 
@@ -251,8 +242,7 @@ def _load_cli_config(
             with open(config_path) as f:
                 raw_config = yaml.safe_load(f) or {}
         except (OSError, yaml.YAMLError) as e:
-            click.secho(f"✗ Could not load config file: {e}", fg="red", err=True)
-            raise SystemExit(1) from e
+            raise ConfigError(f"Could not load config file: {e}") from e
     raw_config.update(overrides or {})
 
     # Validate with Pydantic schema
@@ -260,19 +250,17 @@ def _load_cli_config(
         validated = Config(**raw_config)
         config = validated.model_dump()
     except ValidationError as e:
-        click.secho("✗ Invalid configuration:", fg="red", err=True)
-        for error in e.errors():
-            field = ".".join(str(loc) for loc in error["loc"])
-            click.secho(f"  • {field}: {error['msg']}", fg="red", err=True)
-        raise SystemExit(1) from e
+        problems = [
+            f"  • {'.'.join(str(loc) for loc in error['loc'])}: {error['msg']}"
+            for error in e.errors()
+        ]
+        raise ConfigError("\n".join(["Invalid configuration:", *problems])) from e
 
     # Expand #[Param] references
     try:
         return _expand_config_references(config)
     except ValueError as e:
-        click.secho("✗ Invalid configuration:", fg="red", err=True)
-        click.secho(f"  • {e}", fg="red", err=True)
-        raise SystemExit(1) from e
+        raise ConfigError(f"Invalid configuration:\n  • {e}") from e
 
 
 def _expand_config_references(config: dict[str, Any]) -> dict[str, Any]:

@@ -36,10 +36,10 @@ from cli_wizard.config.schema import (
     ruff_target_version,
     tox_env_name,
 )
+from cli_wizard.errors import FormattingError, RuffNotFoundError
 from cli_wizard.generator.generator import (
     RUFF_COMMANDS,
     CliGenerator,
-    RuffNotFoundError,
     _build_url_expression,
     _sensitive_field_names,
     resolve_ruff,
@@ -574,7 +574,8 @@ class TestCliGenerator:
             generator.generate({}, output_dir, "test-cli", "test_cli")
 
             with _import_generated(output_dir, "test_cli", "client") as module:
-                with pytest.raises(click.ClickException, match="CA file not found"):
+                errors = importlib.import_module("test_cli.errors")
+                with pytest.raises(errors.ConfigError, match="CA file not found"):
                     module.ApiClient(ca_file=str(output_dir / "absent-ca.pem"))
 
     def test_generate_copies_ca_and_splash_files(self):
@@ -681,6 +682,26 @@ class TestCliGenerator:
                     generator.generate({}, output_dir, "test-cli", "test_cli")
 
             assert not output_dir.exists()
+
+    def test_ruff_unable_to_run_is_fatal(self):
+        """Test ruff exiting 2 aborts generation with the output it gave."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            failed = MagicMock(returncode=2, stderr=b"error: bad config", stdout=b"")
+
+            with (
+                patch(
+                    "cli_wizard.generator.generator.resolve_ruff",
+                    return_value=["ruff"],
+                ),
+                patch(
+                    "cli_wizard.generator.generator.subprocess.run",
+                    return_value=failed,
+                ),
+            ):
+                with pytest.raises(FormattingError, match="error: bad config"):
+                    generator.generate({}, output_dir, "test-cli", "test_cli")
 
     def test_generated_workflow_uses_generated_package_name(self):
         """Test that the CI workflow references the generated package."""
@@ -1961,6 +1982,7 @@ def generated_cli(tmp_path_factory):
             profile=importlib.import_module("probe_cli.profile"),
             log=importlib.import_module("probe_cli.log"),
             client=importlib.import_module("probe_cli.client"),
+            errors=importlib.import_module("probe_cli.errors"),
             profile_file=constants.PROFILE_FILE,
         )
     finally:
@@ -2119,7 +2141,7 @@ class TestGeneratedProfilePrecedence:
                 generated_cli.group, ["list-things"], color=True
             )
 
-        assert result.exit_code == generated_cli.client.EXIT_NETWORK
+        assert result.exit_code == generated_cli.errors.EXIT_NETWORK
         assert ("\x1b[31m" in result.stderr) is coloured
 
     def test_environment_variable_names_derive_from_the_package_name(
@@ -2821,7 +2843,7 @@ class TestGeneratedClientFeatures:
 
         result = CliRunner().invoke(generated_cli.group, ["list-things"])
 
-        assert result.exit_code == generated_cli.client.EXIT_SERVER_ERROR
+        assert result.exit_code == generated_cli.errors.EXIT_SERVER_ERROR
         assert "503" in result.stderr
         assert len(flaky_server.handler.requests_seen) == 1
 
@@ -2867,7 +2889,7 @@ class TestGeneratedExitCodes:
 
         result = self._invoke(generated_cli, _response(status_code, reason))
 
-        assert result.exit_code == getattr(generated_cli.client, code)
+        assert result.exit_code == getattr(generated_cli.errors, code)
         assert f"Error: {status_code} {reason}" in result.stderr
 
     @pytest.mark.parametrize(
@@ -2886,7 +2908,7 @@ class TestGeneratedExitCodes:
 
         result = self._invoke(generated_cli, side_effect=error)
 
-        assert result.exit_code == generated_cli.client.EXIT_NETWORK
+        assert result.exit_code == generated_cli.errors.EXIT_NETWORK
         assert f"Error: {error}" in result.stderr
 
     def test_a_malformed_body_is_reported_as_the_response_it_came_in(
@@ -2897,24 +2919,24 @@ class TestGeneratedExitCodes:
 
         result = self._invoke(generated_cli, _response(200, "OK", "<html>oops</html>"))
 
-        assert result.exit_code == generated_cli.client.EXIT_FAILURE
+        assert result.exit_code == generated_cli.errors.EXIT_FAILURE
         assert "Error: 200 OK response is not valid JSON" in result.stderr
 
     def test_the_exit_codes_are_distinct_and_leave_clicks_alone(self, generated_cli):
         """Test no two failure classes share a code, and 2 stays the usage error."""
-        client = generated_cli.client
+        errors = generated_cli.errors
         codes = [
-            client.EXIT_FAILURE,
-            client.EXIT_USAGE,
-            client.EXIT_NETWORK,
-            client.EXIT_AUTH,
-            client.EXIT_CLIENT_ERROR,
-            client.EXIT_SERVER_ERROR,
+            errors.EXIT_FAILURE,
+            errors.EXIT_USAGE,
+            errors.EXIT_NETWORK,
+            errors.EXIT_AUTH,
+            errors.EXIT_CLIENT_ERROR,
+            errors.EXIT_SERVER_ERROR,
         ]
 
         assert len(set(codes)) == len(codes)
         assert 0 not in codes
-        assert client.EXIT_USAGE == click.UsageError.exit_code
+        assert errors.EXIT_USAGE == click.UsageError.exit_code
 
     def test_a_usage_error_keeps_clicks_exit_code(self, generated_cli):
         """Test a bad option is still reported by Click, before any request."""
@@ -2923,14 +2945,14 @@ class TestGeneratedExitCodes:
                 generated_cli.group, ["list-things", "--output", "xml"]
             )
 
-        assert result.exit_code == generated_cli.client.EXIT_USAGE
+        assert result.exit_code == generated_cli.errors.EXIT_USAGE
         sent.assert_not_called()
 
-    def test_a_failure_is_raised_through_click_with_its_cause(self, generated_cli):
-        """Test the error is a ClickException chained to the requests error."""
+    def test_a_failure_is_the_clis_own_error_with_its_cause(self, generated_cli):
+        """Test the error is the CLI's own class, chained to the requests error."""
         self._write_profile(generated_cli)
 
-        with pytest.raises(click.ClickException) as raised:
+        with pytest.raises(generated_cli.errors.ClientError) as raised:
             self._invoke(
                 generated_cli,
                 _response(404, "Not Found"),
@@ -2938,8 +2960,33 @@ class TestGeneratedExitCodes:
                 catch_exceptions=False,
             )
 
-        assert raised.value.exit_code == generated_cli.client.EXIT_CLIENT_ERROR
+        assert isinstance(raised.value, generated_cli.errors.CliError)
+        assert raised.value.exit_code == generated_cli.errors.EXIT_CLIENT_ERROR
         assert isinstance(raised.value.__cause__, requests.HTTPError)
+
+    def test_a_usage_error_is_the_clis_own_error(self, generated_cli):
+        """Test a bad --header is the CLI's own class, still a Click usage error."""
+        with pytest.raises(generated_cli.errors.InvalidHeaderError) as raised:
+            CliRunner().invoke(
+                generated_cli.group,
+                ["list-things", "--header", "nocolon"],
+                standalone_mode=False,
+                catch_exceptions=False,
+            )
+
+        assert isinstance(raised.value, generated_cli.errors.CliError)
+        assert isinstance(raised.value, click.UsageError)
+        assert raised.value.exit_code == generated_cli.errors.EXIT_USAGE
+
+    def test_an_unreadable_profile_file_is_a_config_error(self, generated_cli):
+        """Test a config command reports a profile file it cannot parse."""
+        generated_cli.profile_file.parent.mkdir(parents=True, exist_ok=True)
+        generated_cli.profile_file.write_text("default: [unbalanced")
+
+        result = CliRunner().invoke(generated_cli.main, ["config", "show"])
+
+        assert result.exit_code == generated_cli.errors.EXIT_FAILURE
+        assert "Error: Failed to load profile file" in result.stderr
 
     def test_an_unexpected_error_is_not_swallowed(self, generated_cli):
         """Test an error that is not a request failure surfaces as itself."""

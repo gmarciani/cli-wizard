@@ -10,6 +10,7 @@ import click
 import yaml
 
 from my_cli.constants import PROFILE_DEFAULTS, PROFILE_FILE
+from my_cli.errors import ConfigError
 from my_cli.log import log_error, log_info
 from my_cli.options import common_options
 
@@ -54,13 +55,9 @@ def config_init() -> None:
         }
         click.echo(json.dumps(result, indent=2))
     except OSError as e:
-        log_error(f"Failed to create profile file: {e}")
-        result = {"status": "error", "message": str(e)}
-        click.echo(
-            json.dumps(result, indent=2),
-            err=True,
-        )
-        raise SystemExit(1) from e
+        message = f"Failed to create profile file: {e}"
+        log_error(message)
+        raise ConfigError(message) from e
 
 
 @config.command(
@@ -79,13 +76,9 @@ def config_list_profiles() -> None:
         with open(PROFILE_FILE) as f:
             profiles: dict[str, Any] = yaml.safe_load(f) or {}
     except (yaml.YAMLError, OSError) as e:
-        log_error(f"Failed to load profile file: {e}")
-        result = {"status": "error", "message": str(e)}
-        click.echo(
-            json.dumps(result, indent=2),
-            err=True,
-        )
-        raise SystemExit(1) from e
+        message = f"Failed to load profile file: {e}"
+        log_error(message)
+        raise ConfigError(message) from e
 
     result = {"profiles": list(profiles.keys())}
     click.echo(json.dumps(result, indent=2))
@@ -108,16 +101,9 @@ def config_show(ctx: click.Context) -> None:
         with open(PROFILE_FILE) as f:
             profiles: dict[str, Any] = yaml.safe_load(f) or {}
     except (yaml.YAMLError, OSError) as e:
-        log_error(f"Failed to load profile file: {e}")
-        result: dict[str, Any] = {
-            "status": "error",
-            "message": str(e),
-        }
-        click.echo(
-            json.dumps(result, indent=2),
-            err=True,
-        )
-        raise SystemExit(1) from e
+        message = f"Failed to load profile file: {e}"
+        log_error(message)
+        raise ConfigError(message) from e
 
     if profile not in profiles:
         click.echo(json.dumps({}, indent=2))
@@ -157,13 +143,9 @@ def config_get(ctx: click.Context, param: str) -> None:
         with open(PROFILE_FILE) as f:
             profiles: dict[str, Any] = yaml.safe_load(f) or {}
     except (yaml.YAMLError, OSError) as e:
-        log_error(f"Failed to load profile file: {e}")
-        result = {"status": "error", "message": str(e)}
-        click.echo(
-            json.dumps(result, indent=2),
-            err=True,
-        )
-        raise SystemExit(1) from e
+        message = f"Failed to load profile file: {e}"
+        log_error(message)
+        raise ConfigError(message) from e
 
     if profile not in profiles:
         result = {"key": param, "value": None}
@@ -204,16 +186,9 @@ def config_set(ctx: click.Context, param: str, value: str) -> None:
             with open(PROFILE_FILE) as f:
                 profiles = yaml.safe_load(f) or {}
         except (yaml.YAMLError, OSError) as e:
-            log_error(f"Failed to load profile file: {e}")
-            result = {
-                "status": "error",
-                "message": str(e),
-            }
-            click.echo(
-                json.dumps(result, indent=2),
-                err=True,
-            )
-            raise SystemExit(1) from e
+            message = f"Failed to load profile file: {e}"
+            log_error(message)
+            raise ConfigError(message) from e
 
     if profile not in profiles:
         profiles[profile] = {}
@@ -248,13 +223,9 @@ def config_set(ctx: click.Context, param: str, value: str) -> None:
         }
         click.echo(json.dumps(result, indent=2))
     except OSError as e:
-        log_error(f"Failed to save profile file: {e}")
-        result = {"status": "error", "message": str(e)}
-        click.echo(
-            json.dumps(result, indent=2),
-            err=True,
-        )
-        raise SystemExit(1) from e
+        message = f"Failed to save profile file: {e}"
+        log_error(message)
+        raise ConfigError(message) from e
 
 
 @config.command(
@@ -283,13 +254,9 @@ def config_unset(ctx: click.Context, param: str) -> None:
         with open(PROFILE_FILE) as f:
             profiles: dict[str, Any] = yaml.safe_load(f) or {}
     except (yaml.YAMLError, OSError) as e:
-        log_error(f"Failed to load profile file: {e}")
-        result = {"status": "error", "message": str(e)}
-        click.echo(
-            json.dumps(result, indent=2),
-            err=True,
-        )
-        raise SystemExit(1) from e
+        message = f"Failed to load profile file: {e}"
+        log_error(message)
+        raise ConfigError(message) from e
 
     if profile not in profiles:
         result = {"key": param, "oldValue": None}
@@ -310,16 +277,9 @@ def config_unset(ctx: click.Context, param: str) -> None:
                 )
             log_info(f"Removed '{param}' from profile '{profile}'")
         except OSError as e:
-            log_error(f"Failed to save profile file: {e}")
-            result = {
-                "status": "error",
-                "message": str(e),
-            }
-            click.echo(
-                json.dumps(result, indent=2),
-                err=True,
-            )
-            raise SystemExit(1) from e
+            message = f"Failed to save profile file: {e}"
+            log_error(message)
+            raise ConfigError(message) from e
 
     result = {"key": param, "oldValue": old_value}
     click.echo(json.dumps(result, indent=2))

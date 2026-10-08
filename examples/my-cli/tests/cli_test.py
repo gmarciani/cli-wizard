@@ -27,26 +27,32 @@ from click.testing import CliRunner
 from my_cli import constants
 from my_cli.cli import _show_splash, main
 from my_cli.client import (
-    EXIT_AUTH,
-    EXIT_CLIENT_ERROR,
-    EXIT_FAILURE,
-    EXIT_NETWORK,
-    EXIT_SERVER_ERROR,
-    EXIT_USAGE,
     MAX_ERROR_BODY_CHARS,
     RETRY_STATUSES,
     ApiClient,
-    AuthError,
-    ClientError,
-    CommandError,
-    NetworkError,
-    ServerError,
     create_client,
     encode_path_param,
     failure_class,
     format_error,
     request_error,
     response_error,
+)
+from my_cli.errors import (
+    EXIT_AUTH,
+    EXIT_CLIENT_ERROR,
+    EXIT_FAILURE,
+    EXIT_NETWORK,
+    EXIT_SERVER_ERROR,
+    EXIT_USAGE,
+    AuthError,
+    ClientError,
+    CliError,
+    ConfigError,
+    InvalidHeaderError,
+    NetworkError,
+    RequestError,
+    ResponseError,
+    ServerError,
 )
 from my_cli.log import (
     _file_handler,
@@ -552,7 +558,8 @@ class TestConfigCommands:
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "show"])
-            assert result.exit_code == 1
+            assert result.exit_code == EXIT_FAILURE
+            assert "Error: Failed to load profile file" in result.stderr
 
     def test_config_show_file_not_exists(self):
         """Test show when profile file doesn't exist."""
@@ -822,7 +829,7 @@ class TestApiClient:
     @pytest.mark.parametrize("raw", ["nocolon", ": value", "  : value"])
     def test_header_option_rejects_a_malformed_header(self, raw):
         """Test a header without a name or a colon is a usage error."""
-        with pytest.raises(click.BadParameter, match="Expected 'Name: value'"):
+        with pytest.raises(InvalidHeaderError, match="Expected 'Name: value'"):
             HEADER.convert(raw, None, None)
 
     def test_client_url_building(self):
@@ -835,6 +842,11 @@ class TestApiClient:
         client = ApiClient(verify_ssl=False)
         assert client.session.verify is False
         assert "TLS certificate verification is DISABLED" in capsys.readouterr().err
+
+    def test_client_rejects_a_missing_ca_file(self, tmp_path):
+        """Test a CA file that does not exist is a configuration error."""
+        with pytest.raises(ConfigError, match="CA file not found"):
+            ApiClient(ca_file=str(tmp_path / "absent-ca.pem"))
 
     def test_client_ssl_with_ca_file(self):
         """Test SSL with custom CA file."""
@@ -1351,36 +1363,55 @@ class TestExitCodes:
             (requests.ReadTimeout("read timed out"), NetworkError),
             (requests.exceptions.SSLError("verify failed"), NetworkError),
             (requests.HTTPError("no response attached"), NetworkError),
-            (ValueError("Expecting value"), CommandError),
         ],
     )
     def test_failure_class_names_the_class_of_an_error(self, error, expected):
-        """Test an error maps to the failure class it belongs to."""
+        """Test a failed request maps to the failure class it belongs to."""
         assert failure_class(error) is expected
+        assert issubclass(expected, RequestError)
 
     @pytest.mark.parametrize(
         "cls,expected",
         [
-            (CommandError, EXIT_FAILURE),
+            (CliError, EXIT_FAILURE),
+            (ConfigError, EXIT_FAILURE),
+            (ResponseError, EXIT_FAILURE),
             (NetworkError, EXIT_NETWORK),
             (AuthError, EXIT_AUTH),
             (ClientError, EXIT_CLIENT_ERROR),
             (ServerError, EXIT_SERVER_ERROR),
+            (InvalidHeaderError, EXIT_USAGE),
         ],
     )
-    def test_each_failure_class_exits_with_its_code(self, cls, expected):
+    def test_each_error_exits_with_its_code(self, cls, expected):
         """Test the error carries the code Click exits with."""
         assert cls("boom").exit_code == expected
 
-    def test_failures_are_reported_by_click(self):
-        """Test every failure is one Click shows and exits on by itself."""
-        for cls in (NetworkError, AuthError, ClientError, ServerError):
-            assert issubclass(cls, CommandError)
-        assert issubclass(CommandError, click.ClickException)
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            ConfigError,
+            ResponseError,
+            RequestError,
+            NetworkError,
+            AuthError,
+            ClientError,
+            ServerError,
+            InvalidHeaderError,
+        ],
+    )
+    def test_every_error_is_a_cli_error(self, cls):
+        """Test each failure derives from the one base Click shows and exits on."""
+        assert issubclass(cls, CliError)
+        assert issubclass(CliError, click.ClickException)
 
-    def test_command_error_show_prints_to_stderr(self, capsys):
+    def test_invalid_header_is_a_usage_error(self):
+        """Test a bad --header is still reported with the usage, as Click does."""
+        assert issubclass(InvalidHeaderError, click.UsageError)
+
+    def test_cli_error_show_prints_to_stderr(self, capsys):
         """Test showing the error prints it the way a failed command does."""
-        CommandError("404 Not Found").show()
+        CliError("404 Not Found").show()
 
         captured = capsys.readouterr()
         assert captured.out == ""
@@ -1406,7 +1437,7 @@ class TestExitCodes:
         response.reason = "OK"
         error = response_error("things list", response, ValueError("Expecting value"))
 
-        assert type(error) is CommandError
+        assert isinstance(error, ResponseError)
         assert error.message == "200 OK response is not valid JSON: Expecting value"
 
 

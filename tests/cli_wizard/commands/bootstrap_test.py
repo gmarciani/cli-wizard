@@ -18,6 +18,7 @@ from cli_wizard.commands.bootstrap import (
     _yaml_value,
 )
 from cli_wizard.config.schema import DEFAULT_PYTHON_VERSION
+from cli_wizard.errors import ConfigError
 
 DEFAULT_ANSWERS = "\n" * len(BOOTSTRAP_PARAMS)
 
@@ -535,7 +536,7 @@ class TestLoadCliConfig:
     def test_invalid_yaml_exits(self, tmp_path):
         config_path = tmp_path / "cli-wizard.yaml"
         config_path.write_text("key: [unbalanced")
-        with pytest.raises(SystemExit):
+        with pytest.raises(ConfigError, match="Could not load config file"):
             _load_cli_config(config_path)
 
     def test_validation_error_exits(self, tmp_path):
@@ -545,12 +546,11 @@ class TestLoadCliConfig:
             "DefaultBaseUrl: https://api.example.com\n"
             "OutputFormat: xml\n"
         )
-        with pytest.raises(SystemExit):
+        with pytest.raises(ConfigError, match="OutputFormat"):
             _load_cli_config(config_path)
 
-    def test_circular_reference_exits(self, tmp_path, capsys):
+    def test_circular_reference_exits(self, tmp_path):
         config_path = tmp_path / "cli-wizard.yaml"
         config_path.write_text('PackageName: my_cli\nMainDir: "#[MainDir]/x"\n')
-        with pytest.raises(SystemExit):
+        with pytest.raises(ConfigError, match="MainDir"):
             _load_cli_config(config_path)
-        assert "MainDir" in capsys.readouterr().err

@@ -9,6 +9,7 @@ from typing import Any
 
 import yaml
 
+from cli_wizard.errors import SpecError
 from cli_wizard.generator.models import (
     CommandGroup,
     Operation,
@@ -39,25 +40,30 @@ class OpenApiParser:
         self.spec = self._load_spec()
 
     def _load_spec(self) -> dict[str, Any]:
-        """Load OpenAPI spec from file (JSON or YAML)."""
-        with open(self.spec_path) as f:
-            content = f.read()
+        """Load OpenAPI spec from file (JSON or YAML).
 
-        # Try JSON first, then YAML
-        if self.spec_path.suffix.lower() == ".json":
-            result = json.loads(content)
-            return dict(result) if isinstance(result, dict) else {}
-        elif self.spec_path.suffix.lower() in (".yaml", ".yml"):
-            result = yaml.safe_load(content)
-            return dict(result) if isinstance(result, dict) else {}
-        else:
-            # Try to detect format
-            try:
-                result = json.loads(content)
-                return dict(result) if isinstance(result, dict) else {}
-            except json.JSONDecodeError:
-                result = yaml.safe_load(content)
-                return dict(result) if isinstance(result, dict) else {}
+        Raises:
+            SpecError: if the file cannot be read or does not parse
+        """
+        try:
+            result = self._decode(self.spec_path.read_text())
+        except (OSError, ValueError, yaml.YAMLError) as e:
+            raise SpecError(
+                f"Could not load OpenAPI spec '{self.spec_path}': {e}"
+            ) from e
+        return dict(result) if isinstance(result, dict) else {}
+
+    def _decode(self, content: str) -> Any:
+        """Decode the spec as JSON or YAML, by suffix or by trying both."""
+        suffix = self.spec_path.suffix.lower()
+        if suffix == ".json":
+            return json.loads(content)
+        if suffix in (".yaml", ".yml"):
+            return yaml.safe_load(content)
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            return yaml.safe_load(content)
 
     def parse(
         self,

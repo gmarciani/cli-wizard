@@ -14,7 +14,7 @@ from click.testing import CliRunner
 
 from cli_wizard.cli import main
 from cli_wizard.commands.generate import _expand_config_references
-from cli_wizard.generator.generator import RuffNotFoundError
+from cli_wizard.errors import RuffNotFoundError
 
 
 def create_test_files(temp_dir: Path, cli_name: str = "test-cli") -> tuple[Path, Path]:
@@ -428,6 +428,28 @@ class TestGenerateCommand:
             assert str(output_dir) in result.output
             assert "entire contents will be deleted" in result.output
             assert not (output_dir / "stale-file.txt").exists()
+
+    def test_generate_reports_a_malformed_spec(self, tmp_path):
+        """Test a spec that does not parse fails with a message, not a traceback."""
+        spec_path = tmp_path / "openapi.json"
+        spec_path.write_text("{not json")
+
+        result = CliRunner().invoke(
+            main,
+            [
+                "generate",
+                "--output",
+                str(tmp_path / "out"),
+                "--api",
+                str(spec_path),
+                "--project-name",
+                "Broken CLI",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+        assert f"✗ Could not load OpenAPI spec '{spec_path}'" in result.output
 
     def test_generate_declined_confirmation_leaves_output_untouched(self):
         """Test declining the confirmation aborts without deleting anything."""
