@@ -58,6 +58,22 @@ right after `my-cli` or after a group name:
 
 `my-cli --version` prints the version.
 
+### Exit codes
+
+Every command exits with a code naming the class of what went wrong, so a
+script can branch on it or retry only what is worth retrying. The error itself
+is printed to stderr.
+
+| Code | Meaning |
+|---|---|
+| 0 | The command succeeded. |
+| 1 | Any other failure, such as a response whose body is not valid JSON. |
+| 2 | Usage error: an unknown command, a missing option or a bad value. |
+| 3 | No response: connection refused, unknown host, timeout or TLS failure. |
+| 4 | The API refused the credentials, with a 401 or 403. |
+| 5 | The API rejected the request, with any other 4xx. |
+| 6 | The API failed, with a 5xx. |
+
 ### config
 
 Configure the CLI.

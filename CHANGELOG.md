@@ -36,6 +36,9 @@
 - The log file is opened once per invocation and closed when it ends, and the debug flag, the log level and the colour setting apply to that invocation alone.
 - Logging is based on the standard library's `logging` module.
 - The ruff configuration also enables the `B` (bugbear), `S` (bandit) and `UP` (pyupgrade) rule sets, and the generated code passes them.
+- [Breaking] A failed command exits with the code of its failure class instead of always 1, so a script can branch on it: 3 when no response came back (connection refused, timeout, TLS), 4 on a 401 or 403, 5 on any other 4xx, 6 on a 5xx. 2 stays Click's usage error and 1 is any other failure. A script testing for exit code 1 must test for a non-zero code instead. The generated `README.md` documents the codes.
+- A successful response whose body is not valid JSON is reported as such, `Error: 200 OK response is not valid JSON: ...` with exit code 1, instead of passing the decoding error off as a failed request.
+- Command failures are raised as `click.ClickException` subclasses, one per failure class, instead of exiting with `SystemExit`; an error that is not a request failure is no longer swallowed into `Error: ...`.
 
 ### Bug Fixes
 

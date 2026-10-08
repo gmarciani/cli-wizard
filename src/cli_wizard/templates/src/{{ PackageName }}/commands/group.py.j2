@@ -4,14 +4,20 @@
 """{{ group.name }} commands."""
 
 import click
+import requests
 from typing import Any
 
 {% if group.has_path_parameters %}
-from {{ PackageName }}.client import create_client, encode_path_param, format_error
+from {{ PackageName }}.client import (
+    create_client,
+    encode_path_param,
+    request_error,
+    response_error,
+)
 {% else %}
-from {{ PackageName }}.client import create_client, format_error
+from {{ PackageName }}.client import create_client, request_error, response_error
 {% endif %}
-from {{ PackageName }}.log import colors_enabled, log_error, log_debug
+from {{ PackageName }}.log import log_debug
 from {{ PackageName }}.options import common_options
 from {{ PackageName }}.output import render
 from {{ PackageName }}.profile import load_profile, resolve_setting
@@ -202,30 +208,27 @@ def {{ op.function_name }}(
         )
 {% endif %}
         response.raise_for_status()
-        if response.text:
-            rendered = render(
-                response.json(),
-                output_format,
-                json_indent=json_indent,
-                table_style=table_style,
-            )
-            log_debug(
-                f"Command '{cmd_name}' completed"
-                f" with output: {redact_text(rendered)[:500]}"
-            )
-            click.echo(rendered)
-        else:
-            log_debug(f"Command '{cmd_name}' completed successfully")
-            click.echo("Success")
-    except Exception as e:
-        message = format_error(e)
-        log_error(
-            f"Command '{cmd_name}' failed: {message}"
-        )
-        click.secho(
-            f"Error: {message}",
-            fg="red" if colors_enabled() else None,
-            err=True,
-        )
-        raise SystemExit(1) from e
+    except requests.RequestException as e:
+        raise request_error(cmd_name, e) from e
+    if not response.text:
+        log_debug(f"Command '{cmd_name}' completed successfully")
+        click.echo("Success")
+        return
+    # Past the request: a body that does not decode is a response, not a
+    # failed request, and is reported as such with its own exit code.
+    try:
+        payload = response.json()
+    except ValueError as e:
+        raise response_error(cmd_name, response, e) from e
+    rendered = render(
+        payload,
+        output_format,
+        json_indent=json_indent,
+        table_style=table_style,
+    )
+    log_debug(
+        f"Command '{cmd_name}' completed"
+        f" with output: {redact_text(rendered)[:500]}"
+    )
+    click.echo(rendered)
 {% endfor %}
