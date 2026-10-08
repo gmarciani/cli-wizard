@@ -9,10 +9,18 @@
 Every failure the CLI reports is one of these classes, so a caller can catch
 them by class and a script can branch on the exit code. They are Click
 exceptions, so Click shows them and exits with their code; nothing raises a
-Click class directly. This module sits below the options, which raise one of
-these, so it reads the invocation state itself rather than through the log.
+Click class directly. Shown, an error is one JSON document on stdout, the only
+thing a failed invocation prints there::
+
+    {"error": {"type": "NetworkError", "message": "...", "exitCode": 3}}
+
+This module sits below the options, which raise one of these, so it reads the
+invocation state itself rather than through the log module.
 """
 
+import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import IO, Any
 
 import click
@@ -21,8 +29,8 @@ from {{ PackageName }}.constants import PROFILE_DEFAULTS
 
 # Exit codes of a failed command, one per failure class, so a calling script
 # can tell them apart and branch or retry accordingly. 2 is Click's own, for
-# a usage error, and 1 is what is left: a response that could not be decoded
-# or a setting the CLI cannot work with.
+# a usage error, and 1 is what is left: a response that could not be decoded,
+# a setting the CLI cannot work with, or a bug.
 EXIT_FAILURE = 1
 EXIT_USAGE = 2
 EXIT_NETWORK = 3
@@ -31,36 +39,46 @@ EXIT_CLIENT_ERROR = 5
 EXIT_SERVER_ERROR = 6
 
 
+def _state() -> dict[str, Any]:
+    """The state of the running invocation, empty outside one."""
+    ctx = click.get_current_context(silent=True)
+    return ctx.ensure_object(dict) if ctx is not None else {}
+
+
 def colors_enabled() -> bool:
     """Check if coloured console output is enabled, as the profile set it."""
-    ctx = click.get_current_context(silent=True)
-    settings = ctx.ensure_object(dict) if ctx is not None else {}
-    return bool(settings.get("colors", PROFILE_DEFAULTS.get("outputColors", True)))
+    return bool(_state().get("colors", PROFILE_DEFAULTS.get("outputColors", True)))
 
 
 class CliError(click.ClickException):
     """Base of every error the CLI reports, exiting with the code of its class.
 
-    This base one is what is left after the classes below: a response the
-    command could not decode above all.
+    This base one is what is left after the classes below.
     """
 
     exit_code = EXIT_FAILURE
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
-        # Decided now, inside the invocation: Click shows the error after the
-        # context, and the colour setting the profile put there, is gone.
-        self.colored = colors_enabled()
+        # Read now, inside the invocation: Click shows the error after the
+        # context, and the setting the profile put there, is gone.
+        self.json_indent = int(
+            _state().get("json_indent", PROFILE_DEFAULTS.get("jsonIndent", 2))
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """The document a caller parses: the class, the message and the code."""
+        return {
+            "error": {
+                "type": type(self).__name__,
+                "message": self.format_message(),
+                "exitCode": self.exit_code,
+            }
+        }
 
     def show(self, file: IO[Any] | None = None) -> None:
-        """Print the error to stderr, in red when colours are on."""
-        click.secho(
-            f"Error: {self.format_message()}",
-            fg="red" if self.colored else None,
-            file=file,
-            err=True,
-        )
+        """Print the error document to stdout, where the result would have gone."""
+        click.echo(json.dumps(self.to_dict(), indent=self.json_indent), file=file)
 
 
 class ConfigError(CliError):
@@ -100,10 +118,43 @@ class ServerError(RequestError):
     exit_code = EXIT_SERVER_ERROR
 
 
-class InvalidHeaderError(click.BadParameter, CliError):
-    """A --header value that is not ``Name: value``.
+class UsageError(CliError, click.UsageError):
+    """A bad invocation: an unknown command, a missing option or a bad value.
 
-    A usage error like any bad option: BadParameter comes first, so Click
-    prints the usage line, names the option and exits with EXIT_USAGE, while
-    the error is still one of the CLI's own.
+    What Click raises itself while parsing, wrapped by ``reported`` so it is
+    shown as JSON like every other failure, with Click's exit code for it.
     """
+
+    exit_code = EXIT_USAGE
+
+
+class InvalidHeaderError(UsageError):
+    """A --header value that is not ``Name: value``."""
+
+
+class UnexpectedError(CliError):
+    """An error that is not the CLI's own: a bug, reported with its type."""
+
+    def __init__(self, error: BaseException) -> None:
+        super().__init__(f"{type(error).__name__}: {error}")
+
+
+@contextmanager
+def reported() -> Iterator[None]:
+    """Turn whatever escapes the block into one of the CLI's errors.
+
+    Click's main() shows a ClickException and exits with its code, so wrapping
+    the parsing and the dispatch of the root group in this guard makes every
+    failure a JSON document on stdout. The CLI's own errors and Click's flow
+    control, the exit behind --help and the abort behind Ctrl-C, pass through.
+    """
+    try:
+        yield
+    except (CliError, click.exceptions.Exit, click.Abort, EOFError):
+        raise
+    except click.UsageError as e:
+        raise UsageError(e.format_message()) from e
+    except click.ClickException as e:
+        raise CliError(e.format_message()) from e
+    except Exception as e:
+        raise UnexpectedError(e) from e

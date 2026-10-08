@@ -3,6 +3,7 @@
 
 """Generate command for CLI Wizard."""
 
+import json
 import logging
 import re
 import shutil
@@ -114,6 +115,7 @@ def generate(
                 f"⚠️  Api '{cli_config['Api']}' not found, "
                 "generating CLI without API commands",
                 fg="yellow",
+                err=True,
             )
 
     if debug:
@@ -126,8 +128,8 @@ def generate(
     # Parse OpenAPI spec if provided
     groups: dict = {}
     if api_path:
-        click.secho("📄 Parsing OpenAPI spec: ", fg="cyan", nl=False)
-        click.echo(api_path)
+        click.secho("📄 Parsing OpenAPI spec: ", fg="cyan", nl=False, err=True)
+        click.echo(api_path, err=True)
         parser = OpenApiParser(str(api_path))
 
         groups = parser.parse(
@@ -139,11 +141,12 @@ def generate(
         )
 
         if not groups:
-            click.secho("⚠️  No operations found in OpenAPI spec", fg="yellow")
+            click.secho("⚠️  No operations found in OpenAPI spec", fg="yellow", err=True)
     else:
         click.secho(
             "ℹ️  No OpenAPI spec provided, generating CLI without API commands",
             fg="cyan",
+            err=True,
         )
 
     # Verify the formatter before deleting the previous output
@@ -167,40 +170,39 @@ def generate(
         if not force and any(output_path.iterdir()):
             if not click.confirm(
                 f"⚠️  Output directory '{output_path}' is not empty. "
-                "Its entire contents will be deleted. Continue?"
+                "Its entire contents will be deleted. Continue?",
+                err=True,
             ):
                 raise Aborted()
 
-        click.secho("🧹 Cleaning output directory: ", fg="cyan", nl=False)
-        click.echo(output_path)
+        click.secho("🧹 Cleaning output directory: ", fg="cyan", nl=False, err=True)
+        click.echo(output_path, err=True)
         shutil.rmtree(output_path)
 
     # Generate CLI project
-    click.secho("⚙️  Generating CLI project: ", fg="cyan", nl=False)
-    click.echo(output_path)
+    click.secho("⚙️  Generating CLI project: ", fg="cyan", nl=False, err=True)
+    click.echo(output_path, err=True)
     generator = CliGenerator(config=cli_config, config_dir=config_dir)
     generator.generate(groups, output_path, cli_name, package_name)
 
-    # Summary
-    click.secho(f"\n✓ Generated CLI '{cli_name}'", fg="green", bold=True)
-    click.secho("  📁 Location: ", fg="white", nl=False)
-    click.echo(output_path)
-    click.secho("  📦 Package: ", fg="white", nl=False)
-    click.echo(package_name)
-    if groups:
-        click.secho("  🔧 Commands: ", fg="white", nl=False)
-        click.echo(f"{len(groups)} groups")
-        for group in groups.values():
-            click.secho(f"     • {group.cli_name}", fg="yellow", nl=False)
-            click.echo(f" ({len(group.operations)} commands)")
-    else:
-        click.secho("  🔧 Commands: ", fg="white", nl=False)
-        click.echo("config only (no API commands)")
+    # Progress and hints go to stderr; stdout holds the one JSON result
+    click.secho(f"\n✓ Generated CLI '{cli_name}'", fg="green", bold=True, err=True)
+    click.secho("📋 Validate:", fg="cyan", bold=True, err=True)
+    click.echo(f"   pip install -e {output_path}", err=True)
+    click.echo(f"   {cli_name} --help", err=True)
 
-    click.echo()
-    click.secho("📋 Validate:", fg="cyan", bold=True)
-    click.echo(f"   pip install -e {output_path}")
-    click.echo(f"   {cli_name} --help")
+    summary = {
+        "cliName": cli_name,
+        "packageName": package_name,
+        "output": str(output_path),
+        "configuration": str(config_path) if config_path else None,
+        "api": str(api_path) if api_path else None,
+        "groups": [
+            {"name": group.cli_name, "commands": len(group.operations)}
+            for group in groups.values()
+        ],
+    }
+    click.echo(json.dumps(summary, indent=2))
 
 
 def resolve_output_dir(

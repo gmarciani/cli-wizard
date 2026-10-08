@@ -511,8 +511,9 @@ class TestCliGenerator:
                         result = CliRunner().invoke(module.users, ["list-users"])
 
         assert result.exit_code == 5  # a 4xx, the client error class
-        assert "Error: 422 Unprocessable Entity" in result.output
-        assert "name: Field required" in result.output
+        error = json.loads(result.stdout)["error"]
+        assert error["type"] == "ClientError"
+        assert error["message"] == "422 Unprocessable Entity\n  name: Field required"
 
     def test_generated_command_modules_share_one_client_factory(self):
         """Test every command module calls the factory client.py defines."""
@@ -2128,11 +2129,9 @@ class TestGeneratedProfilePrecedence:
         assert "dropped" not in err
         assert "kept" in err
 
-    @pytest.mark.parametrize("colors,coloured", [(True, True), (False, False)])
-    def test_profile_output_colors_decides_whether_errors_are_coloured(
-        self, generated_cli, colors, coloured
-    ):
-        """Test outputColors from the profile turns error colouring on and off."""
+    @pytest.mark.parametrize("colors", [True, False])
+    def test_errors_are_never_coloured(self, generated_cli, colors):
+        """Test the error document is plain JSON whatever outputColors says."""
         self._write_profile(generated_cli, outputColors=colors)
         with patch(
             "requests.Session.get", side_effect=requests.ConnectionError("boom")
@@ -2142,7 +2141,18 @@ class TestGeneratedProfilePrecedence:
             )
 
         assert result.exit_code == generated_cli.errors.EXIT_NETWORK
-        assert ("\x1b[31m" in result.stderr) is coloured
+        assert "\x1b[" not in result.stdout
+        assert json.loads(result.stdout)["error"]["type"] == "NetworkError"
+
+    def test_profile_json_indent_shapes_the_error_document(self, generated_cli):
+        """Test jsonIndent from the profile is the indentation of an error too."""
+        self._write_profile(generated_cli, jsonIndent=4)
+        with patch(
+            "requests.Session.get", side_effect=requests.ConnectionError("boom")
+        ):
+            result = CliRunner().invoke(generated_cli.group, ["list-things"])
+
+        assert result.stdout.startswith('{\n    "error": {\n        "type"')
 
     def test_environment_variable_names_derive_from_the_package_name(
         self, generated_cli
@@ -2858,39 +2868,50 @@ def _response(status_code: int, reason: str, body: str = "") -> requests.Respons
 
 
 class TestGeneratedExitCodes:
-    """Regression tests for #44: each failure class has its own exit code."""
+    """Regression tests for #44: each failure class has its own exit code, and
+    every failure is one JSON document on stdout."""
 
     _write_profile = staticmethod(TestGeneratedOutputFormats._write_profile)
 
     @staticmethod
-    def _invoke(cli, response=None, *, side_effect=None, **kwargs):
+    def _invoke(cli, response=None, *, side_effect=None, args=(), **kwargs):
         """Run list-things against a transport returning or raising as told."""
         with patch(
             "requests.Session.get", return_value=response, side_effect=side_effect
         ):
-            return CliRunner().invoke(cli.group, ["list-things"], **kwargs)
+            return CliRunner().invoke(cli.group, ["list-things", *args], **kwargs)
+
+    @staticmethod
+    def _error(result):
+        """Parse the error document, the only thing a failure prints on stdout."""
+        return json.loads(result.stdout)["error"]
 
     @pytest.mark.parametrize(
-        ("status_code", "reason", "code"),
+        ("status_code", "reason", "cls", "code"),
         [
-            (401, "Unauthorized", "EXIT_AUTH"),
-            (403, "Forbidden", "EXIT_AUTH"),
-            (404, "Not Found", "EXIT_CLIENT_ERROR"),
-            (422, "Unprocessable Entity", "EXIT_CLIENT_ERROR"),
-            (500, "Internal Server Error", "EXIT_SERVER_ERROR"),
-            (503, "Service Unavailable", "EXIT_SERVER_ERROR"),
+            (401, "Unauthorized", "AuthError", "EXIT_AUTH"),
+            (403, "Forbidden", "AuthError", "EXIT_AUTH"),
+            (404, "Not Found", "ClientError", "EXIT_CLIENT_ERROR"),
+            (422, "Unprocessable Entity", "ClientError", "EXIT_CLIENT_ERROR"),
+            (500, "Internal Server Error", "ServerError", "EXIT_SERVER_ERROR"),
+            (503, "Service Unavailable", "ServerError", "EXIT_SERVER_ERROR"),
         ],
     )
     def test_an_error_response_exits_with_the_code_of_its_class(
-        self, generated_cli, status_code, reason, code
+        self, generated_cli, status_code, reason, cls, code
     ):
-        """Test auth, client and server errors are told apart by exit code."""
+        """Test auth, client and server errors are told apart by code and type."""
         self._write_profile(generated_cli)
 
         result = self._invoke(generated_cli, _response(status_code, reason))
 
-        assert result.exit_code == getattr(generated_cli.errors, code)
-        assert f"Error: {status_code} {reason}" in result.stderr
+        exit_code = getattr(generated_cli.errors, code)
+        assert result.exit_code == exit_code
+        assert self._error(result) == {
+            "type": cls,
+            "message": f"{status_code} {reason}",
+            "exitCode": exit_code,
+        }
 
     @pytest.mark.parametrize(
         "error",
@@ -2909,7 +2930,11 @@ class TestGeneratedExitCodes:
         result = self._invoke(generated_cli, side_effect=error)
 
         assert result.exit_code == generated_cli.errors.EXIT_NETWORK
-        assert f"Error: {error}" in result.stderr
+        assert self._error(result) == {
+            "type": "NetworkError",
+            "message": str(error),
+            "exitCode": generated_cli.errors.EXIT_NETWORK,
+        }
 
     def test_a_malformed_body_is_reported_as_the_response_it_came_in(
         self, generated_cli
@@ -2920,7 +2945,9 @@ class TestGeneratedExitCodes:
         result = self._invoke(generated_cli, _response(200, "OK", "<html>oops</html>"))
 
         assert result.exit_code == generated_cli.errors.EXIT_FAILURE
-        assert "Error: 200 OK response is not valid JSON" in result.stderr
+        error = self._error(result)
+        assert error["type"] == "ResponseError"
+        assert error["message"].startswith("200 OK response is not valid JSON")
 
     def test_the_exit_codes_are_distinct_and_leave_clicks_alone(self, generated_cli):
         """Test no two failure classes share a code, and 2 stays the usage error."""
@@ -2938,15 +2965,46 @@ class TestGeneratedExitCodes:
         assert 0 not in codes
         assert errors.EXIT_USAGE == click.UsageError.exit_code
 
-    def test_a_usage_error_keeps_clicks_exit_code(self, generated_cli):
-        """Test a bad option is still reported by Click, before any request."""
+    def test_a_usage_error_is_reported_as_json_before_any_request(self, generated_cli):
+        """Test an option Click rejects itself is JSON too, with exit code 2."""
         with patch("requests.Session.get") as sent:
             result = CliRunner().invoke(
-                generated_cli.group, ["list-things", "--output", "xml"]
+                generated_cli.main, ["things", "list-things", "--output", "xml"]
             )
 
         assert result.exit_code == generated_cli.errors.EXIT_USAGE
+        error = self._error(result)
+        assert error["type"] == "UsageError"
+        assert error["exitCode"] == generated_cli.errors.EXIT_USAGE
+        assert "'xml'" in error["message"]
         sent.assert_not_called()
+
+    def test_an_unknown_command_is_reported_as_json(self, generated_cli):
+        """Test a command that does not exist is a usage error in JSON."""
+        result = CliRunner().invoke(generated_cli.main, ["things", "frobnicate"])
+
+        assert result.exit_code == generated_cli.errors.EXIT_USAGE
+        assert self._error(result) == {
+            "type": "UsageError",
+            "message": "No such command 'frobnicate'.",
+            "exitCode": generated_cli.errors.EXIT_USAGE,
+        }
+
+    def test_a_bad_header_is_reported_as_json(self, generated_cli):
+        """Test the CLI's own usage error names the option like Click does."""
+        result = CliRunner().invoke(
+            generated_cli.main, ["things", "list-things", "--header", "nocolon"]
+        )
+
+        assert result.exit_code == generated_cli.errors.EXIT_USAGE
+        assert self._error(result) == {
+            "type": "InvalidHeaderError",
+            "message": (
+                "Invalid value for '--header' / '-H':"
+                " Expected 'Name: value', got 'nocolon'."
+            ),
+            "exitCode": generated_cli.errors.EXIT_USAGE,
+        }
 
     def test_a_failure_is_the_clis_own_error_with_its_cause(self, generated_cli):
         """Test the error is the CLI's own class, chained to the requests error."""
@@ -2986,16 +3044,27 @@ class TestGeneratedExitCodes:
         result = CliRunner().invoke(generated_cli.main, ["config", "show"])
 
         assert result.exit_code == generated_cli.errors.EXIT_FAILURE
-        assert "Error: Failed to load profile file" in result.stderr
+        error = self._error(result)
+        assert error["type"] == "ConfigError"
+        assert error["message"].startswith("Failed to load profile file")
 
-    def test_an_unexpected_error_is_not_swallowed(self, generated_cli):
-        """Test an error that is not a request failure surfaces as itself."""
+    def test_an_unexpected_error_is_reported_as_json(self, generated_cli):
+        """Test a bug is reported as JSON naming its type, never as a request."""
         self._write_profile(generated_cli)
 
-        result = self._invoke(generated_cli, side_effect=RuntimeError("a bug"))
+        with patch("requests.Session.get", side_effect=RuntimeError("a bug")):
+            result = CliRunner().invoke(
+                generated_cli.main, ["--debug", "things", "list-things"]
+            )
 
-        assert isinstance(result.exception, RuntimeError)
-        assert "Error: a bug" not in result.stderr
+        assert result.exit_code == generated_cli.errors.EXIT_FAILURE
+        assert self._error(result) == {
+            "type": "UnexpectedError",
+            "message": "RuntimeError: a bug",
+            "exitCode": generated_cli.errors.EXIT_FAILURE,
+        }
+        assert "Traceback (most recent call last)" in result.stderr
+        assert "RuntimeError: a bug" in result.stderr
 
     def test_a_failure_is_logged_before_it_is_reported(self, generated_cli):
         """Test the failure reaches the log, named after the command."""
@@ -3004,6 +3073,13 @@ class TestGeneratedExitCodes:
         result = self._invoke(generated_cli, _response(404, "Not Found"))
 
         assert "Command 'things list-things' failed: 404 Not Found" in result.stderr
+
+    def test_help_stays_text(self, generated_cli):
+        """Test --help is not forced into JSON."""
+        result = CliRunner().invoke(generated_cli.main, ["things", "--help"])
+
+        assert result.exit_code == 0
+        assert result.output.startswith("Usage:")
 
 
 class TestGeneratedInvocationState:

@@ -448,8 +448,38 @@ class TestGenerateCommand:
         )
 
         assert result.exit_code == 1
-        assert result.exception is None or isinstance(result.exception, SystemExit)
-        assert f"✗ Could not load OpenAPI spec '{spec_path}'" in result.output
+        error = json.loads(result.stdout)["error"]
+        assert error["type"] == "SpecError"
+        assert error["exitCode"] == 1
+        assert error["message"].startswith(f"Could not load OpenAPI spec '{spec_path}'")
+
+    def test_generate_prints_a_json_summary_on_stdout(self, tmp_path):
+        """Test stdout holds one JSON document describing what was generated."""
+        openapi_path, config_path = create_test_files(tmp_path)
+        output_dir = tmp_path / "out"
+
+        result = CliRunner().invoke(
+            main,
+            [
+                "generate",
+                "--output",
+                str(output_dir),
+                "--api",
+                str(openapi_path),
+                "--configuration",
+                str(config_path),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        summary = json.loads(result.stdout)
+        assert summary["cliName"] == "test-cli"
+        assert summary["packageName"] == "test_cli"
+        assert summary["output"] == str(output_dir)
+        assert summary["configuration"] == str(config_path)
+        assert summary["api"] == str(openapi_path)
+        assert summary["groups"] == [{"name": "users", "commands": 1}]
+        assert "Generated CLI 'test-cli'" in result.stderr
 
     def test_generate_declined_confirmation_leaves_output_untouched(self):
         """Test declining the confirmation aborts without deleting anything."""
@@ -475,9 +505,12 @@ class TestGenerateCommand:
                 ],
                 input="n\n",
             )
-            assert result.exit_code != 0
+            assert result.exit_code == 1
             assert marker.exists(), "output was deleted despite declining"
             assert marker.read_text() == "keep me"
+            # The prompt went to stderr: stdout holds the error document alone
+            assert json.loads(result.stdout)["error"]["type"] == "Aborted"
+            assert "Continue?" in result.stderr
 
     def test_generate_non_empty_output_aborts_without_confirmation(self):
         """Test generate aborts when it cannot prompt and --force is absent."""
