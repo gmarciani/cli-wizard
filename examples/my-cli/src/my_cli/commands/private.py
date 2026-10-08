@@ -67,7 +67,7 @@ def get_greetings(
             )
             click.echo(rendered)
         else:
-            log_debug("Command '%s' completed successfully" % cmd_name)
+            log_debug(f"Command '{cmd_name}' completed successfully")
             click.echo("Success")
     except Exception as e:
         message = format_error(e)
@@ -77,4 +77,4 @@ def get_greetings(
             fg="red" if colors_enabled() else None,
             err=True,
         )
-        raise SystemExit(1)
+        raise SystemExit(1) from e

@@ -13,7 +13,8 @@ so the shape of the payload stays debuggable.
 
 import json
 import re
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 REDACTED = "***"
 

@@ -351,7 +351,7 @@ class CliGenerator:
         """Initialize generator with package templates."""
         self.config = config or {}
         self.config_dir = config_dir or Path.cwd()
-        self.env = Environment(
+        self.env = Environment(  # noqa: S701 - renders source files, not HTML
             loader=PackageLoader("cli_wizard", "templates"),
             trim_blocks=True,
             lstrip_blocks=True,
@@ -498,7 +498,7 @@ class CliGenerator:
         # Generate commands
         self._generate_commands_init(commands_dir)
         self._generate_config_commands(commands_dir)
-        for tag, group in groups.items():
+        for group in groups.values():
             self._generate_command_group(group, commands_dir)
 
         # Organise imports and format generated Python files with ruff
@@ -836,7 +836,7 @@ class CliGenerator:
             # project it is formatting, polluting the output and giving it
             # non-deterministic contents.
             subcommand, *rest = args
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603 - fixed argv, no shell
                 [*ruff, subcommand, "--no-cache", *rest, str(output_dir)],
                 capture_output=True,
             )

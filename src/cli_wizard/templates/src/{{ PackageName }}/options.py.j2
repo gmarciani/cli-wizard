@@ -22,8 +22,9 @@ parameter names, it holds what the commands derive from them:
 - ``logger``: the logger of the invocation, its handlers closed with it
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 import click
 from click.core import ParameterSource
@@ -124,7 +125,7 @@ _COMMON_OPTIONS = (
 )
 
 
-def common_options(command: F) -> F:
+def common_options[F: Callable[..., Any]](command: F) -> F:
     """Add the options every command takes; read their values from ctx.obj."""
     # Decorators apply bottom-up and Click lists them top-down, so the last
     # option is applied first to keep the declared order in --help.
