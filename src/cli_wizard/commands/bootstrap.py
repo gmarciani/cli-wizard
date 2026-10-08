@@ -4,9 +4,7 @@
 """Bootstrap command for CLI Wizard."""
 
 import getpass
-import json
 import logging
-import re
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -14,12 +12,13 @@ from typing import Any
 import click
 import yaml
 from jinja2 import Environment, PackageLoader
-from pydantic import ValidationError
 
+from cli_wizard.commands.common import emit_json
 from cli_wizard.commands.generate import resolve_output_dir
+from cli_wizard.config.project import load_cli_config
 from cli_wizard.config.schema import Config
 from cli_wizard.constants import CONFIG_FILE_NAME
-from cli_wizard.errors import Aborted, ConfigError
+from cli_wizard.errors import Aborted
 from cli_wizard.generator import CliGenerator
 
 logger = logging.getLogger(__name__)
@@ -236,7 +235,7 @@ def bootstrap(
     click.secho(f"   ✓ {config_path}", fg="green", err=True)
 
     # Load the generated config file (validates with Pydantic and expands references)
-    cli_config = _load_cli_config(config_path)
+    cli_config = load_cli_config(config_path)
 
     # Generate CLI project using the same generator as 'generate' command
     click.echo(err=True)
@@ -275,7 +274,7 @@ def bootstrap(
         "configuration": str(config_path),
         "nextCommand": next_command,
     }
-    click.echo(json.dumps(summary, indent=2))
+    emit_json(summary)
 
 
 def _yaml_value(value: Any) -> str:
@@ -334,74 +333,3 @@ def _generate_config_file(config_path: Path, config: dict) -> None:
     template = env.get_template("cli-wizard.yaml.j2")
     content = template.render(**context)
     config_path.write_text(content)
-
-
-def _load_cli_config(config_path: Path) -> dict:
-    """Load and validate CLI generator configuration from YAML file."""
-    try:
-        with open(config_path) as f:
-            raw_config = yaml.safe_load(f) or {}
-    except (OSError, yaml.YAMLError) as e:
-        raise ConfigError(f"Could not load config file: {e}") from e
-
-    # Validate with Pydantic schema
-    try:
-        validated = Config(**raw_config)
-        config = validated.model_dump()
-    except ValidationError as e:
-        problems = [
-            f"  • {'.'.join(str(loc) for loc in error['loc'])}: {error['msg']}"
-            for error in e.errors()
-        ]
-        raise ConfigError("\n".join(["Invalid configuration:", *problems])) from e
-
-    # Expand #[Param] references
-    try:
-        return _expand_config_references(config)
-    except ValueError as e:
-        raise ConfigError(f"Invalid configuration:\n  • {e}") from e
-
-
-def _expand_config_references(config: dict[str, Any]) -> dict[str, Any]:
-    """Expand #[Param] references in config values recursively.
-
-    Supports referencing other config parameters using #[ParamName] syntax.
-    Environment variables using ${VAR} syntax are left as-is for runtime expansion.
-    References to unknown or non-string parameters are left as-is. A parameter
-    that references itself, directly or through other parameters, raises a
-    ValueError rather than expanding forever.
-    """
-    pattern = re.compile(r"#\[(\w+)\]")
-    resolved: dict[str, str] = {}
-
-    def resolve(name: str, chain: tuple[str, ...]) -> str:
-        """Resolve a top-level parameter, refusing to expand it into itself."""
-        if name in chain:
-            path = " -> ".join(chain + (name,))
-            raise ValueError(
-                f"Circular #[Param] reference in configuration: {path} "
-                f'(value of {name!r}: "{config[name]}")'
-            )
-        if name not in resolved:
-            resolved[name] = substitute(config[name], chain + (name,))
-        return resolved[name]
-
-    def substitute(value: str, chain: tuple[str, ...]) -> str:
-        def replace(match: re.Match[str]) -> str:
-            param_name = match.group(1)
-            if isinstance(config.get(param_name), str):
-                return resolve(param_name, chain)
-            return match.group(0)
-
-        return pattern.sub(replace, value)
-
-    def expand_value(value: Any) -> Any:
-        if isinstance(value, str):
-            return substitute(value, ())
-        elif isinstance(value, dict):
-            return {k: expand_value(v) for k, v in value.items()}
-        elif isinstance(value, list):
-            return [expand_value(item) for item in value]
-        return value
-
-    return {key: expand_value(value) for key, value in config.items()}

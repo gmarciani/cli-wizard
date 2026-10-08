@@ -19,8 +19,9 @@ from my_cli.constants import (
     PROFILE_DEFAULTS,
     PROFILE_FILE,
 )
+from my_cli.errors import ConfigError
 from my_cli.log import log_debug, log_error, log_info, log_warning
-from my_cli.options import state
+from my_cli.state import state
 
 # Splits a camelCase profile key before every capital, so "retryMaxAttempts"
 # becomes RETRY_MAX_ATTEMPTS once upper-cased.
@@ -153,19 +154,57 @@ def load_profile(ctx: click.Context) -> dict[str, Any]:
     return settings
 
 
-def _read_profile(profile_name: str) -> dict[str, Any]:
-    """Read one profile from the profiles file."""
+def read_profiles() -> dict[str, Any]:
+    """Read every profile from the profiles file, none when there is no file.
+
+    Raises:
+        ConfigError: if the file cannot be read or is not valid YAML, after
+            logging it
+    """
     if not PROFILE_FILE.exists():
-        msg = f"Profile file not found: {PROFILE_FILE}. Creating default."
-        log_warning(msg)
+        return {}
+    try:
+        with open(PROFILE_FILE) as f:
+            profiles: dict[str, Any] = yaml.safe_load(f) or {}
+    except (yaml.YAMLError, OSError) as e:
+        message = f"Failed to load profile file: {e}"
+        log_error(message)
+        raise ConfigError(message) from e
+    return profiles
+
+
+def write_profiles(profiles: dict[str, Any]) -> None:
+    """Write every profile to the profiles file, readable by its owner alone.
+
+    The directory is created 0700 and the file 0600, and a file left loose by
+    an older version is tightened: the file may hold an access token.
+
+    Raises:
+        ConfigError: if the file cannot be written, after logging it
+    """
+    try:
+        PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        PROFILE_FILE.touch(mode=0o600, exist_ok=True)
+        PROFILE_FILE.chmod(0o600)
+        with open(PROFILE_FILE, "w") as f:
+            yaml.safe_dump(profiles, f, default_flow_style=False)
+    except OSError as e:
+        message = f"Failed to save profile file: {e}"
+        log_error(message)
+        raise ConfigError(message) from e
+
+
+def _read_profile(profile_name: str) -> dict[str, Any]:
+    """Read one profile from the profiles file, the defaults if that fails."""
+    if not PROFILE_FILE.exists():
+        log_warning(f"Profile file not found: {PROFILE_FILE}. Creating default.")
         _create_default_profile_file()
         return {}
 
     try:
-        with open(PROFILE_FILE) as f:
-            profiles = yaml.safe_load(f) or {}
-    except (yaml.YAMLError, OSError) as e:
-        log_error(f"Failed to load profile file: {e}")
+        profiles = read_profiles()
+    except ConfigError:
+        # Logged already; a command still runs, on the built-in defaults
         return {}
 
     if profile_name not in profiles:
@@ -179,14 +218,11 @@ def _read_profile(profile_name: str) -> dict[str, Any]:
 def _create_default_profile_file() -> None:
     """Create a default profile file with empty settings."""
     try:
-        PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        PROFILE_FILE.touch(mode=0o600, exist_ok=True)
-        default_content: dict[str, dict[str, Any]] = {"default": {}}
-        with open(PROFILE_FILE, "w") as f:
-            yaml.safe_dump(default_content, f, default_flow_style=False)
-        log_info(f"Created default profile file: {PROFILE_FILE}")
-    except OSError as e:
-        log_error(f"Failed to create default profile file: {e}")
+        write_profiles({"default": {}})
+    except ConfigError:
+        # Logged already; the defaults apply until the file can be written
+        return
+    log_info(f"Created default profile file: {PROFILE_FILE}")
 
 
 def get_profile_value(key: str, default: Any = None) -> Any:

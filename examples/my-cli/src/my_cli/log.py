@@ -35,8 +35,7 @@ from my_cli.constants import (
     LOG_TIMESTAMP_FORMAT,
     LOG_TIMEZONE,
 )
-from my_cli.errors import colors_enabled
-from my_cli.options import state
+from my_cli.state import colors_enabled, state
 
 Level = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 

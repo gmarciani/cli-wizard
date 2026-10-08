@@ -60,7 +60,6 @@ from my_cli.errors import (
 from my_cli.log import (
     _file_handler,
     _formatter,
-    colors_enabled,
     get_logger,
     hex_to_rgb,
     log,
@@ -75,9 +74,13 @@ from my_cli.profile import (
     env_var_name,
     get_profile_value,
     load_profile,
+    read_profiles,
     resolve_setting,
+    write_profiles,
 )
 from my_cli.redaction import REDACTED, redact, redact_text
+from my_cli.runner import run_command
+from my_cli.state import colors_enabled, state
 
 
 def invocation(**obj):
@@ -216,7 +219,7 @@ class TestConfigCommands:
         with runner.isolated_filesystem():
             profile_path = Path.cwd() / "profiles.yaml"
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "init"])
@@ -231,7 +234,7 @@ class TestConfigCommands:
         with runner.isolated_filesystem():
             profile_path = Path.cwd() / "home" / "profiles.yaml"
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "init"])
@@ -246,7 +249,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "init"])
@@ -260,7 +263,7 @@ class TestConfigCommands:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "nonexistent.yaml"
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "list-profiles"])
@@ -275,7 +278,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}\nproduction: {}")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "list-profiles"])
@@ -291,7 +294,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default:\n  key: value")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "show"])
@@ -306,7 +309,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "show", "-p", "nonexistent"])
@@ -321,7 +324,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default:\n  mykey: myvalue")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -340,7 +343,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -363,7 +366,7 @@ class TestConfigCommands:
             profile_path = Path.cwd() / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -391,7 +394,7 @@ class TestConfigCommands:
             profile_path.write_text("default: {}")
             profile_path.chmod(0o644)
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -415,7 +418,7 @@ class TestConfigCommands:
             profile_path = Path.cwd() / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -441,7 +444,7 @@ class TestConfigCommands:
             profile_path = Path.cwd() / "profiles.yaml"
             profile_path.write_text("default:\n  mykey: myvalue")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -460,7 +463,7 @@ class TestConfigCommands:
             profile_path = Path.cwd() / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -483,7 +486,7 @@ class TestConfigCommands:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "nonexistent.yaml"
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -501,7 +504,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -529,7 +532,7 @@ class TestConfigCommands:
             os.chmod(readonly_dir, 0o444)
             try:
                 with patch(
-                    "my_cli.commands.config.PROFILE_FILE",
+                    "my_cli.profile.PROFILE_FILE",
                     profile_path,
                 ):
                     result = runner.invoke(main, ["config", "init"])
@@ -544,7 +547,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("invalid: yaml: content: [")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "list-profiles"])
@@ -557,7 +560,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("invalid: yaml: content: [")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "show"])
@@ -572,7 +575,7 @@ class TestConfigCommands:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "nonexistent.yaml"
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(main, ["config", "show"])
@@ -587,7 +590,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("invalid: yaml: content: [")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -607,7 +610,7 @@ class TestConfigCommands:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "nonexistent.yaml"
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -630,7 +633,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -655,7 +658,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("invalid: yaml: content: [")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -678,7 +681,7 @@ class TestConfigCommands:
             profile_path = Path.cwd() / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -706,7 +709,7 @@ class TestConfigCommands:
         with runner.isolated_filesystem():
             profile_path = Path.cwd() / "profiles.yaml"
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -732,7 +735,7 @@ class TestConfigCommands:
             profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("invalid: yaml: content: [")
             with patch(
-                "my_cli.commands.config.PROFILE_FILE",
+                "my_cli.profile.PROFILE_FILE",
                 profile_path,
             ):
                 result = runner.invoke(
@@ -1502,12 +1505,119 @@ class TestExitCodes:
 
 
 # =============================================================================
+# State Tests
+# =============================================================================
+
+
+class TestState:
+    """Tests for the state of the running invocation."""
+
+    def test_state_is_empty_outside_an_invocation(self):
+        """Test nothing is kept where no command runs."""
+        assert state() == {}
+
+    def test_state_is_the_context_object_inside_an_invocation(self):
+        """Test the running command's ctx.obj is what the modules read."""
+        with invocation(profile="staging") as ctx:
+            assert state() is ctx.obj
+            assert state(ctx)["profile"] == "staging"
+
+    @pytest.mark.parametrize("colors,expected", [(True, True), (False, False)])
+    def test_colors_follow_the_invocation(self, colors, expected):
+        """Test the colour setting the profile stored decides the colours."""
+        with invocation(colors=colors):
+            assert colors_enabled() is expected
+
+
+# =============================================================================
+# Runner Tests
+# =============================================================================
+
+
+class TestRunCommand:
+    """Tests for running one API command end to end."""
+
+    @staticmethod
+    def _run(tmp_path, response, **kwargs):
+        """Run a command against a client answering with the given response."""
+        client = MagicMock()
+        client.get.return_value = response
+        with (
+            patch("my_cli.runner.create_client", return_value=client),
+            patch("my_cli.profile.PROFILE_FILE", tmp_path / "profiles.yaml"),
+            invocation(profile="default", output=None, **kwargs) as ctx,
+        ):
+            run_command(ctx, "things list", {"page": 1}, lambda c: c.get("/things"))
+        return client
+
+    def test_a_response_is_rendered(self, tmp_path, capsys):
+        """Test the decoded body is printed in the resolved output format."""
+        response = MagicMock(text='{"id": 1}')
+        response.json.return_value = {"id": 1}
+
+        client = self._run(tmp_path, response)
+
+        client.get.assert_called_once_with("/things")
+        assert json.loads(capsys.readouterr().out) == {"id": 1}
+
+    def test_an_empty_body_is_still_a_json_document(self, tmp_path, capsys):
+        """Test a bodyless success prints a status, keeping stdout JSON."""
+        self._run(tmp_path, MagicMock(text=""))
+
+        assert json.loads(capsys.readouterr().out) == {"status": "success"}
+
+    def test_a_failed_request_raises_its_class(self, tmp_path):
+        """Test an error response is raised as the request error it maps to."""
+        with pytest.raises(ServerError):
+            self._run(tmp_path, _http_error(503, "Service Unavailable", "").response)
+
+    def test_an_undecodable_body_raises_a_response_error(self, tmp_path):
+        """Test a 200 that is not JSON is a response error, not a request one."""
+        response = MagicMock(text="<html>", status_code=200, reason="OK")
+        response.json.side_effect = ValueError("Expecting value")
+
+        with pytest.raises(ResponseError):
+            self._run(tmp_path, response)
+
+
+# =============================================================================
 # Profile Tests
 # =============================================================================
 
 
 class TestProfile:
     """Tests for profile management."""
+
+    def test_read_profiles_without_a_file(self, tmp_path):
+        """Test a missing file reads as no profiles at all."""
+        with patch("my_cli.profile.PROFILE_FILE", tmp_path / "none.yaml"):
+            assert read_profiles() == {}
+
+    def test_read_profiles_rejects_invalid_yaml(self, tmp_path):
+        """Test a file that does not parse is a configuration error."""
+        profile_path = tmp_path / "profiles.yaml"
+        profile_path.write_text("default: [unbalanced")
+        with patch("my_cli.profile.PROFILE_FILE", profile_path):
+            with pytest.raises(ConfigError, match="Failed to load profile file"):
+                read_profiles()
+
+    def test_write_profiles_round_trips_owner_only(self, tmp_path):
+        """Test what is written is read back, from a file nobody else can read."""
+        profile_path = tmp_path / "home" / "profiles.yaml"
+        with patch("my_cli.profile.PROFILE_FILE", profile_path):
+            write_profiles({"default": {"baseUrl": "http://x"}})
+
+            assert read_profiles() == {"default": {"baseUrl": "http://x"}}
+        assert profile_path.stat().st_mode & 0o777 == 0o600
+        assert profile_path.parent.stat().st_mode & 0o777 == 0o700
+
+    def test_write_profiles_reports_a_directory_it_cannot_create(self, tmp_path):
+        """Test a file that cannot be written is a configuration error."""
+        blocker = tmp_path / "blocker"
+        blocker.write_text("")
+        with patch("my_cli.profile.PROFILE_FILE", blocker / "profiles.yaml"):
+            with pytest.raises(ConfigError, match="Failed to save profile file"):
+                write_profiles({})
 
     def test_load_profile_file_not_exists(self):
         """Test loading profile when file doesn't exist."""

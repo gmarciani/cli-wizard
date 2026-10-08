@@ -10,6 +10,7 @@ from typing import Any
 import click
 
 from cli_wizard.commands.bootstrap import bootstrap
+from cli_wizard.commands.common import configure_logging, debug_option
 from cli_wizard.commands.config import config
 from cli_wizard.commands.generate import generate
 from cli_wizard.constants import __version__
@@ -48,21 +49,13 @@ class RootGroup(click.Group):
 
 @click.group(cls=RootGroup, help="CLI Wizard - Generate modern CLI from OpenAPI.")
 @click.version_option(version=__version__, prog_name="cli-wizard")
-@click.option("--debug", "-d", is_flag=True, help="Enable debug output")
+@debug_option
 @click.pass_context
 def main(ctx: click.Context, debug: bool) -> None:
     """Main CLI entry point."""
     ctx.ensure_object(dict)
     ctx.obj["debug"] = debug
-
-    # Configure logging
-    level = logging.DEBUG if debug else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(levelname)s: %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%SZ",
-    )
-    logging.Formatter.converter = lambda *args: __import__("time").gmtime()
+    configure_logging(debug)
 
 
 main.add_command(bootstrap)

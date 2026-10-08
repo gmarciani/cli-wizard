@@ -504,10 +504,11 @@ class TestCliGenerator:
             generator.generate(groups, output_dir, "test-cli", "test_cli")
 
             with _import_generated(output_dir, "test_cli", "commands.users") as module:
+                runner = importlib.import_module("test_cli.runner")
                 client = MagicMock()
                 client.get.return_value = response
-                with patch.object(module, "create_client", return_value=client):
-                    with patch.object(module, "load_profile"):
+                with patch.object(runner, "create_client", return_value=client):
+                    with patch.object(runner, "load_profile"):
                         result = CliRunner().invoke(module.users, ["list-users"])
 
         assert result.exit_code == 4  # a 4xx, the client error class
@@ -515,8 +516,8 @@ class TestCliGenerator:
         assert error["type"] == "ClientError"
         assert error["message"] == "422 Unprocessable Entity\n  name: Field required"
 
-    def test_generated_command_modules_share_one_client_factory(self):
-        """Test every command module calls the factory client.py defines."""
+    def test_generated_command_modules_share_one_runner(self):
+        """Test every command module runs through the runner, building no client."""
         groups = {
             name: CommandGroup(
                 name=name,
@@ -544,13 +545,15 @@ class TestCliGenerator:
 
             commands_dir = output_dir / "src" / "test_cli" / "commands"
             for module_file in ("users.py", "orders.py"):
-                assert "def _get_client" not in (commands_dir / module_file).read_text()
+                source = (commands_dir / module_file).read_text()
+                assert "create_client" not in source
+                assert "load_profile" not in source
 
-            with _import_generated(output_dir, "test_cli", "client") as client_module:
+            with _import_generated(output_dir, "test_cli", "runner") as runner:
                 users = importlib.import_module("test_cli.commands.users")
                 orders = importlib.import_module("test_cli.commands.orders")
-                assert users.create_client is client_module.create_client
-                assert orders.create_client is client_module.create_client
+                assert users.run_command is runner.run_command
+                assert orders.run_command is runner.run_command
 
     def test_generated_cli_reuses_the_log_hex_to_rgb(self):
         """Test the splash colour conversion is the log module's, not a copy."""
@@ -990,7 +993,11 @@ class TestDebugOutputRedaction:
                 "{dict(self.session.headers)}",
                 "{dict(response.headers)}",
             )
-            for py_file in (src_dir / "client.py", src_dir / "commands" / "auth.py"):
+            for py_file in (
+                src_dir / "client.py",
+                src_dir / "runner.py",
+                src_dir / "commands" / "auth.py",
+            ):
                 content = py_file.read_text()
                 for leak in leaks:
                     assert leak not in content, f"{py_file.name} logs {leak} unredacted"
@@ -1753,7 +1760,7 @@ class TestGeneratedGlobalOptions:
         args = [*root_args, "ops", "get-user", "--user-id", "42", *command_args]
         with (
             patch("requests.Session.request") as request,
-            patch(f"{ISSUE23_PACKAGE}.commands.ops.load_profile") as load_profile,
+            patch(f"{ISSUE23_PACKAGE}.runner.load_profile") as load_profile,
         ):
             request.return_value.text = ""
             result = CliRunner().invoke(cli, args)

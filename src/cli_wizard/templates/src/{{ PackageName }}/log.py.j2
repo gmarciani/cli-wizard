@@ -35,8 +35,7 @@ from {{ PackageName }}.constants import (
     LOG_ROTATION_DAYS,
     LOG_ROTATION_BACKUP_COUNT,
 )
-from {{ PackageName }}.errors import colors_enabled
-from {{ PackageName }}.options import state
+from {{ PackageName }}.state import colors_enabled, state
 
 Level = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 

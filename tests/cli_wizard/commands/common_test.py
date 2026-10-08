@@ -3,9 +3,10 @@
 
 """Tests for common command utilities."""
 
+import json
 import logging
 
-from cli_wizard.commands.common import configure_logging, debug_option
+from cli_wizard.commands.common import configure_logging, debug_option, emit_json
 
 
 class TestConfigureLogging:
@@ -21,16 +22,34 @@ class TestConfigureLogging:
         configure_logging(debug=True)
         assert logging.root.level == logging.DEBUG
 
-    def test_configure_logging_removes_existing_handlers(self):
-        """Test that existing handlers are removed."""
-        # Add a handler
+    def test_configure_logging_keeps_existing_handlers(self):
+        """Test a handler already attached, such as a test's, survives."""
         handler = logging.StreamHandler()
         logging.root.addHandler(handler)
+        try:
+            configure_logging(debug=False)
+            assert handler in logging.root.handlers
+        finally:
+            logging.root.removeHandler(handler)
 
+    def test_configure_logging_applies_the_level_on_a_later_call(self):
+        """Test a second invocation in one process still gets its level."""
         configure_logging(debug=False)
+        configure_logging(debug=True)
+        assert logging.root.level == logging.DEBUG
 
-        # Should have replaced handlers
-        assert len(logging.root.handlers) > 0
+
+class TestEmitJson:
+    """Tests for emit_json."""
+
+    def test_emit_json_prints_an_indented_document_to_stdout(self, capsys):
+        """Test the payload lands on stdout as two-space indented JSON."""
+        emit_json({"key": "value", "items": [1]})
+
+        captured = capsys.readouterr()
+        assert captured.err == ""
+        assert captured.out == '{\n  "key": "value",\n  "items": [\n    1\n  ]\n}\n'
+        assert json.loads(captured.out) == {"key": "value", "items": [1]}
 
 
 class TestDebugOption:

@@ -1,18 +1,26 @@
 # AUTO-GENERATED FILE - DO NOT EDIT
 # Generated from OpenAPI specification by cli-wizard
 
-"""Config commands for managing CLI profiles."""
+"""Config commands for managing CLI profiles.
+
+The profile module is imported whole: it owns the profiles file, and a test
+that points PROFILE_FILE elsewhere must be obeyed by every command here.
+"""
 
 import json
 from typing import Any
 
 import click
-import yaml
 
-from {{ PackageName }}.constants import PROFILE_FILE, PROFILE_DEFAULTS
-from {{ PackageName }}.errors import ConfigError
-from {{ PackageName }}.log import log_info, log_error
+from {{ PackageName }} import profile
+from {{ PackageName }}.constants import PROFILE_DEFAULTS
+from {{ PackageName }}.log import log_info
 from {{ PackageName }}.options import common_options
+
+
+def _emit(result: dict[str, Any]) -> None:
+    """Print a command's result, the one JSON document stdout carries."""
+    click.echo(json.dumps(result, indent=2))
 
 
 @click.group(name="config", help="Configure the CLI.")
@@ -28,38 +36,13 @@ def config() -> None:
 @common_options
 def config_init() -> None:
     """Init command implementation."""
-    if PROFILE_FILE.exists():
-        result: dict[str, Any] = {
-            "status": "exists",
-            "path": str(PROFILE_FILE),
-        }
-        click.echo(json.dumps(result, indent=2))
+    if profile.PROFILE_FILE.exists():
+        _emit({"status": "exists", "path": str(profile.PROFILE_FILE)})
         return
 
-    try:
-        PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        PROFILE_FILE.touch(mode=0o600, exist_ok=True)
-        default_content: dict[str, dict[str, Any]] = {
-            "default": {},
-        }
-        with open(PROFILE_FILE, "w") as f:
-            yaml.safe_dump(
-                default_content,
-                f,
-                default_flow_style=False,
-            )
-        log_info(
-            f"Created profile file: {PROFILE_FILE}"
-        )
-        result = {
-            "status": "created",
-            "path": str(PROFILE_FILE),
-        }
-        click.echo(json.dumps(result, indent=2))
-    except OSError as e:
-        message = f"Failed to create profile file: {e}"
-        log_error(message)
-        raise ConfigError(message) from e
+    profile.write_profiles({"default": {}})
+    log_info(f"Created profile file: {profile.PROFILE_FILE}")
+    _emit({"status": "created", "path": str(profile.PROFILE_FILE)})
 
 
 @config.command(
@@ -69,23 +52,7 @@ def config_init() -> None:
 @common_options
 def config_list_profiles() -> None:
     """List profiles command implementation."""
-    if not PROFILE_FILE.exists():
-        result: dict[str, Any] = {"profiles": []}
-        click.echo(json.dumps(result, indent=2))
-        return
-
-    try:
-        with open(PROFILE_FILE) as f:
-            profiles: dict[str, Any] = (
-                yaml.safe_load(f) or {}
-            )
-    except (yaml.YAMLError, OSError) as e:
-        message = f"Failed to load profile file: {e}"
-        log_error(message)
-        raise ConfigError(message) from e
-
-    result = {"profiles": list(profiles.keys())}
-    click.echo(json.dumps(result, indent=2))
+    _emit({"profiles": list(profile.read_profiles())})
 
 
 @config.command(
@@ -96,33 +63,13 @@ def config_list_profiles() -> None:
 @click.pass_context
 def config_show(ctx: click.Context) -> None:
     """Show command implementation."""
-    profile = ctx.obj["profile"]
-    if not PROFILE_FILE.exists():
-        click.echo(json.dumps({}, indent=2))
+    profiles = profile.read_profiles()
+    profile_data = profiles.get(ctx.obj["profile"])
+    if profile_data is None and ctx.obj["profile"] not in profiles:
+        _emit({})
         return
 
-    try:
-        with open(PROFILE_FILE) as f:
-            profiles: dict[str, Any] = (
-                yaml.safe_load(f) or {}
-            )
-    except (yaml.YAMLError, OSError) as e:
-        message = f"Failed to load profile file: {e}"
-        log_error(message)
-        raise ConfigError(message) from e
-
-    if profile not in profiles:
-        click.echo(json.dumps({}, indent=2))
-        return
-
-    profile_data: dict[str, Any] = (
-        profiles[profile] or {}
-    )
-    merged: dict[str, Any] = {
-        **PROFILE_DEFAULTS,
-        **profile_data,
-    }
-    click.echo(json.dumps(merged, indent=2))
+    _emit({**PROFILE_DEFAULTS, **(profile_data or {})})
 
 
 @config.command(
@@ -136,36 +83,8 @@ def config_show(ctx: click.Context) -> None:
 @click.pass_context
 def config_get(ctx: click.Context, param: str) -> None:
     """Get command implementation."""
-    profile = ctx.obj["profile"]
-    if not PROFILE_FILE.exists():
-        result: dict[str, Any] = {
-            "key": param,
-            "value": None,
-        }
-        click.echo(json.dumps(result, indent=2))
-        return
-
-    try:
-        with open(PROFILE_FILE) as f:
-            profiles: dict[str, Any] = (
-                yaml.safe_load(f) or {}
-            )
-    except (yaml.YAMLError, OSError) as e:
-        message = f"Failed to load profile file: {e}"
-        log_error(message)
-        raise ConfigError(message) from e
-
-    if profile not in profiles:
-        result = {"key": param, "value": None}
-        click.echo(json.dumps(result, indent=2))
-        return
-
-    profile_data: dict[str, Any] = (
-        profiles[profile] or {}
-    )
-    value = profile_data.get(param)
-    result = {"key": param, "value": value}
-    click.echo(json.dumps(result, indent=2))
+    profile_data = profile.read_profiles().get(ctx.obj["profile"]) or {}
+    _emit({"key": param, "value": profile_data.get(param)})
 
 
 @config.command(
@@ -182,25 +101,10 @@ def config_get(ctx: click.Context, param: str) -> None:
 @click.pass_context
 def config_set(ctx: click.Context, param: str, value: str) -> None:
     """Set command implementation."""
-    profile = ctx.obj["profile"]
-    profiles: dict[str, Any]
-    result: dict[str, Any]
-    if not PROFILE_FILE.exists():
-        profiles = {}
-    else:
-        try:
-            with open(PROFILE_FILE) as f:
-                profiles = yaml.safe_load(f) or {}
-        except (yaml.YAMLError, OSError) as e:
-            message = f"Failed to load profile file: {e}"
-            log_error(message)
-            raise ConfigError(message) from e
-
-    if profile not in profiles:
-        profiles[profile] = {}
-
-    # Get old value
-    old_value = profiles[profile].get(param)
+    profile_name = ctx.obj["profile"]
+    profiles = profile.read_profiles()
+    profile_data = profiles[profile_name] = profiles.get(profile_name) or {}
+    old_value = profile_data.get(param)
 
     # Try to parse value as JSON for complex types
     try:
@@ -208,33 +112,10 @@ def config_set(ctx: click.Context, param: str, value: str) -> None:
     except json.JSONDecodeError:
         parsed_value = value
 
-    profiles[profile][param] = parsed_value
-
-    try:
-        PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        PROFILE_FILE.touch(mode=0o600, exist_ok=True)
-        # Tighten files left world-readable by older versions
-        PROFILE_FILE.chmod(0o600)
-        with open(PROFILE_FILE, "w") as f:
-            yaml.safe_dump(
-                profiles,
-                f,
-                default_flow_style=False,
-            )
-        log_info(
-            f"Set '{param}' = '{parsed_value}'"
-            f" in profile '{profile}'"
-        )
-        result = {
-            "key": param,
-            "value": parsed_value,
-            "oldValue": old_value,
-        }
-        click.echo(json.dumps(result, indent=2))
-    except OSError as e:
-        message = f"Failed to save profile file: {e}"
-        log_error(message)
-        raise ConfigError(message) from e
+    profile_data[param] = parsed_value
+    profile.write_profiles(profiles)
+    log_info(f"Set '{param}' = '{parsed_value}' in profile '{profile_name}'")
+    _emit({"key": param, "value": parsed_value, "oldValue": old_value})
 
 
 @config.command(
@@ -248,52 +129,14 @@ def config_set(ctx: click.Context, param: str, value: str) -> None:
 @click.pass_context
 def config_unset(ctx: click.Context, param: str) -> None:
     """Unset command implementation."""
-    profile = ctx.obj["profile"]
-    if not PROFILE_FILE.exists():
-        result: dict[str, Any] = {
-            "key": param,
-            "oldValue": None,
-        }
-        click.echo(json.dumps(result, indent=2))
-        return
-
-    try:
-        with open(PROFILE_FILE) as f:
-            profiles: dict[str, Any] = (
-                yaml.safe_load(f) or {}
-            )
-    except (yaml.YAMLError, OSError) as e:
-        message = f"Failed to load profile file: {e}"
-        log_error(message)
-        raise ConfigError(message) from e
-
-    if profile not in profiles:
-        result = {"key": param, "oldValue": None}
-        click.echo(json.dumps(result, indent=2))
-        return
-
-    profile_data: dict[str, Any] = (
-        profiles[profile] or {}
-    )
+    profile_name = ctx.obj["profile"]
+    profiles = profile.read_profiles()
+    profile_data = profiles.get(profile_name) or {}
     old_value = profile_data.get(param)
 
     if param in profile_data:
-        del profiles[profile][param]
-        try:
-            with open(PROFILE_FILE, "w") as f:
-                yaml.safe_dump(
-                    profiles,
-                    f,
-                    default_flow_style=False,
-                )
-            log_info(
-                f"Removed '{param}'"
-                f" from profile '{profile}'"
-            )
-        except OSError as e:
-            message = f"Failed to save profile file: {e}"
-            log_error(message)
-            raise ConfigError(message) from e
+        del profile_data[param]
+        profile.write_profiles(profiles)
+        log_info(f"Removed '{param}' from profile '{profile_name}'")
 
-    result = {"key": param, "oldValue": old_value}
-    click.echo(json.dumps(result, indent=2))
+    _emit({"key": param, "oldValue": old_value})

@@ -3,12 +3,12 @@
 
 """Configuration commands for CLI Wizard."""
 
-import json
 import logging
 
 import click
 from pydantic import ValidationError
 
+from cli_wizard.commands.common import emit_json
 from cli_wizard.config.configuration import (
     get_config_path,
     load_config,
@@ -52,7 +52,7 @@ def set(key: str, value: str) -> None:
         raise ConfigError(f"Invalid value for '{key}': {e}") from e
 
     result = {"key": key, "value": load_config()[key], "oldValue": old_value}
-    print(json.dumps(result, indent=2))
+    emit_json(result)
 
 
 @config.command(help="Get a configuration value.")
@@ -62,7 +62,7 @@ def get(key: str) -> None:
     _check_known_key(key)
 
     result = {"key": key, "value": load_config()[key]}
-    print(json.dumps(result, indent=2))
+    emit_json(result)
 
 
 @config.command(help="Unset a configuration value, reverting it to the default.")
@@ -84,13 +84,13 @@ def unset(key: str) -> None:
         old_value = None
 
     result = {"key": key, "value": load_config()[key], "oldValue": old_value}
-    print(json.dumps(result, indent=2))
+    emit_json(result)
 
 
 @config.command(help="Show all configuration values as JSON.")
 def show() -> None:
     """Show command implementation."""
-    print(json.dumps(load_config(), indent=2))
+    emit_json(load_config())
 
 
 @config.command(help="Reset configuration to defaults and delete local config file.")
@@ -104,4 +104,4 @@ def reset() -> None:
     if config_path.exists():
         config_path.unlink()
 
-    print(json.dumps(Config().model_dump(), indent=2))
+    emit_json(Config().model_dump())
