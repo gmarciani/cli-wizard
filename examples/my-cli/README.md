@@ -60,14 +60,27 @@ right after `my-cli` or after a group name:
 
 ### Exit codes
 
-Every command exits with a code naming the class of what went wrong, so a
-script can branch on it or retry only what is worth retrying. The error itself
-is printed to stderr.
+Every command prints one JSON document on stdout: the response on success, or
+on failure an error object a script can parse, with the error's type, its
+message and the exit code the command exits with:
+
+```json
+{
+  "error": {
+    "type": "AuthError",
+    "message": "401 Unauthorized",
+    "exitCode": 4
+  }
+}
+```
+
+Logs go to stderr. The exit code names the class of what went wrong, so a
+script can branch on it or retry only what is worth retrying.
 
 | Code | Meaning |
 |---|---|
 | 0 | The command succeeded. |
-| 1 | Any other failure: a response whose body is not valid JSON, or a profile file that cannot be read or written. |
+| 1 | Any other failure: a response whose body is not valid JSON, a profile file that cannot be read or written, or a bug. |
 | 2 | Usage error: an unknown command, a missing option or a bad value. |
 | 3 | No response: connection refused, unknown host, timeout or TLS failure. |
 | 4 | The API refused the credentials, with a 401 or 403. |

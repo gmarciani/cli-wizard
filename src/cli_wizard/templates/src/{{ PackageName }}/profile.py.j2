@@ -136,9 +136,9 @@ def resolve_setting(
 def load_profile(ctx: click.Context) -> dict[str, Any]:
     """Load the profile the --profile option names into the invocation's state.
 
-    The log level and the colour setting are resolved here and stored with it:
-    the logging module cannot resolve them itself without importing this
-    module, which imports it.
+    The log level, the colour setting and the JSON indentation are resolved
+    here and stored with it: the logging and errors modules cannot resolve them
+    themselves without importing this module, which imports them.
 
     Args:
         ctx: The context of the running invocation
@@ -152,6 +152,7 @@ def load_profile(ctx: click.Context) -> dict[str, Any]:
     current["settings"] = settings
     current["log_level"] = str(resolve_setting("logLevel", settings=settings))
     current["colors"] = bool(resolve_setting("outputColors", settings=settings))
+    current["json_indent"] = int(resolve_setting("jsonIndent", settings=settings))
 
     return settings
 

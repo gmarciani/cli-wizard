@@ -3,6 +3,8 @@
 
 """Tests for bootstrap command."""
 
+import json
+
 import pytest
 import yaml
 from click.testing import CliRunner
@@ -120,6 +122,31 @@ class TestBootstrapCommand:
 
         assert result.exit_code == 0, result.output
         assert "already exists and is not empty" in result.output
+
+    def test_bootstrap_prints_a_json_summary_on_stdout(self, tmp_path):
+        """Test stdout holds one JSON document, the prompts having gone to stderr."""
+        config_path = tmp_path / "cli-wizard.yaml"
+        target_dir = tmp_path / "my-cli"
+
+        result = CliRunner().invoke(
+            main,
+            [
+                "bootstrap",
+                "--output",
+                str(target_dir),
+                "--configuration",
+                str(config_path),
+            ],
+            input=DEFAULT_ANSWERS,
+        )
+
+        assert result.exit_code == 0, result.output
+        summary = json.loads(result.stdout)
+        assert summary["output"] == str(target_dir)
+        assert summary["configuration"] == str(config_path)
+        assert summary["cliName"] == summary["packageName"].replace("_", "-")
+        assert summary["nextCommand"].startswith("cli-wizard generate --configuration")
+        assert "CLI command name" in result.stderr
 
     def test_bootstrap_directory_exists_nonempty_confirm_no(self, tmp_path):
         """Test bootstrap aborts when user declines to continue."""

@@ -53,6 +53,9 @@ from my_cli.errors import (
     RequestError,
     ResponseError,
     ServerError,
+    UnexpectedError,
+    UsageError,
+    reported,
 )
 from my_cli.log import (
     _file_handler,
@@ -559,7 +562,9 @@ class TestConfigCommands:
             ):
                 result = runner.invoke(main, ["config", "show"])
             assert result.exit_code == EXIT_FAILURE
-            assert "Error: Failed to load profile file" in result.stderr
+            error = json.loads(result.stdout)["error"]
+            assert error["type"] == "ConfigError"
+            assert error["message"].startswith("Failed to load profile file")
 
     def test_config_show_file_not_exists(self):
         """Test show when profile file doesn't exist."""
@@ -831,6 +836,16 @@ class TestApiClient:
         """Test a header without a name or a colon is a usage error."""
         with pytest.raises(InvalidHeaderError, match="Expected 'Name: value'"):
             HEADER.convert(raw, None, None)
+
+    def test_header_option_names_the_option_it_rejects(self):
+        """Test the usage error names the option, as Click's own would."""
+        param = click.Option(["--header", "-H"], type=HEADER)
+        with pytest.raises(InvalidHeaderError) as raised:
+            HEADER.convert("nocolon", param, None)
+        assert raised.value.format_message() == (
+            "Invalid value for '--header' / '-H':"
+            " Expected 'Name: value', got 'nocolon'."
+        )
 
     def test_client_url_building(self):
         """Test URL building."""
@@ -1380,6 +1395,7 @@ class TestExitCodes:
             (AuthError, EXIT_AUTH),
             (ClientError, EXIT_CLIENT_ERROR),
             (ServerError, EXIT_SERVER_ERROR),
+            (UsageError, EXIT_USAGE),
             (InvalidHeaderError, EXIT_USAGE),
         ],
     )
@@ -1397,7 +1413,9 @@ class TestExitCodes:
             AuthError,
             ClientError,
             ServerError,
+            UsageError,
             InvalidHeaderError,
+            UnexpectedError,
         ],
     )
     def test_every_error_is_a_cli_error(self, cls):
@@ -1405,17 +1423,39 @@ class TestExitCodes:
         assert issubclass(cls, CliError)
         assert issubclass(CliError, click.ClickException)
 
-    def test_invalid_header_is_a_usage_error(self):
-        """Test a bad --header is still reported with the usage, as Click does."""
-        assert issubclass(InvalidHeaderError, click.UsageError)
+    @pytest.mark.parametrize("cls", [UsageError, InvalidHeaderError])
+    def test_usage_errors_are_clicks_too(self, cls):
+        """Test a bad invocation is a usage error to Click as well."""
+        assert issubclass(cls, click.UsageError)
 
-    def test_cli_error_show_prints_to_stderr(self, capsys):
-        """Test showing the error prints it the way a failed command does."""
-        CliError("404 Not Found").show()
+    def test_show_prints_a_json_document_to_stdout(self, capsys):
+        """Test showing the error prints the JSON a caller can parse."""
+        ClientError("404 Not Found").show()
 
         captured = capsys.readouterr()
-        assert captured.out == ""
-        assert captured.err == "Error: 404 Not Found\n"
+        assert captured.err == ""
+        assert json.loads(captured.out) == {
+            "error": {
+                "type": "ClientError",
+                "message": "404 Not Found",
+                "exitCode": EXIT_CLIENT_ERROR,
+            }
+        }
+
+    def test_show_follows_the_json_indent_of_the_invocation(self, capsys):
+        """Test the error document is indented as the invocation's setting says."""
+        with invocation(json_indent=4):
+            error = ClientError("404 Not Found")
+        error.show()
+
+        assert capsys.readouterr().out.startswith('{\n    "error": {\n        "type"')
+
+    def test_unexpected_error_names_what_it_wraps(self):
+        """Test a bug is reported with its type in the message."""
+        error = UnexpectedError(RuntimeError("a bug"))
+
+        assert error.format_message() == "RuntimeError: a bug"
+        assert error.exit_code == EXIT_FAILURE
 
     def test_request_error_describes_the_response_and_keeps_its_class(self):
         """Test a failed request becomes an error with the body and the code."""
@@ -1429,6 +1469,29 @@ class TestExitCodes:
         request_error("things list", requests.ConnectionError("refused"))
 
         assert "Command 'things list' failed: refused" in capsys.readouterr().err
+
+    def test_reported_lets_the_clis_errors_and_clicks_flow_control_through(self):
+        """Test the CLI's own errors, --help's exit and aborts pass the guard."""
+        for error in (ConfigError("boom"), click.exceptions.Exit(0), click.Abort()):
+            with pytest.raises(type(error)) as raised:
+                with reported():
+                    raise error
+            assert raised.value is error
+
+    def test_reported_wraps_what_click_raises_itself(self):
+        """Test a bad option Click rejected becomes the CLI's usage error."""
+        with pytest.raises(UsageError) as raised:
+            with reported():
+                raise click.BadParameter("bad", param_hint="--output")
+        assert raised.value.format_message() == "Invalid value for --output: bad"
+        assert isinstance(raised.value.__cause__, click.BadParameter)
+
+    def test_reported_wraps_an_unexpected_error(self):
+        """Test a bug becomes an unexpected error chained to its cause."""
+        with pytest.raises(UnexpectedError) as raised:
+            with reported():
+                raise RuntimeError("a bug")
+        assert isinstance(raised.value.__cause__, RuntimeError)
 
     def test_response_error_names_the_response_it_could_not_decode(self):
         """Test a malformed body is reported with the status it came with."""

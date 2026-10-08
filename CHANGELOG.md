@@ -23,7 +23,8 @@
 - Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.
 - Logging is based on the standard library's `logging` module.
 - Lints its own code and tests with the `B` (bugbear), `S` (bandit) and `UP` (pyupgrade) ruff rule sets, on top of `E`, `F`, `W` and `I`.
-- Every failure is reported through cli-wizard's own error classes, `ConfigError`, `SpecError`, `OutputDirError`, `RuffNotFoundError`, `FormattingError` and `Aborted` under `CliWizardError`, printed as `✗ <message>` on stderr with exit code 1; nothing raises a Click exception class or exits on its own. An OpenAPI spec that cannot be parsed, and a ruff run that fails, now report `✗ <message>` instead of a traceback.
+- [Breaking] Every command prints one JSON document on stdout. `generate` and `bootstrap` print a summary of what they produced, with the CLI and package names, the output directory, the configuration file and, for `generate`, the spec and the command groups; their progress, the `bootstrap` prompts and the hints go to stderr.
+- [Breaking] Every failure is one JSON document on stdout, `{"error": {"type": "<class>", "message": "...", "exitCode": <code>}}`, in place of `✗ <message>` or `Error: <message>` on stderr. The type is one of cli-wizard's own error classes, `ConfigError`, `SpecError`, `OutputDirError`, `RuffNotFoundError`, `FormattingError` and `Aborted` under `CliWizardError`, plus `UsageError` for what Click rejects itself, with exit code 2, and `UnexpectedError` for a bug, whose traceback `--debug` logs. Nothing raises a Click exception class or exits on its own.
 
 #### Generated code
 
@@ -39,8 +40,7 @@
 - The ruff configuration also enables the `B` (bugbear), `S` (bandit) and `UP` (pyupgrade) rule sets, and the generated code passes them.
 - [Breaking] A failed command exits with the code of its failure class instead of always 1, so a script can branch on it: 3 when no response came back (connection refused, timeout, TLS), 4 on a 401 or 403, 5 on any other 4xx, 6 on a 5xx. 2 stays Click's usage error and 1 is any other failure. A script testing for exit code 1 must test for a non-zero code instead. The generated `README.md` documents the codes.
 - A successful response whose body is not valid JSON is reported as such, `Error: 200 OK response is not valid JSON: ...` with exit code 1, instead of passing the decoding error off as a failed request.
-- Every failure is reported through the CLI's own error classes in the new `errors.py` module, `NetworkError`, `AuthError`, `ClientError`, `ServerError`, `ResponseError`, `ConfigError` and `InvalidHeaderError` under `CliError`, instead of exiting with `SystemExit` or raising a Click class; an error that is not a request failure is no longer swallowed into `Error: ...`.
-- The `config` commands report a profile file they cannot read or write as `Error: <message>` on stderr, like every other failure, instead of a JSON object.
+- [Breaking] Every failure is one JSON document on stdout, `{"error": {"type": "<class>", "message": "...", "exitCode": <code>}}`, indented as `jsonIndent` says, in place of `Error: <message>` on stderr; logs stay on stderr. The type is one of the CLI's own error classes in the new `errors.py` module, `NetworkError`, `AuthError`, `ClientError`, `ServerError`, `ResponseError`, `ConfigError` and `InvalidHeaderError` under `CliError`, plus `UsageError` for what Click rejects itself, an unknown command, a missing option or a bad value, with exit code 2, and `UnexpectedError` for a bug, whose traceback `--debug` logs. Nothing exits with `SystemExit` or raises a Click class, and errors are never coloured.
 
 ### Bug Fixes
 

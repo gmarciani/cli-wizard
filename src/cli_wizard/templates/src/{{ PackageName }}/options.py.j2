@@ -66,9 +66,12 @@ class HeaderType(click.ParamType):
             return value
         name, sep, text = str(value).partition(":")
         if not sep or not name.strip():
-            raise InvalidHeaderError(
-                f"Expected 'Name: value', got '{value}'.", ctx=ctx, param=param
-            )
+            problem = f"Expected 'Name: value', got '{value}'."
+            if param is None:
+                raise InvalidHeaderError(problem)
+            # Named the way Click names an option it rejects itself
+            hint = " / ".join(f"'{opt}'" for opt in param.opts)
+            raise InvalidHeaderError(f"Invalid value for {hint}: {problem}")
         return name.strip(), text.strip()
 
 

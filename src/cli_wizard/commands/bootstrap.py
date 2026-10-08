@@ -4,6 +4,7 @@
 """Bootstrap command for CLI Wizard."""
 
 import getpass
+import json
 import logging
 import re
 from datetime import date
@@ -170,10 +171,11 @@ def bootstrap(
     # Load existing config if available (for default values)
     existing_config = _load_existing_config(config_path)
     if existing_config:
-        click.secho(f"📄 Using existing config: {config_path}", fg="cyan")
+        click.secho(f"📄 Using existing config: {config_path}", fg="cyan", err=True)
 
-    # Gather project information interactively
-    click.secho("\n📋 Project Configuration\n", fg="cyan", bold=True)
+    # Gather project information interactively, on stderr: stdout holds the
+    # one JSON result
+    click.secho("\n📋 Project Configuration\n", fg="cyan", bold=True, err=True)
 
     # Collect values for bootstrap parameters. CommandName defaults to the
     # name of the output directory when one is given, else to the name of the
@@ -188,6 +190,7 @@ def bootstrap(
         value = click.prompt(
             description,
             default=default,
+            err=True,
         )
         values[param_name] = value
 
@@ -221,22 +224,23 @@ def bootstrap(
             click.secho(
                 f"⚠️  Directory '{target_dir}' already exists and is not empty.",
                 fg="yellow",
+                err=True,
             )
-            if not click.confirm("Do you want to continue anyway?"):
+            if not click.confirm("Do you want to continue anyway?", err=True):
                 raise Aborted()
 
     # Generate config file
-    click.echo()
-    click.secho("📄 Writing configuration file...", fg="cyan")
+    click.echo(err=True)
+    click.secho("📄 Writing configuration file...", fg="cyan", err=True)
     _generate_config_file(config_path, cli_config)
-    click.secho(f"   ✓ {config_path}", fg="green")
+    click.secho(f"   ✓ {config_path}", fg="green", err=True)
 
     # Load the generated config file (validates with Pydantic and expands references)
     cli_config = _load_cli_config(config_path)
 
     # Generate CLI project using the same generator as 'generate' command
-    click.echo()
-    click.secho("⚙️  Generating CLI project...", fg="cyan")
+    click.echo(err=True)
+    click.secho("⚙️  Generating CLI project...", fg="cyan", err=True)
 
     cli_name = cli_config["CommandName"]
     package_name = cli_config["PackageName"]
@@ -244,29 +248,34 @@ def bootstrap(
     generator = CliGenerator(config=cli_config, config_dir=config_path.parent)
     generator.generate({}, target_dir, cli_name, package_name)
 
-    # Summary
+    # Progress and hints go to stderr; stdout holds the one JSON result
     click.secho(
         f"\n✓ Project '{cli_config['ProjectName']}' bootstrapped successfully!",
         fg="green",
         bold=True,
+        err=True,
     )
-    click.secho("  📁 Location: ", fg="white", nl=False)
-    click.echo(target_dir)
-    click.secho("  📄 Config: ", fg="white", nl=False)
-    click.echo(config_path)
+    click.secho("📋 Validate:", fg="cyan", bold=True, err=True)
+    click.echo(f"   pip install -e {target_dir}", err=True)
+    click.echo(f"   {cli_name} --help", err=True)
 
-    click.echo()
-    click.secho("📋 Validate:", fg="cyan", bold=True)
-    click.echo(f"   pip install -e {target_dir}")
-    click.echo(f"   {cli_name} --help")
-
-    click.echo()
-    click.secho("📋 Next steps:", fg="cyan", bold=True)
-    click.echo(f"   Customize {config_path}")
     next_command = f"cli-wizard generate --configuration {config_path}"
     if output:
         next_command += f" --output {target_dir}"
-    click.echo(f"   {next_command}")
+    click.echo(err=True)
+    click.secho("📋 Next steps:", fg="cyan", bold=True, err=True)
+    click.echo(f"   Customize {config_path}", err=True)
+    click.echo(f"   {next_command}", err=True)
+
+    summary = {
+        "projectName": cli_config["ProjectName"],
+        "cliName": cli_name,
+        "packageName": package_name,
+        "output": str(target_dir),
+        "configuration": str(config_path),
+        "nextCommand": next_command,
+    }
+    click.echo(json.dumps(summary, indent=2))
 
 
 def _yaml_value(value: Any) -> str:

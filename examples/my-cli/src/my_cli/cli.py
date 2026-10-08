@@ -6,6 +6,9 @@
 
 """Main CLI entry point."""
 
+import traceback
+from typing import Any
+
 import click
 
 from my_cli.commands.config import config
@@ -17,7 +20,8 @@ from my_cli.constants import (
     SPLASH_FILE,
     __version__,
 )
-from my_cli.log import hex_to_rgb
+from my_cli.errors import UnexpectedError, reported
+from my_cli.log import hex_to_rgb, log_debug
 from my_cli.options import common_options
 
 
@@ -32,7 +36,36 @@ def _show_splash() -> None:
             click.echo(splash_text)
 
 
+class RootGroup(click.Group):
+    """The root group, reporting what Click raises on its own as JSON too.
+
+    Click's main() shows a ClickException and exits with its code; wrapping the
+    parsing and the dispatch turns everything else into one of the CLI's errors
+    first, so every failure is the one JSON document on stdout.
+    """
+
+    def make_context(
+        self,
+        info_name: str | None,
+        args: list[str],
+        parent: click.Context | None = None,
+        **extra: Any,
+    ) -> click.Context:
+        with reported():
+            return super().make_context(info_name, args, parent, **extra)
+
+    def invoke(self, ctx: click.Context) -> Any:
+        try:
+            with reported():
+                return super().invoke(ctx)
+        except UnexpectedError as e:
+            # The traceback the bug came with, kept for --debug
+            log_debug("".join(traceback.format_exception(e.__cause__)))
+            raise
+
+
 @click.group(
+    cls=RootGroup,
     invoke_without_command=True,
     help="A CLI application",
 )
