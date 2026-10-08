@@ -15,8 +15,7 @@ thing a failed invocation prints there::
     {"error": {"type": "NetworkError", "message": "...", "exitCode": 3}}
 
 This module sits below the options, which raise ClientError for a malformed
---header, so it reads the invocation state itself rather than through the log
-module.
+--header, so it imports nothing above the invocation state.
 """
 
 import json
@@ -27,6 +26,7 @@ from typing import IO, Any
 import click
 
 from my_cli.constants import PROFILE_DEFAULTS
+from my_cli.state import state
 
 # Exit codes of a failed command, one per error class, so a calling script
 # can tell them apart and branch or retry accordingly. 2 is Click's own, for
@@ -39,17 +39,6 @@ EXIT_SERVER_ERROR = 5
 EXIT_RESPONSE = 6
 EXIT_CONFIG = 7
 EXIT_UNEXPECTED = 8
-
-
-def _state() -> dict[str, Any]:
-    """The state of the running invocation, empty outside one."""
-    ctx = click.get_current_context(silent=True)
-    return ctx.ensure_object(dict) if ctx is not None else {}
-
-
-def colors_enabled() -> bool:
-    """Check if coloured console output is enabled, as the profile set it."""
-    return bool(_state().get("colors", PROFILE_DEFAULTS.get("outputColors", True)))
 
 
 class CliError(click.ClickException):
@@ -65,7 +54,7 @@ class CliError(click.ClickException):
         # Read now, inside the invocation: Click shows the error after the
         # context, and the setting the profile put there, is gone.
         self.json_indent = int(
-            _state().get("json_indent", PROFILE_DEFAULTS.get("jsonIndent", 2))
+            state().get("json_indent", PROFILE_DEFAULTS.get("jsonIndent", 2))
         )
 
     def to_dict(self) -> dict[str, Any]:

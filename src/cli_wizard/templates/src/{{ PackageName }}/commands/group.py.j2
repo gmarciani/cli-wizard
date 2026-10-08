@@ -4,24 +4,13 @@
 """{{ group.name }} commands."""
 
 import click
-import requests
 from typing import Any
 
 {% if group.has_path_parameters %}
-from {{ PackageName }}.client import (
-    create_client,
-    encode_path_param,
-    request_error,
-    response_error,
-)
-{% else %}
-from {{ PackageName }}.client import create_client, request_error, response_error
+from {{ PackageName }}.client import encode_path_param
 {% endif %}
-from {{ PackageName }}.log import log_debug
 from {{ PackageName }}.options import common_options
-from {{ PackageName }}.output import render
-from {{ PackageName }}.profile import load_profile, resolve_setting
-from {{ PackageName }}.redaction import redact, redact_text
+from {{ PackageName }}.runner import run_command
 
 
 @click.group(
@@ -126,17 +115,6 @@ def {{ op.function_name }}(
 {% endfor %}
 ) -> None:
     """{{ op.function_name }} command."""
-    # The common options, from whichever level they were given at
-    options = ctx.obj
-
-    # Load the profile
-    load_profile(ctx)
-
-    # Resolved before the request, so a bad setting fails without sending it
-    output_format = str(resolve_setting("outputFormat", options["output"]))
-    json_indent = int(resolve_setting("jsonIndent"))
-    table_style = str(resolve_setting("tableStyle"))
-    # Log command execution start
     cmd_params: dict[str, Any] = {
 {% for param in op.path_parameters %}
         "{{ param.name }}": {{ param.python_name }},
@@ -148,13 +126,6 @@ def {{ op.function_name }}(
         "{{ prop.name }}": {{ prop.python_name }},
 {% endfor %}
     }
-    cmd_name = "{{ group.cli_name }} {{ op.command_name }}"
-    log_debug(
-        f"Executing command '{cmd_name}'"
-        f" with params: {redact(cmd_params)}"
-    )
-
-    client = create_client(options)
 {% if op.query_parameters %}
 
     params: dict[str, Any] = {}
@@ -194,41 +165,21 @@ def {{ op.function_name }}(
 {% if op.query_parameters %}
 {% set _ = call_args.append("params=params") %}
 {% endif %}
-    try:
+    run_command(
+        ctx,
+        "{{ group.cli_name }} {{ op.command_name }}",
+        cmd_params,
 {# One argument on one line; anything longer is pre-wrapped, since an
    interpolated path pushes a single line past the line-length limit and
    ruff formats generated code only after it has linted it. #}
 {% if call_args | length == 1 and not op.path_parameters %}
-        response = client.{{ op.method | lower }}({{ call_args[0] }})
+        lambda client: client.{{ op.method | lower }}({{ call_args[0] }}),
 {% else %}
-        response = client.{{ op.method | lower }}(
+        lambda client: client.{{ op.method | lower }}(
 {% for arg in call_args %}
             {{ arg }},
 {% endfor %}
-        )
+        ),
 {% endif %}
-        response.raise_for_status()
-    except requests.RequestException as e:
-        raise request_error(cmd_name, e) from e
-    if not response.text:
-        log_debug(f"Command '{cmd_name}' completed successfully")
-        click.echo("Success")
-        return
-    # Past the request: a body that does not decode is a response, not a
-    # failed request, and is reported as such with its own exit code.
-    try:
-        payload = response.json()
-    except ValueError as e:
-        raise response_error(cmd_name, response, e) from e
-    rendered = render(
-        payload,
-        output_format,
-        json_indent=json_indent,
-        table_style=table_style,
     )
-    log_debug(
-        f"Command '{cmd_name}' completed"
-        f" with output: {redact_text(rendered)[:500]}"
-    )
-    click.echo(rendered)
 {% endfor %}

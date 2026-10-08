@@ -289,6 +289,73 @@ PROFILE_SETTING_DOCS: dict[str, str] = {
 }
 
 
+# Templates rendered with the shared context alone, and where each one lands,
+# relative to the output directory. The literal "{{ PackageName }}" in a
+# destination is resolved by substitution, as it is in the templates tree.
+PLAIN_TEMPLATES: tuple[tuple[str, str], ...] = (
+    ("pyproject.toml.j2", "pyproject.toml"),
+    ("VERSION.j2", "VERSION"),
+    (".gitignore.j2", ".gitignore"),
+    ("Makefile.j2", "Makefile"),
+    ("DEVELOPMENT.md.j2", "DEVELOPMENT.md"),
+    ("LICENSE.j2", "LICENSE"),
+    ("MANIFEST.in.j2", "MANIFEST.in"),
+    ("tox.ini.j2", "tox.ini"),
+    ("pre-commit-config.yaml.j2", ".pre-commit-config.yaml"),
+    ("tests/{{ PackageName }}/cli_test.py.j2", "tests/cli_test.py"),
+    ("src/{{ PackageName }}/__init__.py.j2", "src/{{ PackageName }}/__init__.py"),
+    ("src/{{ PackageName }}/client.py.j2", "src/{{ PackageName }}/client.py"),
+    ("src/{{ PackageName }}/errors.py.j2", "src/{{ PackageName }}/errors.py"),
+    ("src/{{ PackageName }}/log.py.j2", "src/{{ PackageName }}/log.py"),
+    ("src/{{ PackageName }}/options.py.j2", "src/{{ PackageName }}/options.py"),
+    ("src/{{ PackageName }}/output.py.j2", "src/{{ PackageName }}/output.py"),
+    ("src/{{ PackageName }}/profile.py.j2", "src/{{ PackageName }}/profile.py"),
+    ("src/{{ PackageName }}/runner.py.j2", "src/{{ PackageName }}/runner.py"),
+    ("src/{{ PackageName }}/state.py.j2", "src/{{ PackageName }}/state.py"),
+    (
+        "src/{{ PackageName }}/commands/__init__.py.j2",
+        "src/{{ PackageName }}/commands/__init__.py",
+    ),
+    (
+        "src/{{ PackageName }}/commands/config.py.j2",
+        "src/{{ PackageName }}/commands/config.py",
+    ),
+)
+
+# The .github tree, generated only when IncludeGithubWorkflows is set. The
+# templated files reference the project; the three workflows pinning a single
+# interpreter must pin the project's declared minimum, since a hardcoded
+# version gave a project with a higher PythonVersion a CI job whose pip
+# install failed against its own requires-python.
+GITHUB_TEMPLATES: tuple[tuple[str, str], ...] = (
+    (".github/CODEOWNERS.j2", ".github/CODEOWNERS"),
+    (".github/labels.yaml.j2", ".github/labels.yaml"),
+    (
+        ".github/ISSUE_TEMPLATE/bug-report.yml.j2",
+        ".github/ISSUE_TEMPLATE/bug-report.yml",
+    ),
+    (".github/ISSUE_TEMPLATE/config.yml.j2", ".github/ISSUE_TEMPLATE/config.yml"),
+    (
+        ".github/ISSUE_TEMPLATE/feature-request.yml.j2",
+        ".github/ISSUE_TEMPLATE/feature-request.yml",
+    ),
+    (".github/workflows/docs.yaml.j2", ".github/workflows/docs.yaml"),
+    (".github/workflows/pr-validation.yaml.j2", ".github/workflows/pr-validation.yaml"),
+    (".github/workflows/release.yaml.j2", ".github/workflows/release.yaml"),
+    (".github/workflows/test.yaml.j2", ".github/workflows/test.yaml"),
+)
+
+# Copied byte for byte, so they cannot reference the generated project
+STATIC_FILES: tuple[str, ...] = (
+    ".github/dependabot.yaml",
+    ".github/labeler.yaml",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/workflows/changelog-enforcer.yaml",
+    ".github/workflows/codeql.yaml",
+    ".github/workflows/labeler.yaml",
+    ".github/workflows/sync-labels.yaml",
+)
+
 # Ruff invocations applied to generated code, as (args...) without the binary
 # or the target path. The generated tox.ini [testenv:format] must run the same
 # commands; test_format_recipe_matches_tox_template enforces that.
@@ -405,6 +472,7 @@ class CliGenerator:
             "CoverageThreshold": self.config.get(
                 "CoverageThreshold", Config.get_field_default("CoverageThreshold")
             ),
+            "Version": self.config.get("Version", Config.get_field_default("Version")),
             "config": self.config,  # Also include as nested dict for compatibility
             "cli_name": self.cli_name,
             "package_name": self.package_name,
@@ -436,204 +504,97 @@ class CliGenerator:
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create project structure
         src_dir = output_dir / "src" / package_name
         commands_dir = src_dir / "commands"
         resources_dir = src_dir / "resources"
         tests_dir = output_dir / "tests"
-
-        commands_dir.mkdir(parents=True, exist_ok=True)
         resources_dir.mkdir(parents=True, exist_ok=True)
-        tests_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create .github directories only if needed
-        github_dir = output_dir / ".github"
-        workflows_dir = github_dir / "workflows"
-        issue_template_dir = github_dir / "ISSUE_TEMPLATE"
-        if self.config.get("IncludeGithubWorkflows", False):
-            workflows_dir.mkdir(parents=True, exist_ok=True)
-            issue_template_dir.mkdir(parents=True, exist_ok=True)
-
-        # Copy resources (e.g., CA file, splash file)
-        ca_file_name = self._copy_ca_file(resources_dir)
-        splash_file_name = self._copy_splash_file(resources_dir)
-
-        # Compute main_dir with variable substitution
+        # Resources (the CA and splash files), then what their names feed
+        ca_file_name = self._copy_resource("CaFile", resources_dir)
+        splash_file_name = self._copy_resource("SplashFile", resources_dir)
         main_dir = self._compute_main_dir(package_name)
 
-        # Generate root project files
-        self._generate_pyproject(output_dir, cli_name, package_name)
-        self._generate_readme(output_dir, groups)
-        self._generate_version(output_dir)
-        self._generate_gitignore(output_dir)
-        self._generate_makefile(output_dir)
-        self._generate_changelog(output_dir, groups)
-        self._generate_development(output_dir)
-        self._generate_license(output_dir)
-        self._generate_manifest(output_dir)
-        self._generate_tox(output_dir)
-        self._generate_precommit(output_dir)
-
-        # Generate .github files (conditionally)
-        if self.config.get("IncludeGithubWorkflows", False):
-            self._generate_github_files(github_dir, workflows_dir, issue_template_dir)
-
-        # Generate test files
-        self._generate_tests(tests_dir, groups)
-
-        # Generate package files
-        self._generate_package_init(src_dir, package_name)
-        self._generate_cli_main(src_dir, package_name, groups)
-        self._generate_client(src_dir)
-        self._generate_errors(src_dir)
-        self._generate_log(src_dir)
-        self._generate_options(src_dir)
-        self._generate_output(src_dir)
-        self._generate_redaction(src_dir, groups)
-        self._generate_profile(src_dir)
-        self._generate_constants(src_dir, ca_file_name, splash_file_name, main_dir)
-
-        # Generate commands
-        self._generate_commands_init(commands_dir)
-        self._generate_config_commands(commands_dir)
+        for template_name, relative in PLAIN_TEMPLATES:
+            self._render(template_name, self._destination(output_dir, relative))
+        self._render(
+            "README.md.j2",
+            output_dir / "README.md",
+            readme_groups=_readme_groups(groups),
+        )
+        self._render("CHANGELOG.md.j2", output_dir / "CHANGELOG.md", groups=groups)
+        self._render(
+            "tests/{{ PackageName }}/commands_test.py.j2",
+            tests_dir / "commands_test.py",
+            groups=groups,
+        )
+        self._render(
+            "src/{{ PackageName }}/cli.py.j2", src_dir / "cli.py", groups=groups
+        )
+        self._render(
+            "src/{{ PackageName }}/redaction.py.j2",
+            src_dir / "redaction.py",
+            sensitive_fields=_sensitive_field_names(groups),
+        )
+        self._render(
+            "src/{{ PackageName }}/constants.py.j2",
+            src_dir / "constants.py",
+            ca_file_name=ca_file_name,
+            splash_file_name=splash_file_name,
+            main_dir=main_dir,
+        )
         for group in groups.values():
-            self._generate_command_group(group, commands_dir)
+            self._render(
+                "src/{{ PackageName }}/commands/group.py.j2",
+                commands_dir / f"{group.module_name}.py",
+                group=group,
+            )
+
+        if self.config.get("IncludeGithubWorkflows", False):
+            for template_name, relative in GITHUB_TEMPLATES:
+                self._render(template_name, output_dir / relative)
+            for name in STATIC_FILES:
+                self._copy_static(name, output_dir / name)
 
         # Organise imports and format generated Python files with ruff
         self._format_generated_code(output_dir)
 
-    def _generate_pyproject(
-        self, output_dir: Path, cli_name: str, package_name: str
-    ) -> None:
-        """Generate pyproject.toml."""
-        template = self.env.get_template("pyproject.toml.j2")
-        content = template.render(**self._template_context())
-        with open(output_dir / "pyproject.toml", "w") as f:
-            f.write(content)
+    def _destination(self, output_dir: Path, relative: str) -> Path:
+        """Resolve where a template lands, substituting the package name."""
+        return output_dir / relative.replace("{{ PackageName }}", self.package_name)
 
-    def _generate_readme(
-        self, output_dir: Path, groups: dict[str, CommandGroup]
-    ) -> None:
-        """Generate README.md, with the command reference built from the groups."""
-        template = self.env.get_template("README.md.j2")
-        content = template.render(
-            **self._template_context(readme_groups=_readme_groups(groups))
-        )
-        with open(output_dir / "README.md", "w") as f:
-            f.write(content)
+    def _render(self, template_name: str, destination: Path, **extra: Any) -> None:
+        """Render a template with the shared context, plus extra, into a file."""
+        template = self.env.get_template(template_name)
+        content = template.render(**self._template_context(**extra))
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(content)
 
-    def _generate_version(self, output_dir: Path) -> None:
-        """Generate VERSION file."""
-        version = self.config.get("Version", "0.1.0")
-        with open(output_dir / "VERSION", "w") as f:
-            f.write(f"{version}\n")
+    def _copy_static(self, name: str, destination: Path) -> None:
+        """Copy a file of the templates tree byte for byte, through the loader."""
+        loader = self.env.loader
+        if loader is None:
+            return
+        source = loader.get_source(self.env, name)[0]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(source)
 
-    def _generate_package_init(self, src_dir: Path, package_name: str) -> None:
-        """Generate package __init__.py."""
-        template = self.env.get_template("src/{{ PackageName }}/__init__.py.j2")
-        content = template.render(**self._template_context())
-        with open(src_dir / "__init__.py", "w") as f:
-            f.write(content)
+    def _copy_resource(self, key: str, resources_dir: Path) -> str | None:
+        """Copy the file a config key names into resources, returning its name.
 
-    def _generate_cli_main(
-        self, src_dir: Path, package_name: str, groups: dict[str, CommandGroup]
-    ) -> None:
-        """Generate main CLI entry point."""
-        template = self.env.get_template("src/{{ PackageName }}/cli.py.j2")
-        content = template.render(**self._template_context(groups=groups))
-        with open(src_dir / "cli.py", "w") as f:
-            f.write(content)
-
-    def _generate_client(self, src_dir: Path) -> None:
-        """Generate API client module."""
-        template = self.env.get_template("src/{{ PackageName }}/client.py.j2")
-        content = template.render(**self._template_context())
-        with open(src_dir / "client.py", "w") as f:
-            f.write(content)
-
-    def _generate_errors(self, src_dir: Path) -> None:
-        """Generate the module defining the errors a command exits with."""
-        template = self.env.get_template("src/{{ PackageName }}/errors.py.j2")
-        content = template.render(**self._template_context())
-        with open(src_dir / "errors.py", "w") as f:
-            f.write(content)
-
-    def _generate_log(self, src_dir: Path) -> None:
-        """Generate the log module."""
-        template = self.env.get_template("src/{{ PackageName }}/log.py.j2")
-        content = template.render(**self._template_context())
-        with open(src_dir / "log.py", "w") as f:
-            f.write(content)
-
-    def _generate_options(self, src_dir: Path) -> None:
-        """Generate the module defining the options every command takes."""
-        template = self.env.get_template("src/{{ PackageName }}/options.py.j2")
-        content = template.render(**self._template_context())
-        with open(src_dir / "options.py", "w") as f:
-            f.write(content)
-
-    def _generate_output(self, src_dir: Path) -> None:
-        """Generate the response rendering module."""
-        template = self.env.get_template("src/{{ PackageName }}/output.py.j2")
-        content = template.render(**self._template_context())
-        with open(src_dir / "output.py", "w") as f:
-            f.write(content)
-
-    def _generate_redaction(
-        self, src_dir: Path, groups: dict[str, CommandGroup]
-    ) -> None:
-        """Generate the debug-output redaction module."""
-        template = self.env.get_template("src/{{ PackageName }}/redaction.py.j2")
-        content = template.render(
-            **self._template_context(sensitive_fields=_sensitive_field_names(groups))
-        )
-        with open(src_dir / "redaction.py", "w") as f:
-            f.write(content)
-
-    def _generate_profile(self, src_dir: Path) -> None:
-        """Generate profile module."""
-        template = self.env.get_template("src/{{ PackageName }}/profile.py.j2")
-        content = template.render(**self._template_context())
-        with open(src_dir / "profile.py", "w") as f:
-            f.write(content)
-
-    def _generate_constants(
-        self,
-        src_dir: Path,
-        ca_file_name: str | None,
-        splash_file_name: str | None,
-        main_dir: str,
-    ) -> None:
-        """Generate constants module."""
-        template = self.env.get_template("src/{{ PackageName }}/constants.py.j2")
-        content = template.render(
-            **self._template_context(
-                ca_file_name=ca_file_name,
-                splash_file_name=splash_file_name,
-                main_dir=main_dir,
-            )
-        )
-        with open(src_dir / "constants.py", "w") as f:
-            f.write(content)
-
-    def _copy_ca_file(self, resources_dir: Path) -> str | None:
-        """Copy CA file to resources directory if specified in config."""
-        ca_file = self.config.get("CaFile")
-        if not ca_file:
+        The path is resolved relative to the configuration file. Nothing is
+        copied, and None returned, when the key is unset or the file missing.
+        """
+        configured = self.config.get(key)
+        if not configured:
             return None
-
-        # Resolve CA file path relative to config directory
-        ca_path = Path(ca_file)
-        if not ca_path.is_absolute():
-            ca_path = self.config_dir / ca_file
-
-        if not ca_path.exists():
+        path = Path(configured)
+        if not path.is_absolute():
+            path = self.config_dir / path
+        if not path.exists():
             return None
-
-        # Copy to resources directory with original filename
-        dest_path = resources_dir / ca_path.name
-        shutil.copy2(ca_path, dest_path)
-        return ca_path.name
+        shutil.copy2(path, resources_dir / path.name)
+        return path.name
 
     def _compute_main_dir(self, package_name: str) -> str:
         """Get main directory path from config.
@@ -645,187 +606,6 @@ class CliGenerator:
         if main_dir is not None:
             return str(main_dir)
         return f"${{HOME}}/.{package_name}"
-
-    def _copy_splash_file(self, resources_dir: Path) -> str | None:
-        """Copy splash file to resources directory if specified in config."""
-        splash_file = self.config.get("SplashFile")
-        if not splash_file:
-            return None
-
-        # Resolve splash file path relative to config directory
-        splash_path = Path(splash_file)
-        if not splash_path.is_absolute():
-            splash_path = self.config_dir / splash_file
-
-        if not splash_path.exists():
-            return None
-
-        # Copy to resources directory with original filename
-        dest_path = resources_dir / splash_path.name
-        shutil.copy2(splash_path, dest_path)
-        return splash_path.name
-
-    def _generate_commands_init(self, commands_dir: Path) -> None:
-        """Generate commands __init__.py."""
-        template = self.env.get_template(
-            "src/{{ PackageName }}/commands/__init__.py.j2"
-        )
-        content = template.render(**self._template_context())
-        with open(commands_dir / "__init__.py", "w") as f:
-            f.write(content)
-
-    def _generate_config_commands(self, commands_dir: Path) -> None:
-        """Generate config commands module."""
-        template = self.env.get_template("src/{{ PackageName }}/commands/config.py.j2")
-        content = template.render(**self._template_context())
-        with open(commands_dir / "config.py", "w") as f:
-            f.write(content)
-
-    def _generate_command_group(self, group: CommandGroup, commands_dir: Path) -> None:
-        """Generate a command group file."""
-        template = self.env.get_template("src/{{ PackageName }}/commands/group.py.j2")
-        content = template.render(**self._template_context(group=group))
-        with open(commands_dir / f"{group.module_name}.py", "w") as f:
-            f.write(content)
-
-    def _generate_gitignore(self, output_dir: Path) -> None:
-        """Generate .gitignore."""
-        template = self.env.get_template(".gitignore.j2")
-        content = template.render(**self._template_context())
-        with open(output_dir / ".gitignore", "w") as f:
-            f.write(content)
-
-    def _generate_makefile(self, output_dir: Path) -> None:
-        """Generate Makefile."""
-        template = self.env.get_template("Makefile.j2")
-        content = template.render(**self._template_context())
-        with open(output_dir / "Makefile", "w") as f:
-            f.write(content)
-
-    def _generate_changelog(
-        self, output_dir: Path, groups: dict[str, "CommandGroup"] | None = None
-    ) -> None:
-        """Generate CHANGELOG.md."""
-        template = self.env.get_template("CHANGELOG.md.j2")
-        content = template.render(**self._template_context(groups=groups or {}))
-        with open(output_dir / "CHANGELOG.md", "w") as f:
-            f.write(content)
-
-    def _generate_development(self, output_dir: Path) -> None:
-        """Generate DEVELOPMENT.md."""
-        template = self.env.get_template("DEVELOPMENT.md.j2")
-        content = template.render(**self._template_context())
-        with open(output_dir / "DEVELOPMENT.md", "w") as f:
-            f.write(content)
-
-    def _generate_license(self, output_dir: Path) -> None:
-        """Generate LICENSE."""
-        template = self.env.get_template("LICENSE.j2")
-        content = template.render(**self._template_context())
-        with open(output_dir / "LICENSE", "w") as f:
-            f.write(content)
-
-    def _generate_manifest(self, output_dir: Path) -> None:
-        """Generate MANIFEST.in."""
-        template = self.env.get_template("MANIFEST.in.j2")
-        content = template.render(**self._template_context())
-        with open(output_dir / "MANIFEST.in", "w") as f:
-            f.write(content)
-
-    def _generate_tox(self, output_dir: Path) -> None:
-        """Generate tox.ini."""
-        template = self.env.get_template("tox.ini.j2")
-        content = template.render(**self._template_context())
-        with open(output_dir / "tox.ini", "w") as f:
-            f.write(content)
-
-    def _generate_precommit(self, output_dir: Path) -> None:
-        """Generate .pre-commit-config.yaml."""
-        template = self.env.get_template("pre-commit-config.yaml.j2")
-        content = template.render(**self._template_context())
-        with open(output_dir / ".pre-commit-config.yaml", "w") as f:
-            f.write(content)
-
-    def _generate_github_files(
-        self, github_dir: Path, workflows_dir: Path, issue_template_dir: Path
-    ) -> None:
-        """Generate .github directory files."""
-        # Generate templated files
-        templated_files = [
-            (".github/CODEOWNERS.j2", github_dir / "CODEOWNERS"),
-            (".github/labels.yaml.j2", github_dir / "labels.yaml"),
-            (
-                ".github/ISSUE_TEMPLATE/bug-report.yml.j2",
-                issue_template_dir / "bug-report.yml",
-            ),
-            (
-                ".github/ISSUE_TEMPLATE/config.yml.j2",
-                issue_template_dir / "config.yml",
-            ),
-            (
-                ".github/ISSUE_TEMPLATE/feature-request.yml.j2",
-                issue_template_dir / "feature-request.yml",
-            ),
-            # These three pin a single interpreter, which must be the project's
-            # declared minimum. Hardcoding 3.12 gave a project with a higher
-            # PythonVersion a CI job whose pip install fails against its own
-            # requires-python.
-            (".github/workflows/docs.yaml.j2", workflows_dir / "docs.yaml"),
-            (
-                ".github/workflows/pr-validation.yaml.j2",
-                workflows_dir / "pr-validation.yaml",
-            ),
-            (".github/workflows/release.yaml.j2", workflows_dir / "release.yaml"),
-        ]
-        for template_name, output_path in templated_files:
-            template = self.env.get_template(template_name)
-            content = template.render(**self._template_context())
-            with open(output_path, "w") as f:
-                f.write(content)
-
-        # Copy static files (non-templated)
-        static_files = [
-            (".github/dependabot.yaml", github_dir / "dependabot.yaml"),
-            (".github/labeler.yaml", github_dir / "labeler.yaml"),
-            (
-                ".github/PULL_REQUEST_TEMPLATE.md",
-                github_dir / "PULL_REQUEST_TEMPLATE.md",
-            ),
-            (
-                ".github/workflows/changelog-enforcer.yaml",
-                workflows_dir / "changelog-enforcer.yaml",
-            ),
-            (".github/workflows/codeql.yaml", workflows_dir / "codeql.yaml"),
-            (".github/workflows/labeler.yaml", workflows_dir / "labeler.yaml"),
-            (".github/workflows/sync-labels.yaml", workflows_dir / "sync-labels.yaml"),
-        ]
-        for template_name, output_path in static_files:
-            # Use get_template to read static files through Jinja loader
-            loader = self.env.loader
-            if loader is not None:
-                source = loader.get_source(self.env, template_name)[0]
-                with open(output_path, "w") as f:
-                    f.write(source)
-
-        # test.yaml is rendered because it references the generated package name
-        template = self.env.get_template(".github/workflows/test.yaml.j2")
-        content = template.render(**self._template_context())
-        with open(workflows_dir / "test.yaml", "w") as f:
-            f.write(content)
-
-    def _generate_tests(self, tests_dir: Path, groups: dict[str, CommandGroup]) -> None:
-        """Generate test files."""
-        # Generate cli_test.py directly in tests/
-        template = self.env.get_template("tests/{{ PackageName }}/cli_test.py.j2")
-        content = template.render(**self._template_context())
-        with open(tests_dir / "cli_test.py", "w") as f:
-            f.write(content)
-
-        # One test per spec-derived command, covering the rendered output
-        template = self.env.get_template("tests/{{ PackageName }}/commands_test.py.j2")
-        content = template.render(**self._template_context(groups=groups))
-        with open(tests_dir / "commands_test.py", "w") as f:
-            f.write(content)
 
     @staticmethod
     def _format_generated_code(output_dir: Path) -> None:

@@ -38,10 +38,10 @@ Derivations belong here rather than in the bootstrap prompts, so `generate`
 gets them as well.
 
 **`#[Param]` expansion.** Config values may reference others, e.g.
-`MainDir: "${HOME}/.#[CommandName]"`. Resolved by `_expand_config_references()`,
-duplicated in `commands/generate.py` and `commands/bootstrap.py` — keep both in
-sync. `${VAR}` is deliberately left alone; the generated CLI expands it at
-runtime.
+`MainDir: "${HOME}/.#[CommandName]"`. Resolved by `expand_config_references()`
+in `config/project.py`, which `load_cli_config()` applies for both `generate`
+and `bootstrap`. `${VAR}` is deliberately left alone; the generated CLI expands
+it at runtime.
 
 **Pipeline** (`parser.py` → `models.py` → `generator.py`). `OpenApiParser.parse()`
 groups operations by tag into `CommandGroup`s, applying the include/exclude
@@ -52,9 +52,19 @@ the templates, then formats.
 
 **Templates** in `src/cli_wizard/templates/` mirror the output layout. The
 literal `{{ PackageName }}` directory name is resolved by string substitution,
-not by Jinja. Files needing the package name must be `.j2` and rendered;
-anything in the generator's `static_files` list is copied byte-for-byte, so it
-cannot reference the generated project.
+not by Jinja. `CliGenerator._render()` renders every template with the shared
+context; the ones needing nothing else are listed in `PLAIN_TEMPLATES` and
+`GITHUB_TEMPLATES`, the rest get their extra context in `generate()`. Files
+needing the package name must be `.j2` and rendered; anything in `STATIC_FILES`
+is copied byte-for-byte, so it cannot reference the generated project.
+
+**Generated modules share, never repeat.** The invocation state lives in the
+generated `state.py`, which depends on the constants alone, so every module
+reads it from there. The profiles file is read and written by `read_profiles()`
+and `write_profiles()` in `profile.py`, the client sends every verb through
+`_send()`, and `runner.run_command()` carries what every API command does: the
+settings, the request, the error classes and the output. A command module only
+builds its parameters and hands the runner a lambda that sends the request.
 
 **Debug output is redacted, never raw.** Every payload a generated CLI logs —
 command parameters, request params and body, response body, request and
@@ -87,8 +97,8 @@ a malformed 200 body is a `ResponseError`, not a failed request. Log the failure
 *before* raising: by the time Click shows the error, the context, and with it
 the logger and the profile settings, is gone, which is also why `CliError`
 captures the JSON indentation in its constructor. The generated `errors.py` sits
-below `options.py`, which raises `ClientError` for a bad `--header`, so it reads the
-invocation state itself instead of importing `log`.
+below `options.py`, which raises `ClientError` for a bad `--header`, so it
+imports nothing above `state.py`.
 
 ## Formatting
 

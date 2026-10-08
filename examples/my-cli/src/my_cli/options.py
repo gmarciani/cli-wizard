@@ -35,24 +35,6 @@ from my_cli.errors import ClientError
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def state(ctx: click.Context | None = None) -> dict[str, Any]:
-    """Get the state of the running invocation, ``ctx.obj``.
-
-    Args:
-        ctx: The context to read, the current one when not given
-
-    Returns:
-        The mapping the invocation keeps its state in, or an empty one that
-        nothing keeps outside an invocation, so a read there gets the
-        generated defaults and an invocation starts clean
-    """
-    if ctx is None:
-        ctx = click.get_current_context(silent=True)
-    if ctx is None:
-        return {}
-    return ctx.ensure_object(dict)
-
-
 class HeaderType(click.ParamType):
     """A request header given as ``Name: value``."""
 

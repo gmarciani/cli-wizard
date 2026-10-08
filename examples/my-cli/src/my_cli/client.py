@@ -244,17 +244,24 @@ class ApiClient:
             # partial credential that no longer matches any pattern.
             log_debug(f"Response Body: {redact_text(response.text)[:1000]}")
 
+    def _send(self, method: str, path: str, **kwargs: Any) -> requests.Response:
+        """Send a request through the session's method for the verb, logged."""
+        url = self._url(path)
+        self._log_request(
+            method, url, params=kwargs.get("params"), json_data=kwargs.get("json")
+        )
+        send = getattr(self.session, method.lower())
+        response: requests.Response = send(url, timeout=self.timeout, **kwargs)
+        self._log_response(response)
+        return response
+
     def get(
         self,
         path: str,
         params: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a GET request."""
-        url = self._url(path)
-        self._log_request("GET", url, params=params)
-        response = self.session.get(url, params=params, timeout=self.timeout)
-        self._log_response(response)
-        return response
+        return self._send("GET", path, params=params)
 
     def post(
         self,
@@ -263,13 +270,7 @@ class ApiClient:
         params: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a POST request."""
-        url = self._url(path)
-        self._log_request("POST", url, params=params, json_data=json_data)
-        response = self.session.post(
-            url, json=json_data, params=params, timeout=self.timeout
-        )
-        self._log_response(response)
-        return response
+        return self._send("POST", path, json=json_data, params=params)
 
     def put(
         self,
@@ -278,13 +279,7 @@ class ApiClient:
         params: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a PUT request."""
-        url = self._url(path)
-        self._log_request("PUT", url, params=params, json_data=json_data)
-        response = self.session.put(
-            url, json=json_data, params=params, timeout=self.timeout
-        )
-        self._log_response(response)
-        return response
+        return self._send("PUT", path, json=json_data, params=params)
 
     def patch(
         self,
@@ -293,13 +288,7 @@ class ApiClient:
         params: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a PATCH request."""
-        url = self._url(path)
-        self._log_request("PATCH", url, params=params, json_data=json_data)
-        response = self.session.patch(
-            url, json=json_data, params=params, timeout=self.timeout
-        )
-        self._log_response(response)
-        return response
+        return self._send("PATCH", path, json=json_data, params=params)
 
     def delete(
         self,
@@ -308,13 +297,7 @@ class ApiClient:
         params: dict[str, Any] | None = None,
     ) -> requests.Response:
         """Make a DELETE request."""
-        url = self._url(path)
-        self._log_request("DELETE", url, params=params, json_data=json_data)
-        response = self.session.delete(
-            url, json=json_data, params=params, timeout=self.timeout
-        )
-        self._log_response(response)
-        return response
+        return self._send("DELETE", path, json=json_data, params=params)
 
 
 def create_client(options: dict[str, Any]) -> ApiClient:
