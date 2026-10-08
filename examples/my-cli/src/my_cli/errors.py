@@ -34,12 +34,11 @@ from my_cli.constants import PROFILE_DEFAULTS
 EXIT_FAILURE = 1
 EXIT_USAGE = 2
 EXIT_NETWORK = 3
-EXIT_AUTH = 4
-EXIT_CLIENT_ERROR = 5
-EXIT_SERVER_ERROR = 6
-EXIT_RESPONSE = 7
-EXIT_CONFIG = 8
-EXIT_UNEXPECTED = 9
+EXIT_CLIENT_ERROR = 4
+EXIT_SERVER_ERROR = 5
+EXIT_RESPONSE = 6
+EXIT_CONFIG = 7
+EXIT_UNEXPECTED = 8
 
 
 def _state() -> dict[str, Any]:
@@ -108,17 +107,11 @@ class NetworkError(RequestError):
 
 
 class ClientError(RequestError):
-    """The request is wrong: the API rejected it with a 4xx, or a --header
-    the CLI could not send, one that is not ``Name: value``."""
+    """The request is wrong: the API rejected it with a 4xx, a refused
+    credential included, or a --header the CLI could not send, one that is
+    not ``Name: value``."""
 
     exit_code = EXIT_CLIENT_ERROR
-
-
-class AuthError(ClientError):
-    """The API refused the credentials, or their absence: a 401 or 403, the
-    client error worth telling apart, since a new token is the fix."""
-
-    exit_code = EXIT_AUTH
 
 
 class ServerError(RequestError):

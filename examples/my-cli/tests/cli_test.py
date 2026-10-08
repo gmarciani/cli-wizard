@@ -38,7 +38,6 @@ from my_cli.client import (
     response_error,
 )
 from my_cli.errors import (
-    EXIT_AUTH,
     EXIT_CLIENT_ERROR,
     EXIT_CONFIG,
     EXIT_FAILURE,
@@ -47,7 +46,6 @@ from my_cli.errors import (
     EXIT_SERVER_ERROR,
     EXIT_UNEXPECTED,
     EXIT_USAGE,
-    AuthError,
     ClientError,
     CliError,
     ConfigError,
@@ -1356,7 +1354,6 @@ class TestExitCodes:
             EXIT_FAILURE,
             EXIT_USAGE,
             EXIT_NETWORK,
-            EXIT_AUTH,
             EXIT_CLIENT_ERROR,
             EXIT_SERVER_ERROR,
             EXIT_RESPONSE,
@@ -1373,8 +1370,8 @@ class TestExitCodes:
     @pytest.mark.parametrize(
         "error,expected",
         [
-            (_http_error(401, "Unauthorized", ""), AuthError),
-            (_http_error(403, "Forbidden", ""), AuthError),
+            (_http_error(401, "Unauthorized", ""), ClientError),
+            (_http_error(403, "Forbidden", ""), ClientError),
             (_http_error(400, "Bad Request", ""), ClientError),
             (_http_error(404, "Not Found", ""), ClientError),
             (_http_error(500, "Internal Server Error", ""), ServerError),
@@ -1397,7 +1394,6 @@ class TestExitCodes:
             (ConfigError, EXIT_CONFIG),
             (ResponseError, EXIT_RESPONSE),
             (NetworkError, EXIT_NETWORK),
-            (AuthError, EXIT_AUTH),
             (ClientError, EXIT_CLIENT_ERROR),
             (ServerError, EXIT_SERVER_ERROR),
             (UsageError, EXIT_USAGE),
@@ -1414,7 +1410,6 @@ class TestExitCodes:
             ResponseError,
             RequestError,
             NetworkError,
-            AuthError,
             ClientError,
             ServerError,
             UsageError,
@@ -1425,12 +1420,6 @@ class TestExitCodes:
         """Test each failure derives from the one base Click shows and exits on."""
         assert issubclass(cls, CliError)
         assert issubclass(CliError, click.ClickException)
-
-    def test_auth_error_is_a_client_error(self):
-        """Test a 401 or 403 is a client error, with an exit code of its own."""
-        assert issubclass(AuthError, ClientError)
-        assert AuthError("boom").exit_code == EXIT_AUTH
-        assert ClientError("boom").exit_code == EXIT_CLIENT_ERROR
 
     def test_usage_error_is_clicks_too(self):
         """Test a bad invocation is a usage error to Click as well."""

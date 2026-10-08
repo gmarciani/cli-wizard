@@ -510,7 +510,7 @@ class TestCliGenerator:
                     with patch.object(module, "load_profile"):
                         result = CliRunner().invoke(module.users, ["list-users"])
 
-        assert result.exit_code == 5  # a 4xx, the client error class
+        assert result.exit_code == 4  # a 4xx, the client error class
         error = json.loads(result.stdout)["error"]
         assert error["type"] == "ClientError"
         assert error["message"] == "422 Unprocessable Entity\n  name: Field required"
@@ -2407,12 +2407,11 @@ class TestGeneratedReadme:
             ("1", "Any other failure"),
             ("2", "Usage error"),
             ("3", "No response"),
-            ("4", "401"),
-            ("5", "4xx"),
-            ("6", "5xx"),
-            ("7", "not valid JSON"),
-            ("8", "profile file"),
-            ("9", "bug"),
+            ("4", "4xx"),
+            ("5", "5xx"),
+            ("6", "not valid JSON"),
+            ("7", "profile file"),
+            ("8", "bug"),
         ]:
             line = next(
                 line for line in subsection.splitlines() if f"| {code} |" in line
@@ -2892,8 +2891,8 @@ class TestGeneratedExitCodes:
     @pytest.mark.parametrize(
         ("status_code", "reason", "cls", "code"),
         [
-            (401, "Unauthorized", "AuthError", "EXIT_AUTH"),
-            (403, "Forbidden", "AuthError", "EXIT_AUTH"),
+            (401, "Unauthorized", "ClientError", "EXIT_CLIENT_ERROR"),
+            (403, "Forbidden", "ClientError", "EXIT_CLIENT_ERROR"),
             (404, "Not Found", "ClientError", "EXIT_CLIENT_ERROR"),
             (422, "Unprocessable Entity", "ClientError", "EXIT_CLIENT_ERROR"),
             (500, "Internal Server Error", "ServerError", "EXIT_SERVER_ERROR"),
@@ -2903,7 +2902,7 @@ class TestGeneratedExitCodes:
     def test_an_error_response_exits_with_the_code_of_its_class(
         self, generated_cli, status_code, reason, cls, code
     ):
-        """Test auth, client and server errors are told apart by code and type."""
+        """Test client and server errors are told apart by code and type."""
         self._write_profile(generated_cli)
 
         result = self._invoke(generated_cli, _response(status_code, reason))
@@ -2953,13 +2952,10 @@ class TestGeneratedExitCodes:
         assert error["exitCode"] == generated_cli.errors.EXIT_RESPONSE
         assert error["message"].startswith("200 OK response is not valid JSON")
 
-    def test_an_auth_error_is_a_client_error_with_its_own_code(self, generated_cli):
-        """Test a 401 or 403 is a client error, told apart by exit code 4."""
-        errors = generated_cli.errors
-
-        assert issubclass(errors.AuthError, errors.ClientError)
-        assert errors.AuthError.exit_code == errors.EXIT_AUTH
-        assert errors.ClientError.exit_code == errors.EXIT_CLIENT_ERROR
+    def test_there_is_no_error_class_for_refused_credentials(self, generated_cli):
+        """Test a 401 or 403 has no class of its own: it is a client error."""
+        assert not hasattr(generated_cli.errors, "AuthError")
+        assert not hasattr(generated_cli.errors, "EXIT_AUTH")
 
     def test_the_exit_codes_are_distinct_and_leave_clicks_alone(self, generated_cli):
         """Test no two failure classes share a code, and 2 stays the usage error."""
@@ -2968,7 +2964,6 @@ class TestGeneratedExitCodes:
             errors.EXIT_FAILURE,
             errors.EXIT_USAGE,
             errors.EXIT_NETWORK,
-            errors.EXIT_AUTH,
             errors.EXIT_CLIENT_ERROR,
             errors.EXIT_SERVER_ERROR,
             errors.EXIT_RESPONSE,
