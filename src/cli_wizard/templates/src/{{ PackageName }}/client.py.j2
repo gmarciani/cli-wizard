@@ -24,7 +24,6 @@ from {{ PackageName }}.constants import (
     USER_AGENT,
 )
 from {{ PackageName }}.errors import (
-    AuthError,
     ClientError,
     ConfigError,
     NetworkError,
@@ -42,10 +41,6 @@ MAX_ERROR_BODY_CHARS = 2000
 # Responses worth another attempt: the server is throttling or briefly down.
 RETRY_STATUSES = (429, 500, 502, 503, 504)
 
-# Responses refusing the credentials, or the lack of them
-AUTH_STATUSES = (401, 403)
-
-
 def failure_class(error: requests.RequestException) -> type[RequestError]:
     """Pick the class of a failed request's error, and with it the exit code.
 
@@ -54,8 +49,6 @@ def failure_class(error: requests.RequestException) -> type[RequestError]:
     """
     response = error.response if isinstance(error, requests.HTTPError) else None
     if response is not None:
-        if response.status_code in AUTH_STATUSES:
-            return AuthError
         if response.status_code >= 500:
             return ServerError
         if response.status_code >= 400:
