@@ -21,6 +21,7 @@
 - [Breaking] Renamed the `OpenapiSpec` configuration parameter to `Api`, matching the `--api` option of the `generate` command. A configuration still using `OpenapiSpec` is rejected.
 - Publishes no extras: the dev, test and docs toolchains are [PEP 735](https://peps.python.org/pep-0735/) groups, `dev` including the other two.
 - Installing them is `pip install -e . --group dev`, which needs pip 25.1 or newer.
+- Logging is based on the standard library's `logging` module.
 
 #### Generated code
 
@@ -32,7 +33,7 @@
 - The options and the loaded profile live in the Click context of the invocation and die with it, so a CLI run in-process never inherits the settings of a previous run.
 - The `config` commands take the common options like every other command, so `--profile` applies to them wherever it is given, before `config` or after the subcommand.
 - The log file is opened once per invocation and closed when it ends, and the debug flag, the log level and the colour setting apply to that invocation alone.
-- Logging runs on the standard library's `logging` module, in a `log.py` module that no longer shadows it: `LogFormat` accepts every `%(...)` placeholder, the level field alone is coloured wherever the format puts it, and `LogTimezone: Local` timestamps are no longer naive.
+- Logging is based on the standard library's `logging` module.
 
 ### Bug Fixes
 
