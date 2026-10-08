@@ -4,12 +4,14 @@
 """Tests for OpenAPI parser."""
 
 import json
+import re
 import tempfile
 from pathlib import Path
 
 import pytest
 import yaml
 
+from cli_wizard.errors import SpecError
 from cli_wizard.generator.parser import OpenApiParser
 
 
@@ -25,6 +27,18 @@ def create_temp_spec(content: dict, suffix: str = ".json") -> str:
 
 class TestOpenApiParser:
     """Tests for OpenApiParser."""
+
+    @pytest.mark.parametrize(
+        "suffix,content",
+        [(".json", "{not json"), (".yaml", "key: [unbalanced"), (".txt", "{not: [")],
+    )
+    def test_malformed_spec_is_a_spec_error(self, tmp_path, suffix, content):
+        """Test a spec that does not parse is reported, not a decoder traceback."""
+        spec_path = tmp_path / f"openapi{suffix}"
+        spec_path.write_text(content)
+
+        with pytest.raises(SpecError, match=re.escape(str(spec_path))):
+            OpenApiParser(str(spec_path))
 
     def test_load_json_spec(self):
         """Test loading JSON OpenAPI spec."""

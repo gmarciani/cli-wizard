@@ -65,15 +65,21 @@ threaded per-operation through the client and every command. The name heuristic
 next to it covers what no spec describes, response bodies above all. Redact
 *before* truncating: half a token is still a token.
 
-**Failures exit with the code of their class.** A generated command catches
-`requests.RequestException` only, and raises one of the `CommandError`
-subclasses in the generated `client.py`, a `click.ClickException` carrying the
-exit code as a class attribute (Click declares `exit_code` a `ClassVar`). The
-JSON decode sits outside that `try`, so a malformed 200 body is reported as a
-response rather than as a failed request. Log the failure *before* raising: by
-the time Click shows the error, the context, and with it the logger and the
-colour setting, is gone, which is also why `CommandError` captures the colour
-decision in its constructor.
+**Only project-owned errors are raised.** cli-wizard raises the `CliWizardError`
+subclasses in `errors.py`; generated code raises the `CliError` subclasses in
+the generated `errors.py`. Both are `click.ClickException`s, so Click shows them
+and exits with their code, but no code raises a Click class, `SystemExit` or
+`self.fail()`, and `click.confirm(abort=True)` is replaced by raising `Aborted`.
+`TestOnlyProjectErrorsAreRaised` scans the sources and templates for those
+patterns. A generated command catches `requests.RequestException` only and
+raises the matching `RequestError` subclass, which carries the exit code as a
+class attribute (Click declares `exit_code` a `ClassVar`). The JSON decode sits
+outside that `try`, so a malformed 200 body is a `ResponseError`, not a failed
+request. Log the failure *before* raising: by the time Click shows the error,
+the context, and with it the logger and the colour setting, is gone, which is
+also why `CliError` captures the colour decision in its constructor. The
+generated `errors.py` sits below `options.py`, which raises `InvalidHeaderError`,
+so it reads the invocation state itself instead of importing `log`.
 
 ## Formatting
 

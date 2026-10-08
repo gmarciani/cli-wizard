@@ -23,7 +23,6 @@ from typing import Literal
 import click
 
 from {{ PackageName }}.constants import (
-    PROFILE_DEFAULTS,
     LOG_LEVEL,
     LOG_FORMAT,
     LOG_TIMESTAMP_FORMAT,
@@ -36,14 +35,10 @@ from {{ PackageName }}.constants import (
     LOG_ROTATION_DAYS,
     LOG_ROTATION_BACKUP_COUNT,
 )
+from {{ PackageName }}.errors import colors_enabled
 from {{ PackageName }}.options import state
 
 Level = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
-
-
-def colors_enabled() -> bool:
-    """Check if coloured console output is enabled."""
-    return bool(state().get("colors", PROFILE_DEFAULTS.get("outputColors", True)))
 
 
 def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:

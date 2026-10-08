@@ -15,6 +15,7 @@ from urllib.parse import quote
 from jinja2 import Environment, PackageLoader
 
 from cli_wizard.config.schema import Config, python_versions_from
+from cli_wizard.errors import FormattingError, RuffNotFoundError
 from cli_wizard.generator.models import (
     CommandGroup,
     Operation,
@@ -297,10 +298,6 @@ RUFF_COMMANDS: tuple[tuple[str, ...], ...] = (
 )
 
 
-class RuffNotFoundError(RuntimeError):
-    """Raised when the ruff formatter cannot be located."""
-
-
 def resolve_ruff() -> list[str]:
     """Return the command prefix used to invoke ruff.
 
@@ -488,6 +485,7 @@ class CliGenerator:
         self._generate_package_init(src_dir, package_name)
         self._generate_cli_main(src_dir, package_name, groups)
         self._generate_client(src_dir)
+        self._generate_errors(src_dir)
         self._generate_log(src_dir)
         self._generate_options(src_dir)
         self._generate_output(src_dir)
@@ -551,6 +549,13 @@ class CliGenerator:
         template = self.env.get_template("src/{{ PackageName }}/client.py.j2")
         content = template.render(**self._template_context())
         with open(src_dir / "client.py", "w") as f:
+            f.write(content)
+
+    def _generate_errors(self, src_dir: Path) -> None:
+        """Generate the module defining the errors a command exits with."""
+        template = self.env.get_template("src/{{ PackageName }}/errors.py.j2")
+        content = template.render(**self._template_context())
+        with open(src_dir / "errors.py", "w") as f:
             f.write(content)
 
     def _generate_log(self, src_dir: Path) -> None:
@@ -848,7 +853,7 @@ class CliGenerator:
                 details = (
                     result.stderr.decode().strip() or result.stdout.decode().strip()
                 )
-                raise RuntimeError(
+                raise FormattingError(
                     f"ruff {' '.join(args)} failed on generated code: {details}"
                 )
             if result.returncode == 1:

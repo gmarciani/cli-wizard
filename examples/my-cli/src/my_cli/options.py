@@ -30,6 +30,7 @@ import click
 from click.core import ParameterSource
 
 from my_cli.constants import OUTPUT_FORMATS
+from my_cli.errors import InvalidHeaderError
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -65,7 +66,9 @@ class HeaderType(click.ParamType):
             return value
         name, sep, text = str(value).partition(":")
         if not sep or not name.strip():
-            self.fail(f"Expected 'Name: value', got '{value}'.", param, ctx)
+            raise InvalidHeaderError(
+                f"Expected 'Name: value', got '{value}'.", ctx=ctx, param=param
+            )
         return name.strip(), text.strip()
 
 

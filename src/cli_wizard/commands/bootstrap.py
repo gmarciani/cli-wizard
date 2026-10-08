@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from cli_wizard.commands.generate import resolve_output_dir
 from cli_wizard.config.schema import Config
 from cli_wizard.constants import CONFIG_FILE_NAME
+from cli_wizard.errors import Aborted, ConfigError
 from cli_wizard.generator import CliGenerator
 
 logger = logging.getLogger(__name__)
@@ -222,8 +223,7 @@ def bootstrap(
                 fg="yellow",
             )
             if not click.confirm("Do you want to continue anyway?"):
-                click.secho("Aborted.", fg="red")
-                raise SystemExit(1)
+                raise Aborted()
 
     # Generate config file
     click.echo()
@@ -333,27 +333,24 @@ def _load_cli_config(config_path: Path) -> dict:
         with open(config_path) as f:
             raw_config = yaml.safe_load(f) or {}
     except (OSError, yaml.YAMLError) as e:
-        click.secho(f"✗ Could not load config file: {e}", fg="red", err=True)
-        raise SystemExit(1) from e
+        raise ConfigError(f"Could not load config file: {e}") from e
 
     # Validate with Pydantic schema
     try:
         validated = Config(**raw_config)
         config = validated.model_dump()
     except ValidationError as e:
-        click.secho("✗ Invalid configuration:", fg="red", err=True)
-        for error in e.errors():
-            field = ".".join(str(loc) for loc in error["loc"])
-            click.secho(f"  • {field}: {error['msg']}", fg="red", err=True)
-        raise SystemExit(1) from e
+        problems = [
+            f"  • {'.'.join(str(loc) for loc in error['loc'])}: {error['msg']}"
+            for error in e.errors()
+        ]
+        raise ConfigError("\n".join(["Invalid configuration:", *problems])) from e
 
     # Expand #[Param] references
     try:
         return _expand_config_references(config)
     except ValueError as e:
-        click.secho("✗ Invalid configuration:", fg="red", err=True)
-        click.secho(f"  • {e}", fg="red", err=True)
-        raise SystemExit(1) from e
+        raise ConfigError(f"Invalid configuration:\n  • {e}") from e
 
 
 def _expand_config_references(config: dict[str, Any]) -> dict[str, Any]:

@@ -34,16 +34,11 @@ from my_cli.constants import (
     LOG_ROTATION_TYPE,
     LOG_TIMESTAMP_FORMAT,
     LOG_TIMEZONE,
-    PROFILE_DEFAULTS,
 )
+from my_cli.errors import colors_enabled
 from my_cli.options import state
 
 Level = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
-
-
-def colors_enabled() -> bool:
-    """Check if coloured console output is enabled."""
-    return bool(state().get("colors", PROFILE_DEFAULTS.get("outputColors", True)))
 
 
 def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:

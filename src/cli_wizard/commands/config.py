@@ -16,6 +16,7 @@ from cli_wizard.config.configuration import (
     save_config,
 )
 from cli_wizard.config.schema import Config
+from cli_wizard.errors import ConfigError
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 def _check_known_key(key: str) -> None:
     """Abort if the key is not a configuration field."""
     if key not in Config.model_fields:
-        raise click.ClickException(f"Unknown configuration key '{key}'")
+        raise ConfigError(f"Unknown configuration key '{key}'")
 
 
 @click.group(help="Manage configurations.")
@@ -46,9 +47,9 @@ def set(key: str, value: str) -> None:
         save_config(stored)
     except ValidationError as e:
         detail = "; ".join(item["msg"] for item in e.errors())
-        raise click.ClickException(f"Invalid value for '{key}': {detail}") from e
+        raise ConfigError(f"Invalid value for '{key}': {detail}") from e
     except ValueError as e:
-        raise click.ClickException(f"Invalid value for '{key}': {e}") from e
+        raise ConfigError(f"Invalid value for '{key}': {e}") from e
 
     result = {"key": key, "value": load_config()[key], "oldValue": old_value}
     print(json.dumps(result, indent=2))
