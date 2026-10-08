@@ -168,7 +168,7 @@ class TestBootstrapCommand:
             input=DEFAULT_ANSWERS + "n\n",
         )
 
-        assert result.exit_code == 1
+        assert result.exit_code == 8  # Aborted
         assert "Aborted" in result.output
         assert not config_path.exists()
 
@@ -291,7 +291,7 @@ class TestBootstrapCommand:
             input=DEFAULT_ANSWERS,
         )
 
-        assert result.exit_code == 1
+        assert result.exit_code == 5  # OutputDirError
         assert "contains the configuration file" in result.output
         assert not config_path.exists()
 

@@ -86,12 +86,15 @@ script can branch on it or retry only what is worth retrying.
 | Code | Meaning |
 |---|---|
 | 0 | The command succeeded. |
-| 1 | Any other failure: a response whose body is not valid JSON, a profile file that cannot be read or written, or a bug. |
+| 1 | Any other failure. |
 | 2 | Usage error: an unknown command, a missing option or a bad value. |
 | 3 | No response: connection refused, unknown host, timeout or TLS failure. |
 | 4 | The API refused the credentials, with a 401 or 403. |
 | 5 | The API rejected the request, with any other 4xx, or a `--header` is not `Name: value`. |
 | 6 | The API failed, with a 5xx. |
+| 7 | The response body is not valid JSON. |
+| 8 | The profile file cannot be read or written, or a configured file does not exist. |
+| 9 | A bug in the CLI; `--debug` logs its traceback. |
 {% for group in readme_groups %}
 
 ### {{ group.name }}

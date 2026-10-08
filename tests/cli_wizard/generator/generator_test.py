@@ -2404,12 +2404,15 @@ class TestGeneratedReadme:
         subsection = commands.split("### Exit codes\n", 1)[1].split("\n### ", 1)[0]
         for code, meaning in [
             ("0", "succeeded"),
-            ("1", "not valid JSON"),
+            ("1", "Any other failure"),
             ("2", "Usage error"),
             ("3", "No response"),
             ("4", "401"),
             ("5", "4xx"),
             ("6", "5xx"),
+            ("7", "not valid JSON"),
+            ("8", "profile file"),
+            ("9", "bug"),
         ]:
             line = next(
                 line for line in subsection.splitlines() if f"| {code} |" in line
@@ -2944,9 +2947,10 @@ class TestGeneratedExitCodes:
 
         result = self._invoke(generated_cli, _response(200, "OK", "<html>oops</html>"))
 
-        assert result.exit_code == generated_cli.errors.EXIT_FAILURE
+        assert result.exit_code == generated_cli.errors.EXIT_RESPONSE
         error = self._error(result)
         assert error["type"] == "ResponseError"
+        assert error["exitCode"] == generated_cli.errors.EXIT_RESPONSE
         assert error["message"].startswith("200 OK response is not valid JSON")
 
     def test_the_exit_codes_are_distinct_and_leave_clicks_alone(self, generated_cli):
@@ -2959,10 +2963,13 @@ class TestGeneratedExitCodes:
             errors.EXIT_AUTH,
             errors.EXIT_CLIENT_ERROR,
             errors.EXIT_SERVER_ERROR,
+            errors.EXIT_RESPONSE,
+            errors.EXIT_CONFIG,
+            errors.EXIT_UNEXPECTED,
         ]
 
         assert len(set(codes)) == len(codes)
-        assert 0 not in codes
+        assert min(codes) >= 1
         assert errors.EXIT_USAGE == click.UsageError.exit_code
 
     def test_a_usage_error_is_reported_as_json_before_any_request(self, generated_cli):
@@ -3043,7 +3050,7 @@ class TestGeneratedExitCodes:
 
         result = CliRunner().invoke(generated_cli.main, ["config", "show"])
 
-        assert result.exit_code == generated_cli.errors.EXIT_FAILURE
+        assert result.exit_code == generated_cli.errors.EXIT_CONFIG
         error = self._error(result)
         assert error["type"] == "ConfigError"
         assert error["message"].startswith("Failed to load profile file")
@@ -3057,11 +3064,11 @@ class TestGeneratedExitCodes:
                 generated_cli.main, ["--debug", "things", "list-things"]
             )
 
-        assert result.exit_code == generated_cli.errors.EXIT_FAILURE
+        assert result.exit_code == generated_cli.errors.EXIT_UNEXPECTED
         assert self._error(result) == {
             "type": "UnexpectedError",
             "message": "RuntimeError: a bug",
-            "exitCode": generated_cli.errors.EXIT_FAILURE,
+            "exitCode": generated_cli.errors.EXIT_UNEXPECTED,
         }
         assert "Traceback (most recent call last)" in result.stderr
         assert "RuntimeError: a bug" in result.stderr

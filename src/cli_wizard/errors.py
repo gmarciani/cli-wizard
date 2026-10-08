@@ -18,9 +18,25 @@ from typing import IO, Any
 
 import click
 
+# Exit codes, one per error class, so a calling script can tell the failures
+# apart. 2 is Click's own, for a usage error, and 1 is what is left: a Click
+# error that is not about usage.
+EXIT_FAILURE = 1
+EXIT_USAGE = 2
+EXIT_CONFIG = 3
+EXIT_SPEC = 4
+EXIT_OUTPUT_DIR = 5
+EXIT_RUFF_NOT_FOUND = 6
+EXIT_FORMATTING = 7
+EXIT_ABORTED = 8
+EXIT_UNEXPECTED = 9
+
 
 class CliWizardError(click.ClickException):
-    """Base of every error cli-wizard reports: a JSON document on stdout, exit 1."""
+    """Base of every error cli-wizard reports: a JSON document on stdout, and
+    the exit code of its class."""
+
+    exit_code = EXIT_FAILURE
 
     def to_dict(self) -> dict[str, Any]:
         """The document a caller parses: the class, the message and the code."""
@@ -44,26 +60,38 @@ class ConfigError(CliWizardError):
     references itself, or a key or value the tool's own settings reject.
     """
 
+    exit_code = EXIT_CONFIG
+
 
 class SpecError(CliWizardError):
     """An OpenAPI spec that cannot be read or parsed."""
+
+    exit_code = EXIT_SPEC
 
 
 class OutputDirError(CliWizardError):
     """An output directory that cannot be cleaned: it holds the configuration
     file, or the command runs from inside it."""
 
+    exit_code = EXIT_OUTPUT_DIR
+
 
 class RuffNotFoundError(CliWizardError):
     """The ruff formatter cannot be run."""
+
+    exit_code = EXIT_RUFF_NOT_FOUND
 
 
 class FormattingError(CliWizardError):
     """Ruff could not format the generated code, so the output cannot be trusted."""
 
+    exit_code = EXIT_FORMATTING
+
 
 class Aborted(CliWizardError):
     """The user declined a confirmation."""
+
+    exit_code = EXIT_ABORTED
 
     def __init__(self, message: str = "Aborted.") -> None:
         super().__init__(message)
@@ -76,11 +104,13 @@ class UsageError(CliWizardError, click.UsageError):
     shown as JSON like every other failure, with Click's exit code for it.
     """
 
-    exit_code = click.UsageError.exit_code
+    exit_code = EXIT_USAGE
 
 
 class UnexpectedError(CliWizardError):
     """An error that is not cli-wizard's own: a bug, reported with its type."""
+
+    exit_code = EXIT_UNEXPECTED
 
     def __init__(self, error: BaseException) -> None:
         super().__init__(f"{type(error).__name__}: {error}")

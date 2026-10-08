@@ -447,10 +447,10 @@ class TestGenerateCommand:
             ],
         )
 
-        assert result.exit_code == 1
+        assert result.exit_code == 4  # SpecError
         error = json.loads(result.stdout)["error"]
         assert error["type"] == "SpecError"
-        assert error["exitCode"] == 1
+        assert error["exitCode"] == 4  # SpecError
         assert error["message"].startswith(f"Could not load OpenAPI spec '{spec_path}'")
 
     def test_generate_prints_a_json_summary_on_stdout(self, tmp_path):
@@ -505,7 +505,7 @@ class TestGenerateCommand:
                 ],
                 input="n\n",
             )
-            assert result.exit_code == 1
+            assert result.exit_code == 8  # Aborted
             assert marker.exists(), "output was deleted despite declining"
             assert marker.read_text() == "keep me"
             # The prompt went to stderr: stdout holds the error document alone
@@ -584,7 +584,7 @@ class TestGenerateCommand:
                 str(config_path),
             ],
         )
-        assert result.exit_code == 1
+        assert result.exit_code == 5  # OutputDirError
         assert "Cannot clean output directory" in result.output
 
     def test_generate_output_defaults_to_command_name_beside_config(self, tmp_path):
@@ -687,7 +687,7 @@ class TestGenerateCommand:
             ],
         )
 
-        assert result.exit_code == 1
+        assert result.exit_code == 5  # OutputDirError
         assert "contains the configuration file" in result.output
         assert config_path.exists()
         assert (tmp_path / "keep.txt").exists()
@@ -718,7 +718,7 @@ class TestGenerateCommand:
                     str(config_path),
                 ],
             )
-            assert result.exit_code == 1
+            assert result.exit_code == 3  # ConfigError
             assert "Invalid configuration" in result.output
 
     def test_generate_invalid_config_yaml(self):
@@ -762,7 +762,7 @@ class TestGenerateCommand:
                 ],
             )
             # Should fail with invalid config (missing required fields)
-            assert result.exit_code == 1
+            assert result.exit_code == 3  # ConfigError
             assert (
                 "Invalid configuration" in result.output
                 or "Could not load config" in result.output
@@ -797,7 +797,7 @@ class TestGenerateCommand:
                     ],
                 )
 
-            assert result.exit_code == 1
+            assert result.exit_code == 6  # RuffNotFoundError
             assert marker.exists(), "previous output was deleted despite the abort"
             assert marker.read_text() == "keep me"
 
@@ -827,7 +827,7 @@ class TestGenerateCommand:
                     str(config_path),
                 ],
             )
-            assert result.exit_code == 1
+            assert result.exit_code == 3  # ConfigError
             assert "MainDir" in result.output
 
 

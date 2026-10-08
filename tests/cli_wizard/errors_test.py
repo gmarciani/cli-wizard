@@ -12,6 +12,15 @@ import pytest
 
 import cli_wizard
 from cli_wizard.errors import (
+    EXIT_ABORTED,
+    EXIT_CONFIG,
+    EXIT_FAILURE,
+    EXIT_FORMATTING,
+    EXIT_OUTPUT_DIR,
+    EXIT_RUFF_NOT_FOUND,
+    EXIT_SPEC,
+    EXIT_UNEXPECTED,
+    EXIT_USAGE,
     Aborted,
     CliWizardError,
     ConfigError,
@@ -58,15 +67,33 @@ class TestCliWizardError:
         assert issubclass(cls, CliWizardError)
 
     @pytest.mark.parametrize(
-        "cls", [CliWizardError, *(c for c in SUBCLASSES if c is not UsageError)]
+        ("cls", "code"),
+        [
+            (CliWizardError, EXIT_FAILURE),
+            (UsageError, EXIT_USAGE),
+            (ConfigError, EXIT_CONFIG),
+            (SpecError, EXIT_SPEC),
+            (OutputDirError, EXIT_OUTPUT_DIR),
+            (RuffNotFoundError, EXIT_RUFF_NOT_FOUND),
+            (FormattingError, EXIT_FORMATTING),
+            (Aborted, EXIT_ABORTED),
+            (UnexpectedError, EXIT_UNEXPECTED),
+        ],
     )
-    def test_every_failure_exits_with_one(self, cls):
-        """Test every failure but a usage error exits with the generic code."""
-        assert cls("boom").exit_code == 1
+    def test_every_error_exits_with_its_own_code(self, cls, code):
+        """Test each error class carries the code Click exits with."""
+        assert cls("boom").exit_code == code
 
-    def test_a_usage_error_keeps_clicks_exit_code(self):
-        """Test a bad invocation exits with 2, as Click does, and is one to Click."""
-        assert UsageError("boom").exit_code == click.UsageError.exit_code
+    def test_the_exit_codes_are_distinct_and_leave_zero_alone(self):
+        """Test no two classes share a code, none is success, 2 is Click's."""
+        codes = [cls("boom").exit_code for cls in (CliWizardError, *SUBCLASSES)]
+
+        assert len(set(codes)) == len(codes)
+        assert min(codes) >= 1
+        assert EXIT_USAGE == click.UsageError.exit_code
+
+    def test_a_usage_error_is_clicks_too(self):
+        """Test a bad invocation is a usage error to Click as well."""
         assert issubclass(UsageError, click.UsageError)
 
     def test_show_prints_a_json_document_to_stdout(self, capsys):
@@ -76,7 +103,7 @@ class TestCliWizardError:
         captured = capsys.readouterr()
         assert captured.err == ""
         assert json.loads(captured.out) == {
-            "error": {"type": "ConfigError", "message": "boom", "exitCode": 1}
+            "error": {"type": "ConfigError", "message": "boom", "exitCode": EXIT_CONFIG}
         }
 
     def test_aborted_needs_no_message(self):
@@ -88,7 +115,7 @@ class TestCliWizardError:
         error = UnexpectedError(RuntimeError("a bug"))
 
         assert error.format_message() == "RuntimeError: a bug"
-        assert error.exit_code == 1
+        assert error.exit_code == EXIT_UNEXPECTED
 
 
 class TestReported:
