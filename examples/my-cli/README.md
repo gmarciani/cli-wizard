@@ -84,7 +84,7 @@ script can branch on it or retry only what is worth retrying.
 | 2 | Usage error: an unknown command, a missing option or a bad value. |
 | 3 | No response: connection refused, unknown host, timeout or TLS failure. |
 | 4 | The API refused the credentials, with a 401 or 403. |
-| 5 | The API rejected the request, with any other 4xx. |
+| 5 | The API rejected the request, with any other 4xx, or a `--header` is not `Name: value`. |
 | 6 | The API failed, with a 5xx. |
 
 ### config

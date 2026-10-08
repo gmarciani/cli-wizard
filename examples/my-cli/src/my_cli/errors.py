@@ -14,8 +14,9 @@ thing a failed invocation prints there::
 
     {"error": {"type": "NetworkError", "message": "...", "exitCode": 3}}
 
-This module sits below the options, which raise one of these, so it reads the
-invocation state itself rather than through the log module.
+This module sits below the options, which raise ClientError for a malformed
+--header, so it reads the invocation state itself rather than through the log
+module.
 """
 
 import json
@@ -107,7 +108,8 @@ class AuthError(RequestError):
 
 
 class ClientError(RequestError):
-    """The API rejected the request: any other 4xx."""
+    """The request is wrong: the API rejected it with any other 4xx, or a
+    --header the CLI could not send, one that is not ``Name: value``."""
 
     exit_code = EXIT_CLIENT_ERROR
 
@@ -126,10 +128,6 @@ class UsageError(CliError, click.UsageError):
     """
 
     exit_code = EXIT_USAGE
-
-
-class InvalidHeaderError(UsageError):
-    """A --header value that is not ``Name: value``."""
 
 
 class UnexpectedError(CliError):

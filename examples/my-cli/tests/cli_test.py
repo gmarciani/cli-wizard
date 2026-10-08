@@ -48,7 +48,6 @@ from my_cli.errors import (
     ClientError,
     CliError,
     ConfigError,
-    InvalidHeaderError,
     NetworkError,
     RequestError,
     ResponseError,
@@ -833,14 +832,14 @@ class TestApiClient:
 
     @pytest.mark.parametrize("raw", ["nocolon", ": value", "  : value"])
     def test_header_option_rejects_a_malformed_header(self, raw):
-        """Test a header without a name or a colon is a usage error."""
-        with pytest.raises(InvalidHeaderError, match="Expected 'Name: value'"):
+        """Test a header without a name or a colon is a client error."""
+        with pytest.raises(ClientError, match="Expected 'Name: value'"):
             HEADER.convert(raw, None, None)
 
     def test_header_option_names_the_option_it_rejects(self):
-        """Test the usage error names the option, as Click's own would."""
+        """Test the error names the option, as Click's own usage error would."""
         param = click.Option(["--header", "-H"], type=HEADER)
-        with pytest.raises(InvalidHeaderError) as raised:
+        with pytest.raises(ClientError) as raised:
             HEADER.convert("nocolon", param, None)
         assert raised.value.format_message() == (
             "Invalid value for '--header' / '-H':"
@@ -1396,7 +1395,6 @@ class TestExitCodes:
             (ClientError, EXIT_CLIENT_ERROR),
             (ServerError, EXIT_SERVER_ERROR),
             (UsageError, EXIT_USAGE),
-            (InvalidHeaderError, EXIT_USAGE),
         ],
     )
     def test_each_error_exits_with_its_code(self, cls, expected):
@@ -1414,7 +1412,6 @@ class TestExitCodes:
             ClientError,
             ServerError,
             UsageError,
-            InvalidHeaderError,
             UnexpectedError,
         ],
     )
@@ -1423,10 +1420,9 @@ class TestExitCodes:
         assert issubclass(cls, CliError)
         assert issubclass(CliError, click.ClickException)
 
-    @pytest.mark.parametrize("cls", [UsageError, InvalidHeaderError])
-    def test_usage_errors_are_clicks_too(self, cls):
+    def test_usage_error_is_clicks_too(self):
         """Test a bad invocation is a usage error to Click as well."""
-        assert issubclass(cls, click.UsageError)
+        assert issubclass(UsageError, click.UsageError)
 
     def test_show_prints_a_json_document_to_stdout(self, capsys):
         """Test showing the error prints the JSON a caller can parse."""

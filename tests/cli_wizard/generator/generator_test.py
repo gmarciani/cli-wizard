@@ -2809,10 +2809,10 @@ class TestGeneratedClientFeatures:
         assert self._session(sent).headers["X-Tenant"] == "acme"
 
     def test_malformed_header_is_rejected(self, generated_cli):
-        """Test a header without a colon is a usage error, sent to no one."""
+        """Test a header without a colon is a client error, sent to no one."""
         result, sent = self._invoke(generated_cli, ["--header", "nocolon"])
 
-        assert result.exit_code == 2
+        assert result.exit_code == generated_cli.errors.EXIT_CLIENT_ERROR
         assert "Expected 'Name: value'" in result.output
         sent.assert_not_called()
 
@@ -2990,20 +2990,20 @@ class TestGeneratedExitCodes:
             "exitCode": generated_cli.errors.EXIT_USAGE,
         }
 
-    def test_a_bad_header_is_reported_as_json(self, generated_cli):
-        """Test the CLI's own usage error names the option like Click does."""
+    def test_a_bad_header_is_a_client_error(self, generated_cli):
+        """Test a malformed --header is a client error naming the option."""
         result = CliRunner().invoke(
             generated_cli.main, ["things", "list-things", "--header", "nocolon"]
         )
 
-        assert result.exit_code == generated_cli.errors.EXIT_USAGE
+        assert result.exit_code == generated_cli.errors.EXIT_CLIENT_ERROR
         assert self._error(result) == {
-            "type": "InvalidHeaderError",
+            "type": "ClientError",
             "message": (
                 "Invalid value for '--header' / '-H':"
                 " Expected 'Name: value', got 'nocolon'."
             ),
-            "exitCode": generated_cli.errors.EXIT_USAGE,
+            "exitCode": generated_cli.errors.EXIT_CLIENT_ERROR,
         }
 
     def test_a_failure_is_the_clis_own_error_with_its_cause(self, generated_cli):
@@ -3022,9 +3022,9 @@ class TestGeneratedExitCodes:
         assert raised.value.exit_code == generated_cli.errors.EXIT_CLIENT_ERROR
         assert isinstance(raised.value.__cause__, requests.HTTPError)
 
-    def test_a_usage_error_is_the_clis_own_error(self, generated_cli):
-        """Test a bad --header is the CLI's own class, still a Click usage error."""
-        with pytest.raises(generated_cli.errors.InvalidHeaderError) as raised:
+    def test_a_bad_header_is_raised_as_the_clis_own_error(self, generated_cli):
+        """Test a malformed --header raises ClientError before any request."""
+        with pytest.raises(generated_cli.errors.ClientError) as raised:
             CliRunner().invoke(
                 generated_cli.group,
                 ["list-things", "--header", "nocolon"],
@@ -3032,9 +3032,9 @@ class TestGeneratedExitCodes:
                 catch_exceptions=False,
             )
 
-        assert isinstance(raised.value, generated_cli.errors.CliError)
-        assert isinstance(raised.value, click.UsageError)
-        assert raised.value.exit_code == generated_cli.errors.EXIT_USAGE
+        assert isinstance(raised.value, generated_cli.errors.RequestError)
+        assert raised.value.exit_code == generated_cli.errors.EXIT_CLIENT_ERROR
+        assert not hasattr(generated_cli.errors, "InvalidHeaderError")
 
     def test_an_unreadable_profile_file_is_a_config_error(self, generated_cli):
         """Test a config command reports a profile file it cannot parse."""
