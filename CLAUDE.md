@@ -85,7 +85,7 @@ a malformed 200 body is a `ResponseError`, not a failed request. Log the failure
 *before* raising: by the time Click shows the error, the context, and with it
 the logger and the profile settings, is gone, which is also why `CliError`
 captures the JSON indentation in its constructor. The generated `errors.py` sits
-below `options.py`, which raises `InvalidHeaderError`, so it reads the
+below `options.py`, which raises `ClientError` for a bad `--header`, so it reads the
 invocation state itself instead of importing `log`.
 
 ## Formatting

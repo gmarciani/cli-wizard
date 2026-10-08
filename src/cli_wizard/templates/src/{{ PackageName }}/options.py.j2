@@ -30,7 +30,7 @@ import click
 from click.core import ParameterSource
 
 from {{ PackageName }}.constants import OUTPUT_FORMATS
-from {{ PackageName }}.errors import InvalidHeaderError
+from {{ PackageName }}.errors import ClientError
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -66,12 +66,13 @@ class HeaderType(click.ParamType):
             return value
         name, sep, text = str(value).partition(":")
         if not sep or not name.strip():
+            # A request the CLI cannot send, classed with the ones the API
+            # rejects; named the way Click names an option it rejects itself
             problem = f"Expected 'Name: value', got '{value}'."
             if param is None:
-                raise InvalidHeaderError(problem)
-            # Named the way Click names an option it rejects itself
+                raise ClientError(problem)
             hint = " / ".join(f"'{opt}'" for opt in param.opts)
-            raise InvalidHeaderError(f"Invalid value for {hint}: {problem}")
+            raise ClientError(f"Invalid value for {hint}: {problem}")
         return name.strip(), text.strip()
 
 
