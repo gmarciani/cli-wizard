@@ -122,7 +122,16 @@ make clean-docs
 
 ## Release
 
-Update version in `VERSION`
+Bump the version with the [Bump Version](https://github.com/gmarciani/cli-wizard/actions/workflows/bump-version.yaml)
+workflow: run it with the target version, and merge the pull request it opens.
+The workflow runs `scripts/bump_version.py`, which writes `VERSION` and opens
+the version's section in `CHANGELOG.md`, warning about whichever is already
+there; a branch already at that version gets no pull request. Run the script
+locally instead, if you prefer:
+
+```shell
+python scripts/bump_version.py 3.1.0
+```
 
 Draft the release
 
