@@ -290,6 +290,32 @@ class TestCommandGroup:
         assert group.has_path_parameters is expected
 
 
+class TestDefaultLiteral:
+    """Regression tests for #97: a default renders as a Python literal."""
+
+    @pytest.mark.parametrize(
+        ("param_type", "default", "expected"),
+        [
+            ("string", "asc", "'asc'"),
+            ("string", 'say "hi"', "'say \"hi\"'"),
+            ("integer", 1, "1"),
+            ("number", 0.5, "0.5"),
+            ("boolean", True, "True"),
+            ("array", ["a", "b"], "['a', 'b']"),
+        ],
+    )
+    def test_default_keeps_its_type(self, param_type, default, expected):
+        """Test a string default is quoted and any other keeps its type."""
+        param = Parameter(
+            name="sort",
+            location="query",
+            param_type=param_type,
+            required=False,
+            default=default,
+        )
+        assert param.default_literal == expected
+
+
 class TestMetavar:
     """The placeholder the README shows after an option, as Click's help does."""
 

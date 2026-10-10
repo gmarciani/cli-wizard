@@ -66,6 +66,7 @@
 - Fixed the profile file, which may hold secrets, being created world-readable; it is now `0600` in a `0700` directory, and `config set` tightens a file left loose by an older version.
 - Fixed `--no-verify-ssl` disabling TLS verification silently; every run using it prints a warning on stderr.
 - Fixed path and query parameter values never reaching the request: `get-user --user-id 42` now requests `/users/42`, and every method sends its query string.
+- Fixed a query parameter with a string default, such as `default: "asc"`, producing a command module that fails to import with a `NameError`.
 - Fixed `--profile`, `--debug`, `--base-url`, `--no-verify-ssl` and `--ca-file` given at the root being ignored by subcommands; they are inherited, and a repeat at the subcommand level wins.
 - Fixed nullable parameters and body properties, an `anyOf`/`oneOf` with a single non-null member, being typed as strings; an optional integer is now an integer.
 - Fixed array parameters keeping only the last value; they are repeatable, `--tag a --tag b`, and sent as a JSON list of the declared element type.

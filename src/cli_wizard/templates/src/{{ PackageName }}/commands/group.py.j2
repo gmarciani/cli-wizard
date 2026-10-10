@@ -67,7 +67,7 @@ def {{ group.module_name }}() -> None:
     required=True,
 {% endif %}
 {% if param.default is not none %}
-    default={{ param.default }},
+    default={{ param.default_literal }},
 {% endif %}
     help={{ param.description | string_literal }},
 )

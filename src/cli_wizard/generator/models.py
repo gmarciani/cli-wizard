@@ -68,6 +68,15 @@ class Parameter:
         return _METAVARS[self.click_type]
 
     @property
+    def default_literal(self) -> str:
+        """Get the default as a Python literal for the generated option.
+
+        A string must be quoted, or the generated module names an undefined
+        variable; numbers, booleans and lists keep their type.
+        """
+        return repr(self.default)
+
+    @property
     def python_annotation(self) -> str:
         """Get the annotation for the generated function argument.
 
