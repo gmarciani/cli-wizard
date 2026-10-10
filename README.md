@@ -147,7 +147,8 @@ cli-wizard generate --configuration cli-wizard.yaml --api openapi.yaml
 
 To start from scratch instead, run `bootstrap`. It prompts for the main
 settings, writes a commented `cli-wizard.yaml`, and generates a basic CLI from
-it, without API commands:
+it, without API commands. The CLI lands in the current directory, in a
+directory named after `CommandName`; pass `--output` to write it elsewhere:
 
 ```shell
 cli-wizard bootstrap --configuration cli-wizard.yaml
