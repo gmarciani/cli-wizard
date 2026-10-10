@@ -31,7 +31,7 @@ notes="$(awk -v version="$version" '
   found { print }
   END { exit !found }
 ' CHANGELOG.md | sed '/./,$!d')" ||
-  fail "CHANGELOG.md has no '## $version' section, bump the version with scripts/bump_version.py first"
+  fail "CHANGELOG.md has no '## $version' section, bump the version with tools/bump_version.py first"
 [[ -n "${notes//[[:space:]]/}" ]] ||
   fail "The '## $version' section of CHANGELOG.md is empty, write the release notes first"
 

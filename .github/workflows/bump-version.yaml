@@ -34,7 +34,7 @@ jobs:
       - name: Bump version
         env:
           VERSION: ${{ inputs.version }}
-        run: python scripts/bump_version.py "$VERSION"
+        run: python tools/bump_version.py "$VERSION"
 
       - name: Check for changes
         id: changes
