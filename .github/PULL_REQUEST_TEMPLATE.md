@@ -17,6 +17,5 @@
 - Make sure **to have added unit tests or integration tests** to cover the new/modified code.
 - Check if documentation is impacted by this change.
 
-By submitting this pull request, I confirm that my contribution is compliant with
-the [contributing guidelines](https://github.com/gmarciani/cli-wizard/blob/main/CONTRIBUTING.md)
-and the [LICENSE](https://github.com/gmarciani/cli-wizard/blob/main/LICENSE).
+By submitting this pull request, I confirm that my contribution is compliant
+with the [contributing guidelines](https://github.com/gmarciani/cli-wizard/blob/main/CONTRIBUTING.md) and the [LICENSE](https://github.com/gmarciani/cli-wizard/blob/main/LICENSE).
