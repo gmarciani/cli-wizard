@@ -26,9 +26,18 @@ labels:
   - name: Help Wanted
     description: Extra attention is needed.
     color: 008672
+  - name: High Priority
+    description: High priority items.
+    color: B60205
   - name: Invalid
     description: This doesn't seem right.
     color: E4E669
+  - name: Low Priority
+    description: Low priority items.
+    color: 0052CC
+  - name: Medium Priority
+    description: Medium priority items.
+    color: FBCA04
   - name: Question
     description: Further information is requested.
     color: D876E3
@@ -60,7 +69,10 @@ repos:
       - Enhancement
       - Feature Request
       - Help Wanted
+      - High Priority
       - Invalid
+      - Low Priority
+      - Medium Priority
       - Question
       - Security
       - Skip Changelog Update
