@@ -19,6 +19,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          message="$(scripts/draft_release.sh)"
+          message="$(tools/draft_release.sh)"
           echo "::notice::$message"
           echo "$message" >> "$GITHUB_STEP_SUMMARY"

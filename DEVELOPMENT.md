@@ -124,26 +124,26 @@ make clean-docs
 
 Bump the version with the [Bump Version](https://github.com/gmarciani/cli-wizard/actions/workflows/bump-version.yaml)
 workflow: run it with the target version, and merge the pull request it opens.
-The workflow runs `scripts/bump_version.py`, which writes `VERSION` and opens
+The workflow runs `tools/bump_version.py`, which writes `VERSION` and opens
 the version's section in `CHANGELOG.md`, warning about whichever is already
 there; a branch already at that version gets no pull request. Run the script
 locally instead, if you prefer:
 
 ```shell
-python scripts/bump_version.py 3.1.0
+python tools/bump_version.py 3.1.0
 ```
 
 Once the bump is merged and the version's section in `CHANGELOG.md` is
 written, draft the release with the [Draft Release](https://github.com/gmarciani/cli-wizard/actions/workflows/draft-release.yaml)
 workflow: run it, with no input, and it checks out `main` and runs
-`scripts/draft_release.sh`. The script reads the version from `VERSION`, takes
+`tools/draft_release.sh`. The script reads the version from `VERSION`, takes
 the release notes from that section, and creates the draft `v<VERSION>` release
 targeting `main` with [gh](https://cli.github.com). A version that is already
 released, drafted, or tagged on origin is refused with an error. Run the script
 locally instead, if you prefer:
 
 ```shell
-scripts/draft_release.sh
+tools/draft_release.sh
 ```
 
 Review the release notes on GitHub, and publish
