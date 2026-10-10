@@ -136,7 +136,7 @@ IncludeTags:
   - Products
 ```
 
-Then generate from it. The project lands next to the configuration file, in a
+Then generate from it. The project lands in the current directory, in a
 directory named after `CommandName`:
 
 ```shell
@@ -146,8 +146,8 @@ cli-wizard generate --configuration cli-wizard.yaml --api openapi.yaml
 ### Starting Without a Specification
 
 To start from scratch instead, run `bootstrap`. It prompts for the main
-settings, writes a commented `cli-wizard.yaml` and generates a CLI without API
-commands:
+settings, writes a commented `cli-wizard.yaml`, and generates a basic CLI from
+it, without API commands:
 
 ```shell
 cli-wizard bootstrap --configuration cli-wizard.yaml
@@ -173,16 +173,17 @@ cli-wizard generate [OPTIONS]
 
 Options:
 - `--api, -a` - Path to the OpenAPI spec file, YAML or JSON. Without it and without `Api` in the configuration, the CLI is generated without API commands
-- `--project-name, -p` - Human-readable project name; `CommandName` and `PackageName` derive from it unless the configuration sets them
 - `--configuration, -c` - Path to the `cli-wizard.yaml` configuration file. Without it, every parameter takes its default
-- `--output, -o` - Output directory (default: a directory named after `CommandName` next to the configuration file, or in the current directory without one). Its contents are replaced, after confirmation when it is not empty
+- `--project-name, -p` - Human-readable project name; the generated command name derives from it, unless the configuration sets it
+- `--output, -o` - Output directory (default: a directory named after `CommandName` in the current directory)
 - `--force, -f` - Skip the confirmation prompt when the output directory is not empty
 
 ### cli-wizard bootstrap
 
-Bootstrap a new CLI project interactively, without an OpenAPI specification. It
-writes a configuration file to evolve the project from, then generates a
-starter CLI from it, without API commands, in the output directory.
+Bootstrap a new CLI project interactively, without an OpenAPI specification.
+It does two things: it writes a configuration file to evolve the project from,
+then generates a basic CLI from that file, without API commands, in the output
+directory.
 
 ```shell
 cli-wizard bootstrap [OPTIONS]
@@ -190,7 +191,7 @@ cli-wizard bootstrap [OPTIONS]
 
 Options:
 - `--configuration, -c` - Path for the `cli-wizard.yaml` configuration file (default: `./cli-wizard.yaml`). An existing file is overwritten, after confirmation, without keeping any of its values
-- `--output, -o` - Output directory of the starter CLI (default: a directory named after `CommandName` next to the configuration file)
+- `--output, -o` - Output directory of the basic CLI (default: a directory named after `CommandName` in the current directory)
 - `--force, -f` - Skip the confirmation prompts to overwrite an existing configuration file or to write into a non-empty directory
 
 ## Issues

@@ -273,9 +273,14 @@ class TestBootstrapCommand:
         assert result.exit_code == 0, result.output
         assert (tmp_path / "cli-wizard.yaml").exists()
 
-    def test_bootstrap_output_defaults_to_command_name_beside_config(self, tmp_path):
-        """Test that without --output the project lands beside the config."""
+    def test_bootstrap_output_defaults_to_command_name_in_cwd(
+        self, tmp_path, monkeypatch
+    ):
+        """Test that without --output the project lands in the cwd."""
         runner = CliRunner()
+        work_dir = tmp_path / "work"
+        work_dir.mkdir()
+        monkeypatch.chdir(work_dir)
         config_path = tmp_path / "nested" / "cli-wizard.yaml"
         answers = "pet-store\n" + "\n" * (len(BOOTSTRAP_PARAMS) - 1)
 
@@ -286,7 +291,8 @@ class TestBootstrapCommand:
         )
 
         assert result.exit_code == 0, result.output
-        assert (tmp_path / "nested" / "pet-store" / "pyproject.toml").exists()
+        assert (work_dir / "pet-store" / "pyproject.toml").exists()
+        assert not (tmp_path / "nested" / "pet-store").exists()
         assert "cli-wizard generate --configuration" in result.output
         assert "--output" not in result.output.split("Next steps")[1]
 
@@ -333,10 +339,11 @@ class TestBootstrapCommand:
         assert not config_path.exists()
 
     def test_command_name_defaults_to_the_config_directory_without_output(
-        self, tmp_path
+        self, tmp_path, monkeypatch
     ):
         """Test that the CommandName prompt defaults to the config file's directory."""
         runner = CliRunner()
+        monkeypatch.chdir(tmp_path)
         config_path = tmp_path / "Pet Store" / "cli-wizard.yaml"
 
         result = runner.invoke(

@@ -92,15 +92,17 @@ def _get_default_for_param(param_name: str, values: dict[str, Any]) -> str:
 
 
 @click.command(
-    help="""Bootstrap a new CLI project.
+    help="""Bootstrap a new CLI project: write a configuration file, then generate
+a basic CLI from it.
 
-You will be guided through a step by step procedure to generate
-a basic CLI and an extensible configuration file to evolve it.
-No OpenAPI file is required. An existing configuration file is
-overwritten, after confirmation, without keeping any of its values.
+The prompts collect the main settings and write them to the configuration
+file, to evolve the project from with generate. The basic CLI is generated
+from that file without API commands, so no OpenAPI file is required. An
+existing configuration file is overwritten, after confirmation, without
+keeping any of its values.
 
-The project is written to the --output directory, by default a directory named
-after CommandName next to the configuration file."""
+The basic CLI is written to the --output directory, by default a directory
+named after CommandName in the current directory."""
 )
 @click.option(
     "--configuration",
@@ -114,7 +116,7 @@ after CommandName next to the configuration file."""
     "-o",
     type=click.Path(file_okay=False, resolve_path=True),
     default=None,
-    help="Output directory (default: CommandName next to the configuration file)",
+    help="Output directory (default: CommandName in the current directory)",
 )
 @click.option(
     "--force",

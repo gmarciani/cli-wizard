@@ -586,11 +586,16 @@ class TestGenerateCommand:
         assert result.exit_code == 5  # OutputDirError
         assert "Cannot clean output directory" in result.output
 
-    def test_generate_output_defaults_to_command_name_beside_config(self, tmp_path):
-        """Test that without --output the project lands beside the config."""
+    def test_generate_output_defaults_to_command_name_in_cwd(
+        self, tmp_path, monkeypatch
+    ):
+        """Test that without --output the project lands in the cwd."""
         runner = CliRunner()
         config_dir = tmp_path / "project"
         config_dir.mkdir()
+        work_dir = tmp_path / "work"
+        work_dir.mkdir()
+        monkeypatch.chdir(work_dir)
         openapi_path, _ = create_test_files(tmp_path)
         config_path = config_dir / "cli-wizard.yaml"
         config_path.write_text(
@@ -611,8 +616,20 @@ class TestGenerateCommand:
         )
 
         assert result.exit_code == 0, result.output
-        assert (config_dir / "pet-store" / "pyproject.toml").exists()
+        assert (work_dir / "pet-store" / "pyproject.toml").exists()
+        assert not (config_dir / "pet-store").exists()
         assert config_path.exists()
+
+    def test_generate_help_lists_configuration_before_project_name(self):
+        """Test that --help lists --api, --configuration, then --project-name."""
+        result = CliRunner().invoke(main, ["generate", "--help"])
+
+        assert result.exit_code == 0, result.output
+        positions = [
+            result.output.index(option)
+            for option in ("-a, --api", "-c, --configuration", "-p, --project-name")
+        ]
+        assert positions == sorted(positions)
 
     def test_generate_without_configuration_uses_project_name(
         self, tmp_path, monkeypatch
@@ -644,9 +661,12 @@ class TestGenerateCommand:
         assert result.exit_code == 0, result.output
         assert (tmp_path / "my-project" / "pyproject.toml").exists()
 
-    def test_project_name_option_overrides_the_configuration(self, tmp_path):
+    def test_project_name_option_overrides_the_configuration(
+        self, tmp_path, monkeypatch
+    ):
         """Test that --project-name wins over ProjectName in the file."""
         runner = CliRunner()
+        monkeypatch.chdir(tmp_path)
         openapi_path, config_path = create_test_files(tmp_path, cli_name="from-file")
 
         result = runner.invoke(
