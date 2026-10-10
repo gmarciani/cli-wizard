@@ -604,6 +604,40 @@ class TestCliGenerator:
             assert (resources_dir / "ca.pem").read_text() == "fake-ca-cert"
             assert (resources_dir / "splash.txt").read_text() == "fake-splash"
 
+    def test_generated_constants_point_at_the_copied_ca_and_splash_files(self):
+        """Test that copied CA and splash files are enabled in the constants."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_dir = Path(temp_dir) / "config"
+            config_dir.mkdir()
+            (config_dir / "ca.pem").write_text("fake-ca-cert")
+            (config_dir / "splash.txt").write_text("fake-splash")
+
+            config = self._default_config()
+            config["CaFile"] = "ca.pem"
+            config["SplashFile"] = "splash.txt"
+
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=config, config_dir=config_dir)
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            resources_dir = output_dir / "src" / "test_cli" / "resources"
+            with _import_generated(output_dir, "test_cli", "constants") as module:
+                assert module.DEFAULT_CA_FILE == resources_dir / "ca.pem"
+                assert module.SPLASH_ENABLED is True
+                assert module.SPLASH_FILE == resources_dir / "splash.txt"
+
+    def test_generated_constants_leave_ca_and_splash_unset_by_default(self):
+        """Test that without CA and splash files the constants disable both."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate({}, output_dir, "test-cli", "test_cli")
+
+            with _import_generated(output_dir, "test_cli", "constants") as module:
+                assert module.DEFAULT_CA_FILE is None
+                assert module.SPLASH_ENABLED is False
+                assert module.SPLASH_FILE is None
+
     @pytest.mark.parametrize("key", ["CaFile", "SplashFile"])
     def test_generate_rejects_a_missing_resource_file(self, key):
         """Test that a missing resource file fails before anything is written."""

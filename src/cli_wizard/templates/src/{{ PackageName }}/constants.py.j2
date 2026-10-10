@@ -36,16 +36,16 @@ DEFAULT_RETRY_BACKOFF_FACTOR = {{ profile_defaults.retryBackoffFactor }}
 
 # Identifies this CLI's traffic in the server's logs
 USER_AGENT = f"{{ cli_name }}/{__version__} (cli-wizard)"
-{% if CaFileName %}
-DEFAULT_CA_FILE = Path(__file__).parent / "resources" / "{{ CaFileName }}"
+{% if ca_file_name %}
+DEFAULT_CA_FILE = Path(__file__).parent / "resources" / "{{ ca_file_name }}"
 {% else %}
 DEFAULT_CA_FILE = None
 {% endif %}
 
 # Splash screen configuration
-{% if SplashFileName %}
+{% if splash_file_name %}
 SPLASH_ENABLED = True
-SPLASH_FILE = Path(__file__).parent / "resources" / "{{ SplashFileName }}"
+SPLASH_FILE = Path(__file__).parent / "resources" / "{{ splash_file_name }}"
 SPLASH_COLOR = "{{ SplashColor | default('#FFFFFF') }}"
 {% else %}
 SPLASH_ENABLED = False
