@@ -15,7 +15,7 @@ from {{ PackageName }}.runner import run_command
 
 @click.group(
     name="{{ group.cli_name }}",
-    help="{{ group.description }}",
+    help={{ group.description | string_literal }},
 )
 @common_options
 def {{ group.module_name }}() -> None:
@@ -25,7 +25,7 @@ def {{ group.module_name }}() -> None:
 
 @{{ group.module_name }}.command(
     name="{{ op.command_name }}",
-    help="{{ op.summary or op.operation_id }}",
+    help={{ (op.summary or op.operation_id) | string_literal }},
 )
 {% for param in op.path_parameters %}
 @click.option(
@@ -34,7 +34,7 @@ def {{ group.module_name }}() -> None:
     type={{ param.click_type }},
 {% endif %}
     required=True,
-    help="{{ param.description }}",
+    help={{ param.description | string_literal }},
 )
 {% endfor %}
 {% for param in op.query_parameters %}
@@ -52,7 +52,7 @@ def {{ group.module_name }}() -> None:
 {% if param.default is not none %}
     default="{{ param.default }}",
 {% endif %}
-    help="{{ param.description }}",
+    help={{ param.description | string_literal }},
 )
 {% else %}
 @click.option(
@@ -69,7 +69,7 @@ def {{ group.module_name }}() -> None:
 {% if param.default is not none %}
     default={{ param.default }},
 {% endif %}
-    help="{{ param.description }}",
+    help={{ param.description | string_literal }},
 )
 {% endif %}
 {% endfor %}
@@ -97,7 +97,7 @@ def {{ group.module_name }}() -> None:
 {% if prop.required %}
     required=True,
 {% endif %}
-    help="{{ prop.description }}",
+    help={{ prop.description | string_literal }},
 )
 {% endfor %}
 @common_options

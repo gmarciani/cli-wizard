@@ -42,6 +42,7 @@ from cli_wizard.generator.generator import (
     CliGenerator,
     _build_url_expression,
     _sensitive_field_names,
+    _string_literal,
     resolve_ruff,
 )
 from cli_wizard.generator.models import (
@@ -172,6 +173,39 @@ class TestBuildUrlExpression:
         assert _build_url_expression(op) == (
             'f"/users/{encode_path_param(user_id)}/{{unknown}}"'
         )
+
+
+# Text a spec or a config may carry, each a way to end a quoted string early.
+UNSAFE_TEXT = [
+    'Say "hi"',
+    "First line.\nSecond line.",
+    "Windows\r\nline",
+    "C:\\path\\to",
+    "Tab\tand\bcontrol\x00\x1f\x7f",
+    "Ends with a backslash\\",
+    'Triple """ quotes and \'single\' ones',
+    "Unicode \u00e9\x85\u2028\u2029\U0001f600",
+    "",
+]
+
+
+class TestStringLiteral:
+    """Tests for _string_literal helper."""
+
+    @pytest.mark.parametrize("text", UNSAFE_TEXT)
+    def test_round_trips_as_python_literal(self, text):
+        """Test the literal evaluates back to the original text in Python."""
+        assert ast.literal_eval(_string_literal(text)) == text
+
+    @pytest.mark.parametrize("text", UNSAFE_TEXT)
+    def test_round_trips_as_toml_string(self, text):
+        """Test the literal parses back to the original text in TOML."""
+        assert tomllib.loads(f"key = {_string_literal(text)}")["key"] == text
+
+    @pytest.mark.parametrize("text", UNSAFE_TEXT)
+    def test_stays_on_one_line(self, text):
+        """Test the literal never spans lines, whatever the text holds."""
+        assert len(_string_literal(text).splitlines()) == 1
 
 
 class TestCliGenerator:
@@ -3331,3 +3365,141 @@ class TestGeneratedConfigCommandOptions:
         assert result.exit_code == 0, result.output
         assert "--debug" in result.output
         assert "--base-url" in result.output
+
+
+ISSUE98_PACKAGE = "issue98_cli"
+ISSUE98_DESCRIPTION = 'A "quoted" CLI.\nSecond line with C:\\path.'
+
+
+def _issue98_text(subject):
+    """Build a multi-line help text with quotes and a backslash for a subject."""
+    return f'The "{subject}" text.\nIts second line, with C:\\path.'
+
+
+def _issue98_groups():
+    """Build a group whose help texts would each break a raw string literal."""
+    return {
+        "Ops": CommandGroup(
+            name="Ops",
+            cli_name="ops",
+            description=_issue98_text("group"),
+            operations=[
+                Operation(
+                    operation_id="updateUser",
+                    method="PATCH",
+                    path="/users/{userId}",
+                    summary=_issue98_text("summary"),
+                    description="",
+                    tags=["Ops"],
+                    parameters=[
+                        Parameter(
+                            name="userId",
+                            location="path",
+                            param_type="string",
+                            required=True,
+                            description=_issue98_text("path"),
+                        ),
+                        Parameter(
+                            name="mode",
+                            location="query",
+                            param_type="string",
+                            required=False,
+                            enum=["fast", "slow"],
+                            description=_issue98_text("enum"),
+                        ),
+                        Parameter(
+                            name="limit",
+                            location="query",
+                            param_type="integer",
+                            required=False,
+                            description=_issue98_text("query"),
+                        ),
+                    ],
+                    body_properties=[
+                        RequestBodyProperty(
+                            name="title",
+                            prop_type="string",
+                            required=False,
+                            description=_issue98_text("body"),
+                        ),
+                    ],
+                ),
+            ],
+        )
+    }
+
+
+@pytest.fixture(scope="module")
+def issue98_cli(tmp_path_factory):
+    """Generate a CLI whose descriptions hold newlines, quotes and backslashes."""
+    output_dir = tmp_path_factory.mktemp("issue98") / "cli"
+    config = {
+        "CommandName": "issue98-cli",
+        "PackageName": ISSUE98_PACKAGE,
+        "Description": ISSUE98_DESCRIPTION,
+        "AuthorName": "Test Author",
+        "AuthorEmail": "test@example.com",
+        "PythonVersion": "3.12",
+        "RepositoryUrl": "https://github.com/test/issue98-cli",
+        "MainDir": str(output_dir / "home"),
+    }
+    generator = CliGenerator(config=config)
+    generator.generate(_issue98_groups(), output_dir, "issue98-cli", ISSUE98_PACKAGE)
+    return output_dir
+
+
+class TestGeneratedHelpTextEscaping:
+    """Regression tests for #98: spec and config text is escaped, not interpolated."""
+
+    def test_root_help_is_the_description(self, issue98_cli):
+        """Test the root command's help keeps the description intact."""
+        with _import_generated(issue98_cli, ISSUE98_PACKAGE, "cli") as cli:
+            assert cli.main.help == ISSUE98_DESCRIPTION
+
+    def test_group_help_is_the_tag_description(self, issue98_cli):
+        """Test the group's help keeps the tag description intact."""
+        with _import_generated(issue98_cli, ISSUE98_PACKAGE, "cli") as cli:
+            assert cli.main.commands["ops"].help == _issue98_text("group")
+
+    def test_command_help_is_the_summary(self, issue98_cli):
+        """Test the command's help keeps the operation summary intact."""
+        with _import_generated(issue98_cli, ISSUE98_PACKAGE, "cli") as cli:
+            command = cli.main.commands["ops"].commands["update-user"]
+            assert command.help == _issue98_text("summary")
+
+    @pytest.mark.parametrize(
+        "option,subject",
+        [
+            ("user_id", "path"),
+            ("mode", "enum"),
+            ("limit", "query"),
+            ("title", "body"),
+        ],
+    )
+    def test_option_help_is_the_description(self, issue98_cli, option, subject):
+        """Test each kind of option keeps its description intact."""
+        with _import_generated(issue98_cli, ISSUE98_PACKAGE, "cli") as cli:
+            command = cli.main.commands["ops"].commands["update-user"]
+            params = {param.name: param for param in command.params}
+            assert params[option].help == _issue98_text(subject)
+
+    def test_pyproject_description_is_the_description(self, issue98_cli):
+        """Test pyproject.toml parses and keeps the description intact."""
+        with open(issue98_cli / "pyproject.toml", "rb") as f:
+            pyproject = tomllib.load(f)
+        assert pyproject["project"]["description"] == ISSUE98_DESCRIPTION
+
+    def test_generated_help_test_passes(self, issue98_cli):
+        """Test the generated root help test holds for a multi-line description."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "tests/cli_test.py::TestCli::test_main_help",
+                "-q",
+            ],
+            cwd=issue98_cli,
+            capture_output=True,
+        )
+        assert result.returncode == 0, result.stdout.decode()

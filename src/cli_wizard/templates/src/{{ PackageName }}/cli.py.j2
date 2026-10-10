@@ -68,7 +68,7 @@ class RootGroup(click.Group):
 @click.group(
     cls=RootGroup,
     invoke_without_command=True,
-    help="{{ Description }}",
+    help={{ Description | string_literal }},
 )
 @click.version_option(version=__version__)
 @common_options

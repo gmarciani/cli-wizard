@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "{{ PackageName }}"
 dynamic = ["version"]
-description = "{{ Description }}"
+description = {{ Description | string_literal }}
 readme = "README.md"
 license = {text = "MIT"}
 authors = [

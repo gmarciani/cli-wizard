@@ -3,6 +3,7 @@
 
 """CLI code generator using Jinja2 templates."""
 
+import json
 import logging
 import re
 import shutil
@@ -47,6 +48,23 @@ def _build_url_expression(op: Operation) -> str:
         return f"{{encode_path_param({param.python_name})}}"
 
     return f'f"{_PLACEHOLDER_PATTERN.sub(substitute, op.path)}"'
+
+
+# Characters JSON leaves raw that still end a line for some reader: str.splitlines()
+# and editors break on the Unicode separators, and TOML refuses a raw DEL.
+_UNSAFE_RAW_CHARACTERS = {
+    ord(char): f"\\u{ord(char):04x}" for char in "\x7f\x85\u2028\u2029"
+}
+
+
+def _string_literal(text: str) -> str:
+    """Render text as a double-quoted, single-line string literal.
+
+    The escapes JSON emits are valid in both a Python string literal and a
+    TOML basic string, so a description from the spec or the config can
+    neither end the string early nor split it across lines.
+    """
+    return json.dumps(text, ensure_ascii=False).translate(_UNSAFE_RAW_CHARACTERS)
 
 
 # One sample per Click type, fed to the generated commands by the generated
@@ -427,6 +445,7 @@ class CliGenerator:
         )
         self.env.filters["url_expression"] = _build_url_expression
         self.env.filters["test_case"] = _operation_test_case
+        self.env.filters["string_literal"] = _string_literal
 
     def _template_context(self, **extra: Any) -> dict[str, Any]:
         """Build template context with all config values spread at top level.
@@ -477,6 +496,10 @@ class CliGenerator:
                 "CoverageThreshold", Config.get_field_default("CoverageThreshold")
             ),
             "Version": self.config.get("Version", Config.get_field_default("Version")),
+            # And an absent description cannot be quoted as a string literal.
+            "Description": self.config.get(
+                "Description", Config.get_field_default("Description")
+            ),
             "config": self.config,  # Also include as nested dict for compatibility
             "cli_name": self.cli_name,
             "package_name": self.package_name,
