@@ -848,6 +848,39 @@ class TestGenerateCommand:
             assert marker.exists(), "previous output was deleted despite the abort"
             assert marker.read_text() == "keep me"
 
+    @pytest.mark.parametrize("key", ["CaFile", "SplashFile"])
+    def test_missing_resource_file_fails_before_deleting_output(self, key):
+        """Test that a missing resource file is a ConfigError keeping the output."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            config_path = temp_path / "cli-wizard.yaml"
+            config_path.write_text(f"ProjectName: test-cli\n{key}: missing.txt\n")
+
+            output_dir = temp_path / "output"
+            output_dir.mkdir()
+            marker = output_dir / "marker.txt"
+            marker.write_text("keep me")
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    "--output",
+                    str(output_dir),
+                    "--configuration",
+                    str(config_path),
+                    "--force",
+                ],
+            )
+
+            assert result.exit_code == 3  # ConfigError
+            error = json.loads(result.stdout)["error"]
+            assert error["type"] == "ConfigError"
+            assert error["message"].startswith(key)
+            assert str(temp_path / "missing.txt") in error["message"]
+            assert marker.read_text() == "keep me"
+
     def test_generate_circular_config_reference(self):
         """Test generate with a config value that references itself."""
         runner = CliRunner()

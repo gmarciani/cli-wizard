@@ -46,6 +46,11 @@
 
 ### Bug Fixes
 
+#### cli-wizard
+
+- Fixed a `CaFile` that does not exist being ignored, leaving the generated CLI to trust the system store instead of the pinned CA; `generate` now fails with a configuration error naming the path, before deleting the previous output.
+- Fixed a `SplashFile` that does not exist being ignored silently; `generate` fails with a configuration error naming the path, as for `CaFile`.
+
 #### Generated code
 
 - Fixed `OutputFormat` and `TableStyle` having no effect: responses print as `json`, `yaml` or `table` as configured, and `--output`/`-o` picks a format for one invocation.

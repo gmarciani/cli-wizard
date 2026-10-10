@@ -153,8 +153,10 @@ def generate(
             err=True,
         )
 
-    # Verify the formatter before deleting the previous output
+    # Verify the formatter and the resource files before deleting the output
     resolve_ruff()
+    generator = CliGenerator(config=cli_config, config_dir=config_dir)
+    generator.check_resources()
 
     # Clean up output directory before generating
     if output_path.exists():
@@ -186,7 +188,6 @@ def generate(
     # Generate CLI project
     click.secho("⚙️  Generating CLI project: ", fg="cyan", nl=False, err=True)
     click.echo(output_path, err=True)
-    generator = CliGenerator(config=cli_config, config_dir=config_dir)
     generator.generate(groups, output_path, cli_name, package_name)
 
     # Progress and hints go to stderr; stdout holds the one JSON result
