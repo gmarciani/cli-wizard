@@ -19,11 +19,18 @@ from cli_wizard.generator.models import (
 
 
 def _unwrap_nullable(schema: dict[str, Any]) -> dict[str, Any]:
-    """Merge an `anyOf`/`oneOf` union with a single non-null member into its parent.
+    """Reduce a nullable schema to the single type it allows besides null.
 
     Optional fields of a Pydantic model serialise as `anyOf: [T, null]`, which
     carries no `type` of its own; without this the type would default to string.
+    OpenAPI 3.1 also spells nullability as a type list, `type: [T, "null"]`. A
+    union or list with several non-null types has no single type and falls back
+    to string.
     """
+    types = schema.get("type")
+    if isinstance(types, list):
+        members = [t for t in types if t != "null"]
+        return {**schema, "type": members[0] if len(members) == 1 else "string"}
     for keyword in ("anyOf", "oneOf"):
         members = [m for m in schema.get(keyword, []) if m.get("type") != "null"]
         if len(members) == 1:
@@ -167,7 +174,7 @@ class OpenApiParser:
             description=param.get("description", ""),
             default=schema.get("default"),
             enum=schema.get("enum", []),
-            items_type=schema.get("items", {}).get("type"),
+            items_type=_unwrap_nullable(schema.get("items", {})).get("type"),
             spec_format=schema.get("format", ""),
             write_only=schema.get("writeOnly", False),
         )
@@ -196,7 +203,9 @@ class OpenApiParser:
                     prop_type=prop_schema.get("type", "string"),
                     required=prop_name in required_props,
                     description=prop_schema.get("description", ""),
-                    items_type=prop_schema.get("items", {}).get("type"),
+                    items_type=_unwrap_nullable(prop_schema.get("items", {})).get(
+                        "type"
+                    ),
                     default=prop_schema.get("default"),
                     spec_format=prop_schema.get("format", ""),
                     write_only=prop_schema.get("writeOnly", False),
