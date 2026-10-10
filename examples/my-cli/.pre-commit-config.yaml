@@ -14,21 +14,17 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.3.0
+  # mypy runs in the `tox -e type` environment, which installs the project
+  # with the dependencies pyproject.toml declares and the stubs in its dev
+  # group, so nothing here has to repeat them. A mirrors-mypy hook would run
+  # in an environment of its own, where every package left out of it is
+  # untyped and fails the check.
+  - repo: local
     hooks:
       - id: mypy
-        # The same files `tox -e type` checks.
+        name: mypy
+        language: python
+        additional_dependencies: [tox~=4.58]
+        entry: tox -e type
         files: ^src/
-        # pre-commit runs mypy in an isolated environment holding nothing but
-        # mypy and the packages below. A package missing from it is untyped,
-        # so mypy reports it as missing and reads everything from it as Any,
-        # failing warn_return_any. The list is the runtime dependencies, with
-        # the pins in pyproject.toml: click carries its own type hints, while
-        # PyYAML and requests ship none, so their stubs come too.
-        additional_dependencies:
-          - click~=8.4
-          - PyYAML~=6.0
-          - requests~=2.34
-          - types-PyYAML~=6.0
-          - types-requests~=2.33
+        pass_filenames: false

@@ -1192,10 +1192,10 @@ def _with_requirements(names: list[str]) -> set[str]:
     return seen
 
 
-def _hook_environment(names: list[str], env_dir: Path) -> Path:
+def _isolated_environment(names: list[str], env_dir: Path) -> Path:
     """Build a virtualenv holding only the given distributions and their requirements.
 
-    It mirrors what pre-commit installs for a hook, without a network: the
+    It mirrors what tox installs for an environment, without a network: the
     distributions are linked in from the environment running the tests.
 
     Returns:
@@ -1239,43 +1239,64 @@ def type_checked_cli(tmp_path_factory):
 
 
 class TestGeneratedTypeCheck:
-    """The generated pre-commit mypy hook must pass on the generated code."""
+    """The generated pre-commit mypy hook must check the code as `tox -e type` does."""
 
-    def test_mypy_hook_installs_dependencies_and_stubs(self, type_checked_cli):
-        """Test the hook installs every runtime dependency and stub, as pinned."""
+    def test_mypy_hook_runs_the_tox_type_environment(self, type_checked_cli):
+        """Test the hook runs `tox -e type` once, rather than mypy on its own."""
+        hook = _mypy_hook(type_checked_cli)
+
+        assert (hook["entry"], hook["files"], hook["pass_filenames"]) == (
+            "tox -e type",
+            "^src/",
+            False,
+        )
+
+    def test_mypy_hook_installs_only_tox_as_pinned(self, type_checked_cli):
+        """Test the hook repeats no project dependency and pins tox as dev does."""
+        pyproject = tomllib.loads((type_checked_cli / "pyproject.toml").read_text())
+        tox_pin = next(
+            dep
+            for dep in pyproject["dependency-groups"]["dev"]
+            if isinstance(dep, str) and Requirement(dep).name == "tox"
+        )
+
+        assert _mypy_hook(type_checked_cli)["additional_dependencies"] == [tox_pin]
+
+    def test_type_environment_installs_the_project_and_dev_group(
+        self, type_checked_cli
+    ):
+        """Test `tox -e type` checks src/ with the project and its stubs installed."""
+        tox = configparser.ConfigParser()
+        tox.read(type_checked_cli / "tox.ini")
+        env = tox["testenv:type"]
+
+        assert "skip_install" not in env
+        assert (env["dependency_groups"], env["commands"].strip()) == (
+            "dev",
+            "mypy src/",
+        )
+
+    def test_generated_code_passes_mypy_in_the_type_environment(
+        self, type_checked_cli, tmp_path
+    ):
+        """Test mypy passes with the runtime dependencies and the dev group's stubs.
+
+        That is what `tox -e type` installs, leaving out the dev tooling, which
+        types nothing the generated code imports. A package left out used to
+        degrade to Any, failing the generated project's own commit with
+        warn_return_any errors.
+        """
         pyproject = tomllib.loads((type_checked_cli / "pyproject.toml").read_text())
         stubs = [
             dep
             for dep in pyproject["dependency-groups"]["dev"]
             if isinstance(dep, str) and dep.startswith("types-")
         ]
-        expected = pyproject["project"]["dependencies"] + stubs
-
-        hook = _mypy_hook(type_checked_cli)
-
-        assert sorted(hook["additional_dependencies"]) == sorted(expected)
-
-    def test_mypy_hook_checks_what_tox_checks(self, type_checked_cli):
-        """Test the hook leaves out the tests, as `tox -e type` runs `mypy src/`."""
-        tox = configparser.ConfigParser()
-        tox.read(type_checked_cli / "tox.ini")
-        assert tox["testenv:type"]["commands"].strip() == "mypy src/"
-
-        assert _mypy_hook(type_checked_cli)["files"] == "^src/"
-
-    def test_generated_code_passes_mypy_in_the_hook_environment(
-        self, type_checked_cli, tmp_path
-    ):
-        """Test mypy passes with only what the hook installs, as pre-commit runs it.
-
-        A package missing from the hook used to degrade to Any, failing the
-        generated project's own commit with warn_return_any errors.
-        """
         names = [
             Requirement(dep).name
-            for dep in _mypy_hook(type_checked_cli)["additional_dependencies"]
+            for dep in pyproject["project"]["dependencies"] + stubs
         ]
-        python = _hook_environment(names, tmp_path / "hook-env")
+        python = _isolated_environment(names, tmp_path / "type-env")
 
         result = subprocess.run(  # noqa: S603 - fixed argv, no shell
             [sys.executable, "-m", "mypy", "--python-executable", python, "src/"],
@@ -1288,7 +1309,7 @@ class TestGeneratedTypeCheck:
 
     def test_missing_dependency_is_reported_by_name(self, type_checked_cli, tmp_path):
         """Test mypy names a package the environment lacks, not only its Any fallout."""
-        python = _hook_environment([], tmp_path / "empty-env")
+        python = _isolated_environment([], tmp_path / "empty-env")
 
         result = subprocess.run(  # noqa: S603 - fixed argv, no shell
             [sys.executable, "-m", "mypy", "--python-executable", python, "src/"],
