@@ -15,7 +15,7 @@ from urllib.parse import quote
 from jinja2 import Environment, PackageLoader
 
 from cli_wizard.config.schema import Config, python_versions_from
-from cli_wizard.errors import FormattingError, RuffNotFoundError
+from cli_wizard.errors import ConfigError, FormattingError, RuffNotFoundError
 from cli_wizard.generator.models import (
     CommandGroup,
     Operation,
@@ -356,6 +356,10 @@ STATIC_FILES: tuple[str, ...] = (
     ".github/workflows/sync-labels.yaml",
 )
 
+# Config keys naming files copied into the generated package's resources/,
+# resolved relative to the configuration file; each must exist when set
+RESOURCE_KEYS: tuple[str, ...] = ("CaFile", "SplashFile")
+
 # Ruff invocations applied to generated code, as (args...) without the binary
 # or the target path. The generated tox.ini [testenv:format] must run the same
 # commands; test_format_recipe_matches_tox_template enforces that.
@@ -499,8 +503,9 @@ class CliGenerator:
         self.package_name = package_name
         self.cli_name = cli_name
 
-        # Fail before creating anything if the formatter is unavailable
+        # Fail before creating anything if the formatter or a resource is missing
         resolve_ruff()
+        self.check_resources()
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -579,19 +584,36 @@ class CliGenerator:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(source)
 
-    def _copy_resource(self, key: str, resources_dir: Path) -> str | None:
-        """Copy the file a config key names into resources, returning its name.
+    def check_resources(self) -> None:
+        """Fail if a configured resource file does not exist.
 
-        The path is resolved relative to the configuration file. Nothing is
-        copied, and None returned, when the key is unset or the file missing.
+        A missing CA file would leave the generated CLI trusting the system
+        store instead of the pinned CA, so a missing file is an error, never
+        skipped. Callers run this before deleting the previous output.
         """
+        for key in RESOURCE_KEYS:
+            path = self._resource_path(key)
+            if path is not None and not path.is_file():
+                raise ConfigError(f"{key} '{path}' not found")
+
+    def _resource_path(self, key: str) -> Path | None:
+        """Resolve the file a config key names, relative to the config file."""
         configured = self.config.get(key)
         if not configured:
             return None
         path = Path(configured)
         if not path.is_absolute():
             path = self.config_dir / path
-        if not path.exists():
+        return path
+
+    def _copy_resource(self, key: str, resources_dir: Path) -> str | None:
+        """Copy the file a config key names into resources, returning its name.
+
+        Nothing is copied, and None returned, when the key is unset; a missing
+        file is rejected earlier by check_resources().
+        """
+        path = self._resource_path(key)
+        if path is None:
             return None
         shutil.copy2(path, resources_dir / path.name)
         return path.name

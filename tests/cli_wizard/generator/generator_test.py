@@ -36,7 +36,7 @@ from cli_wizard.config.schema import (
     ruff_target_version,
     tox_env_name,
 )
-from cli_wizard.errors import FormattingError, RuffNotFoundError
+from cli_wizard.errors import ConfigError, FormattingError, RuffNotFoundError
 from cli_wizard.generator.generator import (
     RUFF_COMMANDS,
     CliGenerator,
@@ -604,19 +604,22 @@ class TestCliGenerator:
             assert (resources_dir / "ca.pem").read_text() == "fake-ca-cert"
             assert (resources_dir / "splash.txt").read_text() == "fake-splash"
 
-    def test_generate_missing_ca_and_splash_files_skipped(self):
-        """Test that missing CA/splash files are silently skipped."""
+    @pytest.mark.parametrize("key", ["CaFile", "SplashFile"])
+    def test_generate_rejects_a_missing_resource_file(self, key):
+        """Test that a missing resource file fails before anything is written."""
         with tempfile.TemporaryDirectory() as temp_dir:
             config = self._default_config()
-            config["CaFile"] = "missing-ca.pem"
-            config["SplashFile"] = "missing-splash.txt"
+            config[key] = "missing.txt"
 
             output_dir = Path(temp_dir) / "test-cli"
             generator = CliGenerator(config=config, config_dir=Path(temp_dir))
-            generator.generate({}, output_dir, "test-cli", "test_cli")
+            with pytest.raises(ConfigError) as excinfo:
+                generator.generate({}, output_dir, "test-cli", "test_cli")
 
-            resources_dir = output_dir / "src" / "test_cli" / "resources"
-            assert list(resources_dir.iterdir()) == []
+            message = excinfo.value.message
+            assert message.startswith(key)
+            assert str(Path(temp_dir) / "missing.txt") in message
+            assert not output_dir.exists()
 
     def test_generate_with_github_workflows(self):
         """Test that .github files are generated when IncludeGithubWorkflows is set."""
