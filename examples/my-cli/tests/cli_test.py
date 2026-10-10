@@ -524,8 +524,9 @@ class TestConfigCommands:
             output = json.loads(result.output)
             assert output["oldValue"] is None
 
-    def test_config_init_error_handling(self):
-        """Test config init error handling."""
+    @pytest.mark.parametrize("command", ["init", "list-profiles"])
+    def test_config_unsearchable_profile_dir_is_config_error(self, command):
+        """Test a profile directory that cannot be searched is a config error."""
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "readonly" / "profiles.yaml"
@@ -537,8 +538,10 @@ class TestConfigCommands:
                     "my_cli.profile.PROFILE_FILE",
                     profile_path,
                 ):
-                    result = runner.invoke(main, ["config", "init"])
-                assert result.exit_code in [0, EXIT_CONFIG]
+                    result = runner.invoke(main, ["config", command])
+                assert result.exit_code == EXIT_CONFIG
+                output = json.loads(result.stdout)
+                assert output["error"]["type"] == "ConfigError"
             finally:
                 os.chmod(readonly_dir, 0o700)
 

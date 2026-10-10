@@ -1986,6 +1986,21 @@ class TestGeneratedCommandTests:
         )
         assert result.returncode == 0, result.stdout.decode()
 
+    def test_generated_config_tests_pass(self, issue50_cli):
+        """Test the generated config tests hold on every supported Python."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "tests/cli_test.py::TestConfigCommands",
+                "-q",
+            ],
+            cwd=issue50_cli,
+            capture_output=True,
+        )
+        assert result.returncode == 0, result.stdout.decode()
+
     @pytest.mark.parametrize(
         "command,method,path,params,body",
         [
