@@ -3255,6 +3255,38 @@ class TestGeneratedConfigCommandOptions:
         assert result.exit_code == 0, result.output
         assert json.loads(result.output)["baseUrl"] == "http://prod"
 
+    @pytest.mark.parametrize(
+        ("param", "value", "logged"),
+        [
+            ("accessToken", "s3cr3t-token", "'accessToken' = '***'"),
+            ("auth", '{"password": "s3cr3t"}', "'auth' = '{'password': '***'}'"),
+        ],
+        ids=["sensitive-name", "nested-sensitive-key"],
+    )
+    def test_set_logs_a_credential_redacted(self, generated_cli, param, value, logged):
+        """Test config set never logs a credential it stores."""
+        self._write_profiles(generated_cli, default={})
+
+        result = CliRunner().invoke(
+            generated_cli.main, ["config", "set", "--param", param, "--value", value]
+        )
+
+        assert result.exit_code == 0, result.output
+        assert f"Set {logged} in profile 'default'" in result.stderr
+        assert "s3cr3t" not in result.stderr
+
+    def test_set_logs_a_plain_value_as_is(self, generated_cli):
+        """Test config set logs a value that is no credential unchanged."""
+        self._write_profiles(generated_cli, default={})
+
+        result = CliRunner().invoke(
+            generated_cli.main,
+            ["config", "set", "--param", "baseUrl", "--value", "http://prod"],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "Set 'baseUrl' = 'http://prod' in profile 'default'" in result.stderr
+
     def test_debug_is_a_common_option(self, generated_cli):
         """Test config commands take --debug with the rest of the common options."""
         result = CliRunner().invoke(generated_cli.main, ["config", "init", "--help"])

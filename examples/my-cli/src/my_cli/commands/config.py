@@ -16,6 +16,7 @@ from my_cli import profile
 from my_cli.constants import PROFILE_DEFAULTS
 from my_cli.log import log_info
 from my_cli.options import common_options
+from my_cli.redaction import redact
 
 
 def _emit(result: dict[str, Any]) -> None:
@@ -120,7 +121,10 @@ def config_set(ctx: click.Context, param: str, value: str) -> None:
 
     profile_data[param] = parsed_value
     profile.write_profiles(profiles)
-    log_info(f"Set '{param}' = '{parsed_value}' in profile '{profile_name}'")
+    # Keyed by the parameter, so both a credential parameter and a credential
+    # nested in a JSON value are redacted
+    logged = redact({param: parsed_value})[param]
+    log_info(f"Set '{param}' = '{logged}' in profile '{profile_name}'")
     _emit({"key": param, "value": parsed_value, "oldValue": old_value})
 
 
