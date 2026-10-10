@@ -51,6 +51,11 @@ Generate modern CLIs from OpenAPI specifications.
 - Generated projects are pip-installable out of the box
 - Auto-generated `pyproject.toml` and `VERSION`
 - Auto-generated `README.md` with commands and configuration reference
+- Auto-generated `DEVELOPMENT.md`, `CHANGELOG.md` and `LICENSE`
+- Test suite for the generated CLI, ready to run
+- `tox.ini` with test, lint, type, format and coverage environments, plus a `Makefile` wrapping them
+- Pre-commit configuration running ruff and mypy
+- Optional GitHub setup (`IncludeGithubWorkflows`): test, release, docs, PR validation, CodeQL, changelog and labeler workflows, plus Dependabot, issue and PR templates, and `CODEOWNERS`
 - Resources (CA certs, splash files) bundled in the package
 - Profile management for storing credentials and settings
 
@@ -138,6 +143,19 @@ directory named after `CommandName`:
 cli-wizard generate --configuration cli-wizard.yaml --api openapi.yaml
 ```
 
+### Starting Without a Specification
+
+To start from scratch instead, run `bootstrap`. It prompts for the main
+settings, writes a commented `cli-wizard.yaml` and generates a CLI without API
+commands:
+
+```shell
+cli-wizard bootstrap
+```
+
+Then edit the configuration, point `Api` at your specification, and rebuild
+with `cli-wizard generate --configuration cli-wizard.yaml`.
+
 ## Configuration
 
 See [configuration reference](https://gmarciani.github.io/cli-wizard/configuration.html) for full documentation.
@@ -159,6 +177,20 @@ Options:
 - `--configuration, -c` - Path to the `cli-wizard.yaml` configuration file. Without it, every parameter takes its default
 - `--output, -o` - Output directory (default: a directory named after `CommandName` next to the configuration file, or in the current directory without one). Its contents are replaced, after confirmation when it is not empty
 - `--force, -f` - Skip the confirmation prompt when the output directory is not empty
+
+### cli-wizard bootstrap
+
+Bootstrap a new CLI project interactively, without an OpenAPI specification. It
+writes a configuration file to evolve the project from, then generates it.
+
+```shell
+cli-wizard bootstrap [OPTIONS]
+```
+
+Options:
+- `--configuration, -c` - Path for the `cli-wizard.yaml` configuration file (default: `./cli-wizard.yaml`). An existing file is overwritten, after confirmation, without keeping any of its values
+- `--output, -o` - Output directory (default: a directory named after `CommandName` next to the configuration file)
+- `--force, -f` - Skip the confirmation prompts to overwrite an existing configuration file or to write into a non-empty directory
 
 ## Issues
 
