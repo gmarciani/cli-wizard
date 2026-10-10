@@ -51,6 +51,7 @@
 - Fixed a profile or environment value outside a setting's allowed values, such as `outputFormat: xml`, being accepted silently; it is ignored with a warning listing the allowed values.
 - Fixed `RetryMaxAttempts` and `RetryBackoffFactor` having no effect: connection failures and 429 or 5xx responses are retried as configured.
 - Fixed `--debug` printing passwords, tokens and the `Authorization` header in cleartext; they are redacted to `***` in the terminal and in the log file.
+- Fixed `config set` logging the value it stores in cleartext; an access token or other credential is logged as `***`.
 - Fixed a configured CA file that does not exist being ignored in favour of the system trust store; the command now fails with a configuration error.
 - Fixed the profile file, which may hold secrets, being created world-readable; it is now `0600` in a `0700` directory, and `config set` tightens a file left loose by an older version.
 - Fixed `--no-verify-ssl` disabling TLS verification silently; every run using it prints a warning on stderr.
