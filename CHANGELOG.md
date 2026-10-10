@@ -78,6 +78,7 @@
 - Fixed `--version` reporting `0.0.0` when installed from a wheel.
 - Fixed the log file growing without bound; the `LogRotation*` settings now take effect.
 - Fixed a bare `tox` running the tests only; it now lints and type-checks too.
+- Fixed the pre-commit mypy hook failing on the generated code: it installs the runtime dependencies and their stubs, and checks `src/` only, as `tox -e type` does.
 - Fixed the PR validation workflow measuring coverage of `cli_wizard` instead of the generated package.
 - Fixed `Jinja2` and `pydantic` being installed as runtime dependencies the generated code never imports.
 - Fixed `DEVELOPMENT.md` and the workflows calling a `make setup` target and tox environments that did not exist.

@@ -33,8 +33,8 @@ local-only metadata that never reaches PyPI:
 
 | Group | Contents | Installed by |
 |---|---|---|
-| `test` | pytest, pytest-cov | `tox -e py3xx`, and `dev` via `include-group` |
-| `dev` | `test`, plus build, mypy, pre-commit, tox, twine, type stubs | `make setup`, CI |
+| `test` | pytest, pytest-cov, mypy, type stubs | `tox -e py3xx`, and `dev` via `include-group` |
+| `dev` | `test`, plus build, pre-commit, tox, twine | `make setup`, CI |
 | `docs` | sphinx and its plugins | `make install-docs` |
 
 `dev` pulls `test` in through `{include-group = "test"}`, so one command gets

@@ -16,8 +16,10 @@ import sys
 import tempfile
 import threading
 import tomllib
+import venv
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib import metadata
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -27,6 +29,7 @@ import pytest
 import requests
 import yaml
 from click.testing import CliRunner
+from packaging.requirements import Requirement
 
 import cli_wizard
 from cli_wizard.config.schema import (
@@ -1164,6 +1167,137 @@ class TestPublishedDependenciesAreUsed:
 
         unused = {d for d in declared if IMPORT_NAMES.get(d, d) not in imported}
         assert not unused, f"declared but never imported: {sorted(unused)}"
+
+
+def _mypy_hook(project_dir: Path) -> dict:
+    """Return the mypy hook of a generated project's pre-commit configuration."""
+    config = yaml.safe_load((project_dir / ".pre-commit-config.yaml").read_text())
+    hooks = [hook for repo in config["repos"] for hook in repo["hooks"]]
+    return next(hook for hook in hooks if hook["id"] == "mypy")
+
+
+def _with_requirements(names: list[str]) -> set[str]:
+    """Close a set of installed distribution names over their requirements."""
+    seen: set[str] = set()
+    pending = list(names)
+    while pending:
+        name = metadata.distribution(pending.pop()).metadata["Name"]
+        if name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        for spec in metadata.requires(name) or []:
+            requirement = Requirement(spec)
+            if requirement.marker is None or requirement.marker.evaluate({"extra": ""}):
+                pending.append(requirement.name)
+    return seen
+
+
+def _hook_environment(names: list[str], env_dir: Path) -> Path:
+    """Build a virtualenv holding only the given distributions and their requirements.
+
+    It mirrors what pre-commit installs for a hook, without a network: the
+    distributions are linked in from the environment running the tests.
+
+    Returns:
+        The environment's interpreter, for mypy's --python-executable
+    """
+    venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+    python = env_dir / "bin" / "python"
+    site_packages = Path(
+        subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [python, "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    )
+    for name in _with_requirements(names):
+        dist = metadata.distribution(name)
+        tops = {
+            Path(str(file)).parts[0]
+            for file in dist.files or []
+            if not str(file).startswith("..")
+        }
+        for top in tops - {"__pycache__"}:
+            target = site_packages / top
+            if not target.exists():
+                target.symlink_to(dist.locate_file(top))
+    return python
+
+
+@pytest.fixture(scope="module")
+def type_checked_cli(tmp_path_factory):
+    """Generate a project with operations, to type check it like its own hooks."""
+    output_dir = tmp_path_factory.mktemp("type-checked") / "issue50-cli"
+    config = Config(
+        ProjectName="Issue50 Cli", PythonVersion=SUPPORTED_PYTHON_VERSIONS[0]
+    )
+    CliGenerator(config=config.model_dump()).generate(
+        _issue50_groups(), output_dir, "issue50-cli", "issue50_cli"
+    )
+    return output_dir
+
+
+class TestGeneratedTypeCheck:
+    """The generated pre-commit mypy hook must pass on the generated code."""
+
+    def test_mypy_hook_installs_dependencies_and_stubs(self, type_checked_cli):
+        """Test the hook installs every runtime dependency and stub, as pinned."""
+        pyproject = tomllib.loads((type_checked_cli / "pyproject.toml").read_text())
+        stubs = [
+            dep
+            for dep in pyproject["dependency-groups"]["dev"]
+            if isinstance(dep, str) and dep.startswith("types-")
+        ]
+        expected = pyproject["project"]["dependencies"] + stubs
+
+        hook = _mypy_hook(type_checked_cli)
+
+        assert sorted(hook["additional_dependencies"]) == sorted(expected)
+
+    def test_mypy_hook_checks_what_tox_checks(self, type_checked_cli):
+        """Test the hook leaves out the tests, as `tox -e type` runs `mypy src/`."""
+        tox = configparser.ConfigParser()
+        tox.read(type_checked_cli / "tox.ini")
+        assert tox["testenv:type"]["commands"].strip() == "mypy src/"
+
+        assert _mypy_hook(type_checked_cli)["files"] == "^src/"
+
+    def test_generated_code_passes_mypy_in_the_hook_environment(
+        self, type_checked_cli, tmp_path
+    ):
+        """Test mypy passes with only what the hook installs, as pre-commit runs it.
+
+        A package missing from the hook used to degrade to Any, failing the
+        generated project's own commit with warn_return_any errors.
+        """
+        names = [
+            Requirement(dep).name
+            for dep in _mypy_hook(type_checked_cli)["additional_dependencies"]
+        ]
+        python = _hook_environment(names, tmp_path / "hook-env")
+
+        result = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [sys.executable, "-m", "mypy", "--python-executable", python, "src/"],
+            cwd=type_checked_cli,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_missing_dependency_is_reported_by_name(self, type_checked_cli, tmp_path):
+        """Test mypy names a package the environment lacks, not only its Any fallout."""
+        python = _hook_environment([], tmp_path / "empty-env")
+
+        result = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [sys.executable, "-m", "mypy", "--python-executable", python, "src/"],
+            cwd=type_checked_cli,
+            capture_output=True,
+            text=True,
+        )
+
+        assert 'module named "click"' in result.stdout, result.stdout
 
 
 # Tooling nobody installing from an index should be offered. cli-wizard also
