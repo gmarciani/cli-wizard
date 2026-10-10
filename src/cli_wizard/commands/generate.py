@@ -30,8 +30,7 @@ A configuration file is optional: without one, --project-name names the
 project and every other parameter takes its default.
 
 The project is written to the --output directory, by default a directory named
-after CommandName next to the configuration file, or in the current directory
-when there is no configuration file. Its previous contents are deleted."""
+after CommandName in the current directory. Its previous contents are deleted."""
 )
 @click.option(
     "--api",
@@ -41,12 +40,6 @@ when there is no configuration file. Its previous contents are deleted."""
     help="Path to the OpenAPI spec file, YAML or JSON",
 )
 @click.option(
-    "--project-name",
-    "-p",
-    default=None,
-    help="Human-readable project name; CommandName and PackageName derive from it",
-)
-@click.option(
     "--configuration",
     "-c",
     type=click.Path(exists=True, dir_okay=False, resolve_path=True),
@@ -54,11 +47,18 @@ when there is no configuration file. Its previous contents are deleted."""
     help=f"Path to {CONFIG_FILE_NAME} configuration file",
 )
 @click.option(
+    "--project-name",
+    "-p",
+    default=None,
+    help="Human-readable project name; the generated command name derives from it, "
+    "unless the configuration sets it",
+)
+@click.option(
     "--output",
     "-o",
     type=click.Path(file_okay=False, resolve_path=True),
     default=None,
-    help="Output directory (default: CommandName next to the configuration file)",
+    help="Output directory (default: CommandName in the current directory)",
 )
 @click.option(
     "--force",
@@ -70,8 +70,8 @@ when there is no configuration file. Its previous contents are deleted."""
 def generate(
     ctx: click.Context,
     api: str | None,
-    project_name: str | None,
     configuration: str | None,
+    project_name: str | None,
     output: str | None,
     force: bool,
 ) -> None:
@@ -219,15 +219,12 @@ def resolve_output_dir(
     """Return the directory to write the project to.
 
     Without an explicit ``--output`` it is a directory named after
-    ``CommandName`` next to the configuration file, the layout ``bootstrap``
-    produces and ``examples/`` uses, or in the current directory when there is
-    no configuration file. The output directory is deleted before generation,
-    so one that contains the configuration file, or any of the other ``inputs``
-    (a label for each file mapped to its path), is refused rather than
-    destroying the files that describe the project.
+    ``CommandName`` in the current directory. The output directory is deleted
+    before generation, so one that contains the configuration file, or any of
+    the other ``inputs`` (a label for each file mapped to its path), is refused
+    rather than destroying the files that describe the project.
     """
-    base_dir = config_path.parent if config_path else Path.cwd()
-    output_path = Path(output) if output else base_dir / command_name
+    output_path = Path(output) if output else Path.cwd() / command_name
     guarded = {"configuration file": config_path} if config_path else {}
     guarded.update(inputs or {})
     for label, path in guarded.items():
