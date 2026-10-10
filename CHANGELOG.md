@@ -21,7 +21,7 @@
 
 #### cli-wizard
 
-- [Breaking] `generate` and `bootstrap` take the output directory with `--output`, defaulting to `CommandName` next to the configuration file; one holding that file is refused.
+- [Breaking] `generate` and `bootstrap` take the output directory with `--output`, defaulting to `CommandName` next to the configuration file; one holding that file, the OpenAPI spec, the CA file or the splash file is refused.
 - [Breaking] Renamed the `OpenapiSpec` configuration parameter to `Api`, matching `--api`; a configuration still using `OpenapiSpec` is rejected.
 - [Breaking] Every command prints one JSON document on stdout: `generate` and `bootstrap` print a summary of what they produced, while progress, prompts and hints go to stderr.
 - [Breaking] Every failure is a JSON document on stdout, `{"error": {"type", "message", "exitCode"}}`, in place of a message on stderr.
@@ -52,6 +52,8 @@
 - Fixed `RetryMaxAttempts` and `RetryBackoffFactor` having no effect: connection failures and 429 or 5xx responses are retried as configured.
 - Fixed `--debug` printing passwords, tokens and the `Authorization` header in cleartext; they are redacted to `***` in the terminal and in the log file.
 - Fixed a configured CA file that does not exist being ignored in favour of the system trust store; the command now fails with a configuration error.
+- Fixed `CaFile` having no effect: requests are verified against the bundled CA instead of the system trust store.
+- Fixed `SplashFile` having no effect: the bundled splash screen now shows.
 - Fixed the profile file, which may hold secrets, being created world-readable; it is now `0600` in a `0700` directory, and `config set` tightens a file left loose by an older version.
 - Fixed `--no-verify-ssl` disabling TLS verification silently; every run using it prints a warning on stderr.
 - Fixed path and query parameter values never reaching the request: `get-user --user-id 42` now requests `/users/42`, and every method sends its query string.

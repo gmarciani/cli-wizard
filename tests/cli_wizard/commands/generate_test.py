@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 import yaml
 from click.testing import CliRunner
 
@@ -689,6 +690,54 @@ class TestGenerateCommand:
         assert "contains the configuration file" in result.output
         assert config_path.exists()
         assert (tmp_path / "keep.txt").exists()
+
+    @pytest.mark.parametrize(
+        ("config_extra", "api_option", "file_name", "label"),
+        [
+            ({"Api": "../inputs/openapi.json"}, False, "openapi.json", "OpenAPI spec"),
+            ({}, True, "openapi.json", "OpenAPI spec"),
+            ({"CaFile": "../inputs/ca.pem"}, False, "ca.pem", "CA file"),
+            (
+                {"SplashFile": "../inputs/splash.txt"},
+                False,
+                "splash.txt",
+                "splash file",
+            ),
+        ],
+        ids=["Api", "--api", "CaFile", "SplashFile"],
+    )
+    def test_generate_refuses_output_containing_an_input(
+        self, tmp_path, config_extra, api_option, file_name, label
+    ):
+        """Test that an output directory holding an input file is left alone."""
+        runner = CliRunner()
+        config_dir = tmp_path / "conf"
+        config_dir.mkdir()
+        openapi_path, config_path = create_test_files(config_dir)
+        inputs_dir = tmp_path / "inputs"
+        inputs_dir.mkdir()
+        input_path = inputs_dir / file_name
+        input_path.write_text(openapi_path.read_text())
+        config = yaml.safe_load(config_path.read_text())
+        config_path.write_text(yaml.dump({**config, **config_extra}))
+        api_args = ["--api", str(input_path)] if api_option else []
+
+        result = runner.invoke(
+            main,
+            [
+                "generate",
+                "--output",
+                str(inputs_dir),
+                "--configuration",
+                str(config_path),
+                "--force",
+                *api_args,
+            ],
+        )
+
+        assert result.exit_code == 5  # OutputDirError
+        assert f"contains the {label} '{input_path}'" in result.output
+        assert input_path.exists()
 
     def test_generate_invalid_field_value(self):
         """Test generate with a syntactically valid but semantically invalid config."""

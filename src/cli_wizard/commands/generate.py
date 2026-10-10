@@ -90,20 +90,13 @@ def generate(
     # Load and validate configuration
     overrides = {"ProjectName": project_name} if project_name else {}
     cli_config = load_cli_config(config_path, overrides)
-    output_path = resolve_output_dir(output, cli_config["CommandName"], config_path)
-
-    if debug:
-        logger.debug(f"Output directory (resolved): {output_path}")
 
     # Resolve OpenAPI spec path: --api option, else config Api, else none
     api_path: Path | None = None
     if api:
         api_path = Path(api)
     elif cli_config.get("Api"):
-        # Resolve relative to config file directory
-        spec_path = Path(cli_config["Api"])
-        if not spec_path.is_absolute():
-            spec_path = config_dir / spec_path
+        spec_path = _resolve_input(cli_config["Api"], config_dir)
         if spec_path.exists():
             api_path = spec_path
         else:
@@ -116,6 +109,21 @@ def generate(
 
     if debug:
         logger.debug(f"OpenAPI spec (resolved): {api_path}")
+
+    # The output directory is deleted, so it must not hold any input
+    inputs = {"OpenAPI spec": api_path}
+    for key, label in (("CaFile", "CA file"), ("SplashFile", "splash file")):
+        if cli_config.get(key):
+            inputs[label] = _resolve_input(cli_config[key], config_dir)
+    output_path = resolve_output_dir(
+        output,
+        cli_config["CommandName"],
+        config_path,
+        {label: path for label, path in inputs.items() if path and path.exists()},
+    )
+
+    if debug:
+        logger.debug(f"Output directory (resolved): {output_path}")
 
     # Get CLI name and package name from config
     cli_name = cli_config["CommandName"]
@@ -202,7 +210,10 @@ def generate(
 
 
 def resolve_output_dir(
-    output: str | None, command_name: str, config_path: Path | None
+    output: str | None,
+    command_name: str,
+    config_path: Path | None,
+    inputs: dict[str, Path] | None = None,
 ) -> Path:
     """Return the directory to write the project to.
 
@@ -210,16 +221,25 @@ def resolve_output_dir(
     ``CommandName`` next to the configuration file, the layout ``bootstrap``
     produces and ``examples/`` uses, or in the current directory when there is
     no configuration file. The output directory is deleted before generation,
-    so one that contains the configuration file is refused rather than
-    destroying the file that describes the project.
+    so one that contains the configuration file, or any of the other ``inputs``
+    (a label for each file mapped to its path), is refused rather than
+    destroying the files that describe the project.
     """
     base_dir = config_path.parent if config_path else Path.cwd()
     output_path = Path(output) if output else base_dir / command_name
-    if config_path and (
-        output_path == config_path.parent or output_path in config_path.parents
-    ):
-        raise OutputDirError(
-            f"Output directory '{output_path}' contains the configuration "
-            f"file '{config_path}'. Choose a different --output."
-        )
+    guarded = {"configuration file": config_path} if config_path else {}
+    guarded.update(inputs or {})
+    for label, path in guarded.items():
+        resolved = path.resolve()
+        if output_path.resolve() in resolved.parents:
+            raise OutputDirError(
+                f"Output directory '{output_path}' contains the {label} "
+                f"'{resolved}'. Choose a different --output."
+            )
     return output_path
+
+
+def _resolve_input(value: str, config_dir: Path) -> Path:
+    """Return the path of an input file, relative to the configuration file."""
+    path = Path(value)
+    return path if path.is_absolute() else config_dir / path
