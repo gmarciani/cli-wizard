@@ -37,7 +37,7 @@ def config() -> None:
 @common_options
 def config_init() -> None:
     """Init command implementation."""
-    if profile.PROFILE_FILE.exists():
+    if profile.profile_file_exists():
         _emit({"status": "exists", "path": str(profile.PROFILE_FILE)})
         return
 

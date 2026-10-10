@@ -57,6 +57,7 @@
 #### Generated code
 
 - Fixed `OutputFormat` and `TableStyle` having no effect: responses print as `json`, `yaml` or `table` as configured, and `--output`/`-o` picks a format for one invocation.
+- Fixed every command crashing with an unexpected error on Python 3.12 and 3.13 when the profile file's directory cannot be read; `config init` and `config list-profiles` fail with a configuration error naming the file, and other commands run on the defaults.
 - Fixed a profile or environment value outside a setting's allowed values, such as `outputFormat: xml`, being accepted silently; it is ignored with a warning listing the allowed values.
 - Fixed `RetryMaxAttempts` and `RetryBackoffFactor` having no effect: connection failures and 429 or 5xx responses are retried as configured.
 - Fixed `--debug` printing passwords, tokens and the `Authorization` header in cleartext; they are redacted to `***` in the terminal and in the log file.

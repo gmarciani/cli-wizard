@@ -161,6 +161,28 @@ def load_profile(ctx: click.Context) -> dict[str, Any]:
     return settings
 
 
+def profile_file_exists() -> bool:
+    """Tell whether the profiles file exists.
+
+    Path.exists() raises on Python before 3.14 when the file's directory cannot
+    be searched, and from 3.14 hides that as a missing file, so ask os.stat()
+    and tell the two apart on every version.
+
+    Raises:
+        ConfigError: if the file's directory cannot be searched, after logging
+            it
+    """
+    try:
+        PROFILE_FILE.stat()
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except OSError as e:
+        message = f"Failed to access profile file: {e}"
+        log_error(message)
+        raise ConfigError(message) from e
+    return True
+
+
 def read_profiles() -> dict[str, Any]:
     """Read every profile from the profiles file, none when there is no file.
 
@@ -168,7 +190,7 @@ def read_profiles() -> dict[str, Any]:
         ConfigError: if the file cannot be read or is not valid YAML, after
             logging it
     """
-    if not PROFILE_FILE.exists():
+    if not profile_file_exists():
         return {}
     try:
         with open(PROFILE_FILE) as f:
@@ -208,16 +230,15 @@ def _read_profile(profile_name: str) -> dict[str, Any]:
         ConfigError: if the file holds no profile by that name, after logging
             it: a mistyped name must not send the request to another API
     """
-    if not PROFILE_FILE.exists():
+    try:
+        exists = profile_file_exists()
+        profiles: dict[str, Any] = read_profiles() if exists else {"default": {}}
+    except ConfigError:
+        # Logged already; a command still runs, on the built-in defaults
+        return {}
+    if not exists:
         log_warning(f"Profile file not found: {PROFILE_FILE}. Creating default.")
         _create_default_profile_file()
-        profiles: dict[str, Any] = {"default": {}}
-    else:
-        try:
-            profiles = read_profiles()
-        except ConfigError:
-            # Logged already; a command still runs, on the built-in defaults
-            return {}
 
     if profile_name not in profiles:
         available = ", ".join(sorted(profiles)) or "none"
