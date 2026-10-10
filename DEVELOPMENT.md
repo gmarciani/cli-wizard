@@ -133,22 +133,23 @@ locally instead, if you prefer:
 python scripts/bump_version.py 3.1.0
 ```
 
-Draft the release
+Once the bump is merged and the version's section in `CHANGELOG.md` is
+written, draft the release with the [Draft Release](https://github.com/gmarciani/cli-wizard/actions/workflows/draft-release.yaml)
+workflow: run it, with no input, and it checks out `main` and runs
+`scripts/draft_release.sh`. The script reads the version from `VERSION`, takes
+the release notes from that section, and creates the draft `v<VERSION>` release
+targeting `main` with [gh](https://cli.github.com). A version that is already
+released, drafted, or tagged on origin is refused with an error. Run the script
+locally instead, if you prefer:
 
 ```shell
-VERSION="$(cat VERSION)"
-gh release create v${VERSION} \
-   --title v${VERSION} \
-   --target main \
-   --notes-file CHANGELOG.md \
-   --latest \
-   --draft
+scripts/draft_release.sh
 ```
 
-Make changes to the release notes, and publish
+Review the release notes on GitHub, and publish
 
 ```shell
-gh release edit v${VERSION} --draft=false
+gh release edit "v$(cat VERSION)" --draft=false
 ```
 
 This will automatically publish to PyPI at https://pypi.org/project/cli-wizard.
