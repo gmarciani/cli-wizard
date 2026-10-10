@@ -45,22 +45,13 @@ BOOTSTRAP_PARAMS: list[str] = [
 ]
 
 
-def _get_default_for_param(
-    param_name: str,
-    values: dict[str, Any],
-    existing_config: dict[str, Any] | None = None,
-) -> str:
+def _get_default_for_param(param_name: str, values: dict[str, Any]) -> str:
     """Get the default value for a parameter.
 
     Priority:
-    1. Existing config file value (if config exists)
-    2. Derived value based on other parameters (for CommandName, ProjectName, etc.)
-    3. Schema default
+    1. Derived value based on other parameters (for CommandName, ProjectName, etc.)
+    2. Schema default
     """
-    # First, check existing config
-    if existing_config and param_name in existing_config:
-        return str(existing_config[param_name])
-
     if param_name == "CommandName":
         # Default to folder name in kebab-case
         target_dir_name = str(values.get("_target_dir_name", "my-project"))
@@ -100,31 +91,13 @@ def _get_default_for_param(
     return str(default_value) if default_value is not None else ""
 
 
-def _load_existing_config(config_path: Path) -> dict[str, Any] | None:
-    """Load existing config file if it exists.
-
-    Returns None if file doesn't exist or can't be parsed.
-    """
-    if not config_path.exists():
-        return None
-
-    try:
-        with open(config_path) as f:
-            result = yaml.safe_load(f)
-            if result is None:
-                return {}
-            return dict(result)
-    except (OSError, yaml.YAMLError) as e:
-        logger.warning(f"Could not load existing config: {e}")
-        return None
-
-
 @click.command(
     help="""Bootstrap a new CLI project.
 
 You will be guided through a step by step procedure to generate
 a basic CLI and an extensible configuration file to evolve it.
-No OpenAPI file is required.
+No OpenAPI file is required. An existing configuration file is
+overwritten, after confirmation, without keeping any of its values.
 
 The project is written to the --output directory, by default a directory named
 after CommandName next to the configuration file."""
@@ -147,7 +120,8 @@ after CommandName next to the configuration file."""
     "--force",
     "-f",
     is_flag=True,
-    help="Skip confirmation prompt if directory exists and is not empty",
+    help="Skip the confirmation prompts to overwrite an existing configuration "
+    "file or to write into a non-empty directory",
 )
 @click.pass_context
 def bootstrap(
@@ -167,10 +141,16 @@ def bootstrap(
         logger.debug(f"Output directory (CLI): {output}")
         logger.debug(f"Force mode: {force}")
 
-    # Load existing config if available (for default values)
-    existing_config = _load_existing_config(config_path)
-    if existing_config:
-        click.secho(f"📄 Using existing config: {config_path}", fg="cyan", err=True)
+    # Confirm before anything is prompted or written: an existing config is
+    # replaced, none of its values kept
+    if config_path.exists() and not force:
+        click.secho(
+            f"⚠️  Configuration file '{config_path}' already exists.",
+            fg="yellow",
+            err=True,
+        )
+        if not click.confirm("Do you want to overwrite it?", err=True):
+            raise Aborted()
 
     # Gather project information interactively, on stderr: stdout holds the
     # one JSON result
@@ -184,7 +164,7 @@ def bootstrap(
 
     for param_name in BOOTSTRAP_PARAMS:
         description = Config.get_field_description(param_name)
-        default = _get_default_for_param(param_name, values, existing_config)
+        default = _get_default_for_param(param_name, values)
 
         value = click.prompt(
             description,
@@ -196,11 +176,7 @@ def bootstrap(
     # Remove internal keys
     del values["_target_dir_name"]
 
-    # Merge with existing config (prompted values override)
-    if existing_config:
-        cli_config = {**existing_config, **values}
-    else:
-        cli_config = values
+    cli_config = values
 
     # Derive additional values if not already set
     if "MainDir" not in cli_config:
