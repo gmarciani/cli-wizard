@@ -1644,6 +1644,37 @@ def _issue23_groups():
                     ],
                 ),
                 Operation(
+                    operation_id="listUsers",
+                    method="GET",
+                    path="/users",
+                    summary="List users",
+                    description="",
+                    tags=["Ops"],
+                    parameters=[
+                        Parameter(
+                            name="sort",
+                            location="query",
+                            param_type="string",
+                            required=False,
+                            default="asc",
+                        ),
+                        Parameter(
+                            name="page",
+                            location="query",
+                            param_type="integer",
+                            required=False,
+                            default=1,
+                        ),
+                        Parameter(
+                            name="active",
+                            location="query",
+                            param_type="boolean",
+                            required=False,
+                            default=True,
+                        ),
+                    ],
+                ),
+                Operation(
                     operation_id="updateBetaAccess",
                     method="PATCH",
                     path="/admin/beta-access/{email}",
@@ -2302,6 +2333,25 @@ class TestGeneratedOptionalityGuards:
             ["ops", "update-beta-access", "--email", "a@b.com", *args],
         )
         assert call.kwargs["json"] == expected
+
+
+class TestGeneratedQueryDefaults:
+    """Regression tests for #97: a query default keeps its value and type."""
+
+    @pytest.mark.parametrize(
+        "args,expected",
+        [
+            ([], {"sort": "asc", "page": 1, "active": True}),
+            (
+                ["--sort", "desc", "--page", "3"],
+                {"sort": "desc", "page": 3, "active": True},
+            ),
+        ],
+    )
+    def test_query_defaults_reach_the_request(self, issue23_cli, args, expected):
+        """Test the defaults are sent as typed values the user may override."""
+        call = _invoke_issue23(issue23_cli, ["ops", "list-users", *args])
+        assert call.kwargs["params"] == expected
 
 
 class TestGeneratedRequiredBooleans:
