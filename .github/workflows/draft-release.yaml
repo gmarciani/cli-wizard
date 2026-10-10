@@ -1,4 +1,4 @@
-name: Draft Release
+name: 📦 Draft Release
 
 on:
   workflow_dispatch:

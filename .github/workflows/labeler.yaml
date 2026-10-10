@@ -1,5 +1,5 @@
 # This workflow assigns labels to PRs according to the rules defined in .github/labeler.yml.
-name: PR Labeler
+name: 🏷️ PR Labeler
 
 on:
   - pull_request_target
