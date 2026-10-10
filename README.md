@@ -150,7 +150,7 @@ settings, writes a commented `cli-wizard.yaml` and generates a CLI without API
 commands:
 
 ```shell
-cli-wizard bootstrap
+cli-wizard bootstrap --configuration cli-wizard.yaml
 ```
 
 Then edit the configuration, point `Api` at your specification, and rebuild
@@ -181,7 +181,8 @@ Options:
 ### cli-wizard bootstrap
 
 Bootstrap a new CLI project interactively, without an OpenAPI specification. It
-writes a configuration file to evolve the project from, then generates it.
+writes a configuration file to evolve the project from, then generates a
+starter CLI from it, without API commands, in the output directory.
 
 ```shell
 cli-wizard bootstrap [OPTIONS]
@@ -189,7 +190,7 @@ cli-wizard bootstrap [OPTIONS]
 
 Options:
 - `--configuration, -c` - Path for the `cli-wizard.yaml` configuration file (default: `./cli-wizard.yaml`). An existing file is overwritten, after confirmation, without keeping any of its values
-- `--output, -o` - Output directory (default: a directory named after `CommandName` next to the configuration file)
+- `--output, -o` - Output directory of the starter CLI (default: a directory named after `CommandName` next to the configuration file)
 - `--force, -f` - Skip the confirmation prompts to overwrite an existing configuration file or to write into a non-empty directory
 
 ## Issues
