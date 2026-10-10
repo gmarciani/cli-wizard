@@ -145,7 +145,10 @@ def load_profile(ctx: click.Context) -> dict[str, Any]:
         ctx: The context of the running invocation
 
     Returns:
-        Profile settings as a dictionary, empty dict if profile not found
+        Profile settings as a dictionary, empty if the file cannot be read
+
+    Raises:
+        ConfigError: if the profiles file holds no profile by that name
     """
     current = state(ctx)
     settings = _read_profile(current.get("profile", "default"))
@@ -199,21 +202,31 @@ def write_profiles(profiles: dict[str, Any]) -> None:
 
 
 def _read_profile(profile_name: str) -> dict[str, Any]:
-    """Read one profile from the profiles file, the defaults if that fails."""
+    """Read one profile from the profiles file, the defaults if that fails.
+
+    Raises:
+        ConfigError: if the file holds no profile by that name, after logging
+            it: a mistyped name must not send the request to another API
+    """
     if not PROFILE_FILE.exists():
         log_warning(f"Profile file not found: {PROFILE_FILE}. Creating default.")
         _create_default_profile_file()
-        return {}
-
-    try:
-        profiles = read_profiles()
-    except ConfigError:
-        # Logged already; a command still runs, on the built-in defaults
-        return {}
+        profiles: dict[str, Any] = {"default": {}}
+    else:
+        try:
+            profiles = read_profiles()
+        except ConfigError:
+            # Logged already; a command still runs, on the built-in defaults
+            return {}
 
     if profile_name not in profiles:
-        log_error(f"Profile '{profile_name}' not found in {PROFILE_FILE}")
-        return {}
+        available = ", ".join(sorted(profiles)) or "none"
+        message = (
+            f"Profile '{profile_name}' not found in {PROFILE_FILE}."
+            f" Available profiles: {available}"
+        )
+        log_error(message)
+        raise ConfigError(message)
 
     log_debug(f"Loaded profile '{profile_name}'")
     return profiles[profile_name] or {}

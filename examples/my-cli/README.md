@@ -86,7 +86,7 @@ script can branch on it or retry only what is worth retrying.
 | 4 | The API rejected the request, with a 4xx, or a `--header` is not `Name: value`. |
 | 5 | The API failed, with a 5xx. |
 | 6 | The response body is not valid JSON. |
-| 7 | The profile file cannot be read or written, or a configured file does not exist. |
+| 7 | The profile file cannot be read or written, the selected profile is not in it, or a configured file does not exist. |
 | 8 | A bug in the CLI; `--debug` logs its traceback. |
 
 ### config
@@ -147,7 +147,8 @@ creates the file with an empty `default` profile, and any command creates it on
 first run if it is missing. `my-cli config show` lists a profile with the
 defaults filled in, `my-cli config set --param <setting> --value <value>`
 changes one setting and `--profile <name>` on any command selects a profile other
-than `default`.
+than `default`. An API command given a profile the file does not hold fails
+without sending the request; `config set --profile <name>` creates it.
 
 | Setting | Default | Effect |
 |---|---|---|

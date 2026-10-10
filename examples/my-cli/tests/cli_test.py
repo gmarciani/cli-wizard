@@ -1571,6 +1571,21 @@ class TestRunCommand:
         with pytest.raises(ServerError):
             self._run(tmp_path, _http_error(503, "Service Unavailable", "").response)
 
+    def test_an_unknown_profile_fails_without_sending_the_request(self, tmp_path):
+        """Test a mistyped --profile is a configuration error, not the defaults."""
+        (tmp_path / "profiles.yaml").write_text("default: {}")
+        client = MagicMock()
+
+        with (
+            patch("my_cli.runner.create_client", return_value=client),
+            patch("my_cli.profile.PROFILE_FILE", tmp_path / "profiles.yaml"),
+            invocation(profile="prdo", output=None) as ctx,
+        ):
+            with pytest.raises(ConfigError, match="Profile 'prdo' not found"):
+                run_command(ctx, "things list", {}, lambda c: c.get("/things"))
+
+        client.get.assert_not_called()
+
     def test_an_undecodable_body_raises_a_response_error(self, tmp_path):
         """Test a 200 that is not JSON is a response error, not a request one."""
         response = MagicMock(text="<html>", status_code=200, reason="OK")
@@ -1657,18 +1672,26 @@ class TestProfile:
                     result = load_profile(ctx)
             assert result == {"key": "value"}
 
-    def test_load_profile_not_found(self):
-        """Test loading nonexistent profile."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            profile_path = Path(tmpdir) / "profiles.yaml"
-            profile_path.write_text("default: {}")
-            with patch(
-                "my_cli.profile.PROFILE_FILE",
-                profile_path,
-            ):
-                with invocation(profile="nonexistent") as ctx:
-                    result = load_profile(ctx)
-            assert result == {}
+    @pytest.mark.parametrize(
+        ("body", "available"),
+        [
+            ("default: {}\nprod: {}", "default, prod"),
+            ("{}", "none"),
+            (None, "default"),
+        ],
+        ids=["other-profiles", "empty-file", "no-file"],
+    )
+    def test_load_profile_rejects_an_unknown_profile(self, tmp_path, body, available):
+        """Test a profile the file does not hold fails, naming those it does."""
+        profile_path = tmp_path / "profiles.yaml"
+        if body is not None:
+            profile_path.write_text(body)
+        with patch("my_cli.profile.PROFILE_FILE", profile_path):
+            with invocation(profile="prdo") as ctx:
+                with pytest.raises(ConfigError) as excinfo:
+                    load_profile(ctx)
+        assert "Profile 'prdo' not found" in excinfo.value.message
+        assert excinfo.value.message.endswith(f"Available profiles: {available}")
 
     def test_get_profile_value(self):
         """Test getting profile value."""
