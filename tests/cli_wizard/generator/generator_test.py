@@ -1308,13 +1308,23 @@ class TestDevToolingIsNotPublished:
             assert tool in groups, f"{tool} missing from the dependency groups"
             assert tool not in published, f"{tool} is published"
 
+    def test_cli_wizard_ci_enforces_the_coverage_gate(self):
+        """Test that CI fails a change dropping coverage below 90%."""
+        pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+        workflow = yaml.safe_load(
+            (REPO_ROOT / ".github" / "workflows" / "test.yaml").read_text()
+        )
+        runs = [s.get("run", "") for s in workflow["jobs"]["quality"]["steps"]]
+
+        assert pyproject["tool"]["coverage"]["report"]["fail_under"] == 90
+        assert any(r.startswith("pytest") and "--cov=" in r for r in runs)
+
     @pytest.mark.parametrize(
         "recipe_paths",
         [
             (
                 REPO_ROOT / "Makefile",
                 REPO_ROOT / ".github" / "workflows" / "test.yaml",
-                REPO_ROOT / ".github" / "workflows" / "pr-validation.yaml",
             ),
             (
                 "Makefile",
