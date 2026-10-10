@@ -51,6 +51,7 @@
 - Fixed a `CaFile` that does not exist being ignored, leaving the generated CLI to trust the system store instead of the pinned CA; `generate` now fails with a configuration error naming the path, before deleting the previous output.
 - Fixed a `SplashFile` that does not exist being ignored silently; `generate` fails with a configuration error naming the path, as for `CaFile`.
 - Fixed `generate` failing with a formatting error when a spec description or summary, or the configured `Description`, holds a line break or a double quote; the help text keeps both.
+- Fixed `generate` crashing on an OpenAPI 3.1 type list such as `type: [string, "null"]`; the parameter takes its non-null type, and a list of several types is a string.
 
 #### Generated code
 

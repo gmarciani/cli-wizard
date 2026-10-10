@@ -189,6 +189,11 @@ class TestOpenApiParser:
                 {"anyOf": [{"type": "integer"}, {"type": "string"}, {"type": "null"}]},
                 "string",
             ),
+            # OpenAPI 3.1 spells nullability as a list of types.
+            ({"type": ["integer", "null"]}, "integer"),
+            ({"type": ["null", "boolean"]}, "boolean"),
+            ({"type": ["integer", "string", "null"]}, "string"),
+            ({"type": ["null"]}, "string"),
         ],
     )
     def test_parse_union_query_parameter(self, schema, expected_type):
@@ -223,8 +228,15 @@ class TestOpenApiParser:
         finally:
             Path(spec_path).unlink()
 
-    @pytest.mark.parametrize("keyword", ["anyOf", "oneOf"])
-    def test_parse_nullable_body_property(self, keyword):
+    @pytest.mark.parametrize(
+        "nullable",
+        [
+            {"anyOf": [{"type": "integer"}, {"type": "null"}]},
+            {"oneOf": [{"type": "integer"}, {"type": "null"}]},
+            {"type": ["integer", "null"]},
+        ],
+    )
+    def test_parse_nullable_body_property(self, nullable):
         """Test nullable body property keeps its non-null member type."""
         spec = {
             "openapi": "3.1.0",
@@ -241,10 +253,7 @@ class TestOpenApiParser:
                                         "type": "object",
                                         "properties": {
                                             "duration_minutes": {
-                                                keyword: [
-                                                    {"type": "integer"},
-                                                    {"type": "null"},
-                                                ],
+                                                **nullable,
                                                 "description": "Window length",
                                             },
                                         },
@@ -299,6 +308,50 @@ class TestOpenApiParser:
             param = groups["Users"].operations[0].parameters[0]
             assert param.is_array
             assert param.click_type == "int"
+        finally:
+            Path(spec_path).unlink()
+
+    @pytest.mark.parametrize(
+        ("items", "expected_click_type"),
+        [
+            ({"type": ["integer", "null"]}, "int"),
+            ({"anyOf": [{"type": "integer"}, {"type": "null"}]}, "int"),
+        ],
+    )
+    def test_parse_array_parameter_with_nullable_items(
+        self, items, expected_click_type
+    ):
+        """Test an array parameter with nullable items keeps the item type."""
+        spec = {
+            "openapi": "3.1.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/users": {
+                    "get": {
+                        "operationId": "listUsers",
+                        "tags": ["Users"],
+                        "parameters": [
+                            {
+                                "name": "ids",
+                                "in": "query",
+                                "schema": {
+                                    "type": ["array", "null"],
+                                    "items": items,
+                                },
+                            }
+                        ],
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                }
+            },
+        }
+        spec_path = create_temp_spec(spec)
+        try:
+            parser = OpenApiParser(spec_path)
+            groups = parser.parse()
+            param = groups["Users"].operations[0].parameters[0]
+            assert param.is_array
+            assert param.click_type == expected_click_type
         finally:
             Path(spec_path).unlink()
 
