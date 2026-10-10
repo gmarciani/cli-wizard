@@ -52,6 +52,7 @@
 - Fixed a `SplashFile` that does not exist being ignored silently; `generate` fails with a configuration error naming the path, as for `CaFile`.
 - Fixed `generate` failing with a formatting error when a spec description or summary, or the configured `Description`, holds a line break or a double quote; the help text keeps both.
 - Fixed `generate` crashing on an OpenAPI 3.1 type list such as `type: [string, "null"]`; the parameter takes its non-null type, and a list of several types is a string.
+- Fixed a `$ref` parameter, such as `{"$ref": "#/components/parameters/Verbose"}`, crashing `generate` with `KeyError: 'name'`; it becomes an option like any other parameter, and a reference that does not resolve is a spec error naming it.
 
 #### Generated code
 

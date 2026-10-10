@@ -164,7 +164,19 @@ class OpenApiParser:
         )
 
     def _parse_parameter(self, param: dict[str, Any]) -> Parameter:
-        """Parse a parameter definition."""
+        """Parse a parameter definition, resolving a `$ref` to one first.
+
+        Raises:
+            SpecError: if the parameter is a `$ref` that does not resolve
+        """
+        if "$ref" in param:
+            ref = param["$ref"]
+            param = self._resolve_ref(ref, "parameters")
+            if "name" not in param or "in" not in param:
+                raise SpecError(
+                    f"Could not resolve parameter reference '{ref}' in OpenAPI spec "
+                    f"'{self.spec_path}'"
+                )
         schema = _unwrap_nullable(param.get("schema", {}))
         return Parameter(
             name=param["name"],
@@ -187,7 +199,7 @@ class OpenApiParser:
 
         # Handle $ref
         if "$ref" in schema:
-            schema = self._resolve_ref(schema["$ref"])
+            schema = self._resolve_ref(schema["$ref"], "schemas")
 
         if not schema:
             return []
@@ -214,12 +226,11 @@ class OpenApiParser:
 
         return properties
 
-    def _resolve_ref(self, ref: str) -> dict[str, Any]:
-        """Resolve a $ref to its schema."""
+    def _resolve_ref(self, ref: str, section: str) -> dict[str, Any]:
+        """Resolve a `#/components/<section>/<name>` $ref, or return `{}`."""
         parts = ref.split("/")
-        if len(parts) != 4 or parts[1] != "components":
+        if len(parts) != 4 or parts[:3] != ["#", "components", section]:
             return {}
 
-        schema_name = parts[3]
-        result = self.spec.get("components", {}).get("schemas", {}).get(schema_name, {})
+        result = self.spec.get("components", {}).get(section, {}).get(parts[3], {})
         return dict(result) if isinstance(result, dict) else {}
