@@ -47,16 +47,17 @@ dev = [
     {include-group = "test"},
     {include-group = "docs"},
     "build~=1.5",
-    "mypy~=2.3",
     "pre-commit~=4.6",
     "tox~=4.58",
     "twine>=6.2,<8.0",
-    "types-PyYAML~=6.0",
-    "types-requests~=2.33",
 ]
+# mypy and the stubs too: the suite type checks the code it generates.
 test = [
+    "mypy~=2.3",
     "pytest~=9.1",
     "pytest-cov~=7.1",
+    "types-PyYAML~=6.0",
+    "types-requests~=2.33",
 ]
 docs = [
     "sphinx~=9.1",
