@@ -218,8 +218,8 @@ class TestConfigCommands:
     def test_config_init_creates_file(self):
         """Test config init creates profile file."""
         runner = CliRunner()
-        with runner.isolated_filesystem():
-            profile_path = Path.cwd() / "profiles.yaml"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir) / "profiles.yaml"
             with patch(
                 "my_cli.profile.PROFILE_FILE",
                 profile_path,
@@ -233,8 +233,8 @@ class TestConfigCommands:
     def test_config_init_restricts_permissions(self):
         """Test config init creates an owner-only file and directory."""
         runner = CliRunner()
-        with runner.isolated_filesystem():
-            profile_path = Path.cwd() / "home" / "profiles.yaml"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir) / "home" / "profiles.yaml"
             with patch(
                 "my_cli.profile.PROFILE_FILE",
                 profile_path,
@@ -364,8 +364,8 @@ class TestConfigCommands:
     def test_config_set(self):
         """Test setting a config value."""
         runner = CliRunner()
-        with runner.isolated_filesystem():
-            profile_path = Path.cwd() / "profiles.yaml"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
                 "my_cli.profile.PROFILE_FILE",
@@ -391,8 +391,8 @@ class TestConfigCommands:
     def test_config_set_restricts_permissions(self):
         """Test config set tightens a world-readable profile file."""
         runner = CliRunner()
-        with runner.isolated_filesystem():
-            profile_path = Path.cwd() / "profiles.yaml"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
             profile_path.chmod(0o644)
             with patch(
@@ -416,8 +416,8 @@ class TestConfigCommands:
     def test_config_set_json_value(self):
         """Test setting a JSON config value."""
         runner = CliRunner()
-        with runner.isolated_filesystem():
-            profile_path = Path.cwd() / "profiles.yaml"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
                 "my_cli.profile.PROFILE_FILE",
@@ -442,8 +442,8 @@ class TestConfigCommands:
     def test_config_unset(self):
         """Test unsetting a config value."""
         runner = CliRunner()
-        with runner.isolated_filesystem():
-            profile_path = Path.cwd() / "profiles.yaml"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default:\n  mykey: myvalue")
             with patch(
                 "my_cli.profile.PROFILE_FILE",
@@ -461,8 +461,8 @@ class TestConfigCommands:
     def test_config_unset_nonexistent_key(self):
         """Test unsetting a nonexistent config value."""
         runner = CliRunner()
-        with runner.isolated_filesystem():
-            profile_path = Path.cwd() / "profiles.yaml"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
                 "my_cli.profile.PROFILE_FILE",
@@ -682,8 +682,8 @@ class TestConfigCommands:
     def test_config_set_creates_profile(self):
         """Test set creates profile if it doesn't exist."""
         runner = CliRunner()
-        with runner.isolated_filesystem():
-            profile_path = Path.cwd() / "profiles.yaml"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir) / "profiles.yaml"
             profile_path.write_text("default: {}")
             with patch(
                 "my_cli.profile.PROFILE_FILE",
@@ -711,8 +711,8 @@ class TestConfigCommands:
     def test_config_set_file_not_exists(self):
         """Test set when profile file doesn't exist."""
         runner = CliRunner()
-        with runner.isolated_filesystem():
-            profile_path = Path.cwd() / "profiles.yaml"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir) / "profiles.yaml"
             with patch(
                 "my_cli.profile.PROFILE_FILE",
                 profile_path,

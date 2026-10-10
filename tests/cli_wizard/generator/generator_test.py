@@ -1987,7 +1987,7 @@ class TestGeneratedCommandTests:
         assert result.returncode == 0, result.stdout.decode()
 
     def test_generated_config_tests_pass(self, issue50_cli):
-        """Test the generated config tests hold on every supported Python."""
+        """Test the generated config tests hold, deprecation-free, on every Python."""
         result = subprocess.run(
             [
                 sys.executable,
@@ -1995,6 +1995,8 @@ class TestGeneratedCommandTests:
                 "pytest",
                 "tests/cli_test.py::TestConfigCommands",
                 "-q",
+                "-W",
+                "error::DeprecationWarning",
             ],
             cwd=issue50_cli,
             capture_output=True,
