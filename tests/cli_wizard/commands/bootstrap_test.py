@@ -14,12 +14,18 @@ from cli_wizard.commands.bootstrap import (
     BOOTSTRAP_PARAMS,
     _generate_config_file,
     _get_default_for_param,
-    _load_existing_config,
     _yaml_value,
 )
 from cli_wizard.config.schema import DEFAULT_PYTHON_VERSION
 
 DEFAULT_ANSWERS = "\n" * len(BOOTSTRAP_PARAMS)
+
+# A configuration file already in place when bootstrap runs
+EXISTING_CONFIG = (
+    'CommandName: "acme"\n'
+    "IncludeGithubWorkflows: true\n"
+    'DefaultBaseUrl: "https://api.example.com"\n'
+)
 
 # Values a prompt accepts that YAML would misread if written unescaped
 HOSTILE_STRINGS = [
@@ -193,14 +199,12 @@ class TestBootstrapCommand:
         assert result.exit_code == 0, result.output
         assert "already exists" not in result.output
 
-    def test_bootstrap_with_existing_config(self, tmp_path):
-        """Test bootstrap reuses values from an existing config file as defaults."""
+    def test_bootstrap_declining_to_overwrite_the_config_writes_nothing(self, tmp_path):
+        """Test bootstrap aborts before prompting when the overwrite is declined."""
         runner = CliRunner()
         target_dir = tmp_path / "my-cli"
         config_path = tmp_path / "cli-wizard.yaml"
-        config_path.write_text(
-            "CommandName: my-existing-cli\nDefaultBaseUrl: https://api.example.com\n"
-        )
+        config_path.write_text(EXISTING_CONFIG)
 
         result = runner.invoke(
             main,
@@ -211,12 +215,48 @@ class TestBootstrapCommand:
                 "--configuration",
                 str(config_path),
             ],
-            input=DEFAULT_ANSWERS,
+            input="n\n",
+        )
+
+        assert result.exit_code == 8  # Aborted
+        assert "already exists" in result.stderr
+        assert "Project Configuration" not in result.stderr
+        assert config_path.read_text() == EXISTING_CONFIG
+        assert not target_dir.exists()
+
+    @pytest.mark.parametrize(
+        ("extra_args", "answers"),
+        [([], "y\n" + DEFAULT_ANSWERS), (["--force"], DEFAULT_ANSWERS)],
+        ids=["confirmed", "force"],
+    )
+    def test_bootstrap_overwrites_the_config_without_keeping_its_values(
+        self, tmp_path, extra_args, answers
+    ):
+        """Test an overwritten config holds only the prompted values."""
+        runner = CliRunner()
+        target_dir = tmp_path / "my-cli"
+        config_path = tmp_path / "cli-wizard.yaml"
+        config_path.write_text(EXISTING_CONFIG)
+
+        result = runner.invoke(
+            main,
+            [
+                "bootstrap",
+                "--output",
+                str(target_dir),
+                "--configuration",
+                str(config_path),
+                *extra_args,
+            ],
+            input=answers,
         )
 
         assert result.exit_code == 0, result.output
-        assert "Using existing config" in result.output
-        assert "my-existing-cli" in config_path.read_text()
+        written = yaml.safe_load(config_path.read_text())
+        assert written["CommandName"] == "my-cli"
+        assert "IncludeGithubWorkflows" not in written
+        assert "DefaultBaseUrl" not in written
+        assert not (target_dir / ".github").exists()
 
     def test_bootstrap_default_configuration_path(self, tmp_path, monkeypatch):
         """Test bootstrap writes to ./cli-wizard.yaml without --configuration."""
@@ -334,45 +374,34 @@ class TestBootstrapCommand:
 class TestGetDefaultForParam:
     """Tests for _get_default_for_param helper."""
 
-    def test_existing_config_takes_priority(self):
-        """Existing config values take priority over derived/schema defaults."""
-        default = _get_default_for_param(
-            "CommandName", {}, existing_config={"CommandName": "from-config"}
-        )
-        assert default == "from-config"
-
     def test_command_name_derived_from_target_dir(self):
         """CommandName defaults to kebab-case of the target directory name."""
         default = _get_default_for_param(
-            "CommandName", {"_target_dir_name": "My Cool CLI"}, None
+            "CommandName", {"_target_dir_name": "My Cool CLI"}
         )
         assert default == "my-cool-cli"
 
     def test_project_name_derived_from_command_name(self):
         """ProjectName defaults to title case of CommandName."""
-        default = _get_default_for_param(
-            "ProjectName", {"CommandName": "my-cool-cli"}, None
-        )
+        default = _get_default_for_param("ProjectName", {"CommandName": "my-cool-cli"})
         assert default == "My Cool Cli"
 
     def test_package_name_derived_from_command_name(self):
         """PackageName defaults to snake_case of CommandName."""
-        default = _get_default_for_param(
-            "PackageName", {"CommandName": "my-cool-cli"}, None
-        )
+        default = _get_default_for_param("PackageName", {"CommandName": "my-cool-cli"})
         assert default == "my_cool_cli"
 
     def test_github_user_defaults_to_system_user(self, monkeypatch):
         """GithubUser defaults to the current system username."""
         monkeypatch.setattr("getpass.getuser", lambda: "testuser")
-        default = _get_default_for_param("GithubUser", {}, None)
+        default = _get_default_for_param("GithubUser", {})
         assert default == "testuser"
 
     def test_copyright_year_defaults_to_current_year(self):
         """CopyrightYear defaults to the current year."""
         from datetime import date
 
-        default = _get_default_for_param("CopyrightYear", {}, None)
+        default = _get_default_for_param("CopyrightYear", {})
         assert default == str(date.today().year)
 
     def test_repository_url_derived_from_github_user_and_command_name(self):
@@ -380,7 +409,6 @@ class TestGetDefaultForParam:
         default = _get_default_for_param(
             "RepositoryUrl",
             {"GithubUser": "octocat", "CommandName": "my-cli"},
-            None,
         )
         assert default == "https://github.com/octocat/my-cli"
 
@@ -389,40 +417,13 @@ class TestGetDefaultForParam:
         default = _get_default_for_param(
             "HomePageUrl",
             {"RepositoryUrl": "https://github.com/octocat/my-cli"},
-            None,
         )
         assert default == "https://github.com/octocat/my-cli"
 
     def test_falls_back_to_schema_default(self):
         """Unrecognized params fall back to the schema default value."""
-        default = _get_default_for_param("PythonVersion", {}, None)
+        default = _get_default_for_param("PythonVersion", {})
         assert default == DEFAULT_PYTHON_VERSION
-
-
-class TestLoadExistingConfig:
-    """Tests for _load_existing_config helper."""
-
-    def test_missing_file_returns_none(self, tmp_path):
-        """Test that a missing config file returns None."""
-        assert _load_existing_config(tmp_path / "nonexistent.yaml") is None
-
-    def test_valid_config_returns_dict(self, tmp_path):
-        """Test that a valid config file is parsed into a dict."""
-        config_path = tmp_path / "cli-wizard.yaml"
-        config_path.write_text("CommandName: my-cli\n")
-        assert _load_existing_config(config_path) == {"CommandName": "my-cli"}
-
-    def test_empty_file_returns_empty_dict(self, tmp_path):
-        """Test that an empty config file returns an empty dict."""
-        config_path = tmp_path / "cli-wizard.yaml"
-        config_path.write_text("")
-        assert _load_existing_config(config_path) == {}
-
-    def test_invalid_yaml_returns_none(self, tmp_path):
-        """Test that invalid YAML content returns None."""
-        config_path = tmp_path / "cli-wizard.yaml"
-        config_path.write_text("key: [unbalanced")
-        assert _load_existing_config(config_path) is None
 
 
 class TestYamlValue:

@@ -25,6 +25,7 @@
 - [Breaking] Renamed the `OpenapiSpec` configuration parameter to `Api`, matching `--api`; a configuration still using `OpenapiSpec` is rejected.
 - [Breaking] Every command prints one JSON document on stdout: `generate` and `bootstrap` print a summary of what they produced, while progress, prompts and hints go to stderr.
 - [Breaking] Every failure is a JSON document on stdout, `{"error": {"type", "message", "exitCode"}}`, in place of a message on stderr.
+- [Breaking] `bootstrap` asks before overwriting an existing configuration file and keeps none of its values; declining exits without writing anything, and `--force` overwrites without asking.
 - A malformed OpenAPI spec and a failing ruff run are reported as errors instead of tracebacks; `--debug` logs the traceback of an unexpected error.
 - The development toolchain installs with `pip install -e . --group dev`, a [PEP 735](https://peps.python.org/pep-0735/) dependency group needing pip 25.1 or newer, instead of extras.
 - Logs through the standard library's `logging` module.
