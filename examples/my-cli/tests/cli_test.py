@@ -106,7 +106,9 @@ class TestCli:
         runner = CliRunner()
         result = runner.invoke(main, ["--help"])
         assert result.exit_code == 0
-        assert "A CLI application" in result.output
+        # Click rewraps the help text, so compare it word by word
+        description = "A CLI application"
+        assert " ".join(description.split()) in " ".join(result.output.split())
 
     def test_version(self):
         """Test version option."""
