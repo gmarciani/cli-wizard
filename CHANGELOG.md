@@ -58,6 +58,7 @@
 - Fixed `RetryMaxAttempts` and `RetryBackoffFactor` having no effect: connection failures and 429 or 5xx responses are retried as configured.
 - Fixed `--debug` printing passwords, tokens and the `Authorization` header in cleartext; they are redacted to `***` in the terminal and in the log file.
 - Fixed `config set` logging the value it stores in cleartext; an access token or other credential is logged as `***`.
+- Fixed an unknown `--profile` being logged and then ignored, sending the request with the defaults; an API command fails with exit code 7 before sending anything, listing the profiles that exist.
 - Fixed a configured CA file that does not exist being ignored in favour of the system trust store; the command now fails with a configuration error.
 - Fixed `CaFile` having no effect: requests are verified against the bundled CA instead of the system trust store.
 - Fixed `SplashFile` having no effect: the bundled splash screen now shows.
