@@ -845,3 +845,72 @@ class TestOpenApiParser:
             assert len(op.body_properties) == 0
         finally:
             Path(spec_path).unlink()
+
+    @staticmethod
+    def _spec_with_parameter(parameter: dict, components: dict) -> dict:
+        """Build a spec whose one operation takes the given parameter."""
+        return {
+            "openapi": "3.0.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/users": {
+                    "get": {
+                        "operationId": "listUsers",
+                        "tags": ["Users"],
+                        "parameters": [parameter],
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                }
+            },
+            "components": components,
+        }
+
+    def test_parse_parameter_ref(self, tmp_path):
+        """Test a $ref parameter is parsed as the parameter it references."""
+        spec = self._spec_with_parameter(
+            {"$ref": "#/components/parameters/Verbose"},
+            {
+                "parameters": {
+                    "Verbose": {
+                        "name": "verbose",
+                        "in": "query",
+                        "description": "Verbose output",
+                        "schema": {"type": "boolean"},
+                    }
+                }
+            },
+        )
+        spec_path = tmp_path / "openapi.json"
+        spec_path.write_text(json.dumps(spec))
+
+        groups = OpenApiParser(str(spec_path)).parse()
+
+        param = groups["Users"].operations[0].parameters[0]
+        assert (param.name, param.location, param.param_type, param.description) == (
+            "verbose",
+            "query",
+            "boolean",
+            "Verbose output",
+        )
+
+    @pytest.mark.parametrize(
+        "ref,components",
+        [
+            ("#/components/parameters/Missing", {"parameters": {}}),
+            ("#/components/parameters/Missing", {}),
+            ("#/components/schemas/Verbose", {"schemas": {"Verbose": {}}}),
+            ("#/invalid/path", {}),
+            ("https://example.com/params.json#/Verbose", {}),
+        ],
+    )
+    def test_unresolvable_parameter_ref_is_a_spec_error(
+        self, tmp_path, ref, components
+    ):
+        """Test a $ref parameter that does not resolve names the reference."""
+        spec = self._spec_with_parameter({"$ref": ref}, components)
+        spec_path = tmp_path / "openapi.json"
+        spec_path.write_text(json.dumps(spec))
+        parser = OpenApiParser(str(spec_path))
+
+        with pytest.raises(SpecError, match=re.escape(f"'{ref}'")):
+            parser.parse()
