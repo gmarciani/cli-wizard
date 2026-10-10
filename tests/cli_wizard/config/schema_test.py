@@ -484,21 +484,10 @@ class TestSupportedPythonVersions:
         matrix = workflow["jobs"]["test"]["strategy"]["matrix"]["python-version"]
         assert [str(v) for v in matrix] == list(SUPPORTED_PYTHON_VERSIONS)
 
-    def test_cli_wizard_pr_check_covers_supported_versions(self):
-        """Test that the PR check runs the suite on every supported interpreter."""
-        workflow = yaml.safe_load(
-            (REPO_ROOT / ".github" / "workflows" / "pr-validation.yaml").read_text(
-                encoding="utf-8"
-            )
-        )
-        matrix = workflow["jobs"]["test"]["strategy"]["matrix"]["python-version"]
-        assert [str(v) for v in matrix] == list(SUPPORTED_PYTHON_VERSIONS)
-
     @pytest.mark.parametrize(
         "workflow, job",
         [
             ("test.yaml", "quality"),
-            ("pr-validation.yaml", "quality"),
             ("docs.yaml", "build"),
             ("release.yaml", "publish"),
         ],

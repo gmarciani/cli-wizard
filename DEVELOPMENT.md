@@ -57,6 +57,9 @@ tox -e type        # Type checking only
 tox -e format      # Format code
 ```
 
+A coverage run fails when total coverage drops below 90% (`fail_under` in
+`pyproject.toml`). That applies to `tox -e test`, `tox -e coverage` and CI.
+
 ### Python versions
 
 cli-wizard supports Python 3.12, 3.13 and 3.14, and generates projects that
@@ -94,9 +97,9 @@ The supported range is declared once, in `SUPPORTED_PYTHON_VERSIONS` in
 cli-wizard's classifiers, tox envlist, CI matrices and README badge, and —
 through a generated project's `PythonVersion` — the same in everything
 cli-wizard generates. Tests fail if any of them disagree, so adding a version
-means updating `tox.ini`, `.github/workflows/test.yaml`,
-`.github/workflows/pr-validation.yaml` and the README badge alongside the
-constant.
+means updating `tox.ini`, `.github/workflows/test.yaml` and the README badge
+alongside the constant. The `Required checks` ruleset on `main` names each
+`test (<version>)` job, so update it in the repository settings as well.
 
 ## Documentation
 
