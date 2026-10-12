@@ -151,7 +151,7 @@ it, without API commands. The CLI lands in the current directory, in a
 directory named after `CommandName`; pass `--output` to write it elsewhere:
 
 ```shell
-cli-wizard bootstrap --configuration cli-wizard.yaml
+cli-wizard bootstrap --configuration cli-wizard.yaml --project-name "My CLI"
 ```
 
 Then edit the configuration, point `Api` at your specification, and rebuild
@@ -192,6 +192,7 @@ cli-wizard bootstrap [OPTIONS]
 
 Options:
 - `--configuration, -c` - Path for the `cli-wizard.yaml` configuration file (default: `./cli-wizard.yaml`). An existing file is overwritten, after confirmation, without keeping any of its values
+- `--project-name, -p` - Human-readable project name, written as `ProjectName` without prompting for it; the default command name derives from it
 - `--output, -o` - Output directory of the basic CLI (default: a directory named after `CommandName` in the current directory)
 - `--force, -f` - Skip the confirmation prompts to overwrite an existing configuration file or to write into a non-empty directory
 

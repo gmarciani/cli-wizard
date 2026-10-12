@@ -58,6 +58,7 @@ class TestBootstrapCommand:
         assert "--output" in result.output
         assert "--force" in result.output
         assert "--configuration" in result.output
+        assert "--project-name" in result.output
 
     def test_bootstrap_new_project(self, tmp_path):
         """Test bootstrapping a project in a directory that does not exist yet."""
@@ -356,6 +357,58 @@ class TestBootstrapCommand:
         assert "CLI command name" in result.output
         assert "[pet-store]:" in result.output
 
+    @pytest.mark.parametrize("option", ["--project-name", "-p"])
+    def test_bootstrap_project_name_is_not_prompted(
+        self, tmp_path, monkeypatch, option
+    ):
+        """Test that --project-name sets ProjectName and drives CommandName."""
+        runner = CliRunner()
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / "config" / "cli-wizard.yaml"
+        answers = "\n" * (len(BOOTSTRAP_PARAMS) - 1)
+
+        result = runner.invoke(
+            main,
+            ["bootstrap", "--configuration", str(config_path), option, "Pet Store"],
+            input=answers,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "Human-readable project name" not in result.output
+        written = yaml.safe_load(config_path.read_text())
+        assert written["ProjectName"] == "Pet Store"
+        assert written["CommandName"] == "pet-store"
+        assert written["PackageName"] == "pet_store"
+        assert (tmp_path / "pet-store" / "pyproject.toml").exists()
+        summary = json.loads(result.stdout)
+        assert summary["projectName"] == "Pet Store"
+
+    def test_bootstrap_project_name_still_lets_command_name_be_answered(self, tmp_path):
+        """Test that the derived CommandName is only the prompt's default."""
+        runner = CliRunner()
+        config_path = tmp_path / "cli-wizard.yaml"
+        answers = "petctl\n" + "\n" * (len(BOOTSTRAP_PARAMS) - 2)
+
+        result = runner.invoke(
+            main,
+            [
+                "bootstrap",
+                "--configuration",
+                str(config_path),
+                "--project-name",
+                "Pet Store",
+                "--output",
+                str(tmp_path / "out"),
+            ],
+            input=answers,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "[pet-store]:" in result.output
+        written = yaml.safe_load(config_path.read_text())
+        assert written["ProjectName"] == "Pet Store"
+        assert written["CommandName"] == "petctl"
+
     def test_bootstrap_with_debug(self, tmp_path):
         """Test bootstrap with --debug flag enabled."""
         runner = CliRunner()
@@ -387,6 +440,13 @@ class TestGetDefaultForParam:
             "CommandName", {"_target_dir_name": "My Cool CLI"}
         )
         assert default == "my-cool-cli"
+
+    def test_command_name_derived_from_given_project_name(self):
+        """A ProjectName given upfront takes precedence over the target directory."""
+        default = _get_default_for_param(
+            "CommandName", {"_target_dir_name": "out", "ProjectName": "Pet Store!"}
+        )
+        assert default == "pet-store"
 
     def test_project_name_derived_from_command_name(self):
         """ProjectName defaults to title case of CommandName."""

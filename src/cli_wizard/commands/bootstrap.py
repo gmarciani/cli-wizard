@@ -16,7 +16,7 @@ from jinja2 import Environment, PackageLoader
 from cli_wizard.commands.common import emit_json
 from cli_wizard.commands.generate import resolve_output_dir
 from cli_wizard.config.project import load_cli_config
-from cli_wizard.config.schema import Config
+from cli_wizard.config.schema import Config, command_name_from
 from cli_wizard.constants import CONFIG_FILE_NAME
 from cli_wizard.errors import Aborted
 from cli_wizard.generator import CliGenerator
@@ -53,7 +53,10 @@ def _get_default_for_param(param_name: str, values: dict[str, Any]) -> str:
     2. Schema default
     """
     if param_name == "CommandName":
-        # Default to folder name in kebab-case
+        # Default to the kebab-case of a ProjectName passed with --project-name
+        if values.get("ProjectName"):
+            return command_name_from(str(values["ProjectName"]))
+        # Else to folder name in kebab-case
         target_dir_name = str(values.get("_target_dir_name", "my-project"))
         return target_dir_name.lower().replace("_", "-").replace(" ", "-")
 
@@ -101,6 +104,9 @@ from that file without API commands, so no OpenAPI file is required. An
 existing configuration file is overwritten, after confirmation, without
 keeping any of its values.
 
+--project-name sets ProjectName, which is then not prompted, and the
+CommandName prompt defaults to a name derived from it.
+
 The basic CLI is written to the --output directory, by default a directory
 named after CommandName in the current directory."""
 )
@@ -110,6 +116,12 @@ named after CommandName in the current directory."""
     type=click.Path(dir_okay=False, resolve_path=True),
     default=None,
     help=f"Path for {CONFIG_FILE_NAME} (default: ./{CONFIG_FILE_NAME})",
+)
+@click.option(
+    "--project-name",
+    "-p",
+    default=None,
+    help="Human-readable project name; the default command name derives from it",
 )
 @click.option(
     "--output",
@@ -127,7 +139,11 @@ named after CommandName in the current directory."""
 )
 @click.pass_context
 def bootstrap(
-    ctx: click.Context, configuration: str | None, output: str | None, force: bool
+    ctx: click.Context,
+    configuration: str | None,
+    project_name: str | None,
+    output: str | None,
+    force: bool,
 ) -> None:
     """Bootstrap command implementation."""
     debug = ctx.obj.get("debug", False) if ctx.obj else False
@@ -140,6 +156,7 @@ def bootstrap(
 
     if debug:
         logger.debug(f"Config path: {config_path}")
+        logger.debug(f"Project name (CLI): {project_name}")
         logger.debug(f"Output directory (CLI): {output}")
         logger.debug(f"Force mode: {force}")
 
@@ -160,11 +177,16 @@ def bootstrap(
 
     # Collect values for bootstrap parameters. CommandName defaults to the
     # name of the output directory when one is given, else to the name of the
-    # directory the configuration file lives in.
+    # directory the configuration file lives in. A --project-name is taken
+    # as given and takes precedence for the CommandName default.
     target_dir_name = Path(output).name if output else config_path.parent.name
     values: dict = {"_target_dir_name": target_dir_name}
+    if project_name:
+        values["ProjectName"] = project_name
 
     for param_name in BOOTSTRAP_PARAMS:
+        if param_name in values:
+            continue
         description = Config.get_field_description(param_name)
         default = _get_default_for_param(param_name, values)
 
