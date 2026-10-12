@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.0
+
+### New Features
+
+#### cli-wizard
+
+- Added `--project-name` to `bootstrap`: it sets `ProjectName` without prompting for it, and the command name prompt defaults to a name derived from it.
+
 ## 3.0.0
 
 ### New Features

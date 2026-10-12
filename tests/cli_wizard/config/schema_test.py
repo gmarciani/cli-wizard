@@ -17,6 +17,7 @@ from cli_wizard.config.schema import (
     DEFAULT_PYTHON_VERSION,
     SUPPORTED_PYTHON_VERSIONS,
     Config,
+    command_name_from,
     python_versions_from,
     ruff_target_version,
     tox_env_name,
@@ -406,6 +407,19 @@ class TestDeriveNamesFromProject:
         """A null ProjectName must not reach re.sub and raise TypeError."""
         with pytest.raises(ValidationError):
             Config(ProjectName=None)
+
+    @pytest.mark.parametrize(
+        ("project_name", "command_name"),
+        [
+            ("My CLI", "my-cli"),
+            ("  Pet  Store!  ", "pet-store"),
+            ("acme_tool v2", "acme-tool-v2"),
+        ],
+    )
+    def test_command_name_from_project_name(self, project_name, command_name):
+        """CommandName is the kebab-case of ProjectName, punctuation dropped."""
+        assert command_name_from(project_name) == command_name
+        assert Config(ProjectName=project_name).CommandName == command_name
 
 
 class TestSupportedPythonVersions:

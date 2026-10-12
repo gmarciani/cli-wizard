@@ -54,6 +54,11 @@ def ruff_target_version(version: str) -> str:
     return "py" + version.replace(".", "")
 
 
+def command_name_from(project_name: str) -> str:
+    """Derive the kebab-case ``CommandName`` from a ``ProjectName``."""
+    return re.sub(r"[^a-zA-Z0-9]+", "-", project_name).strip("-").lower()
+
+
 class Config(BaseModel):
     """CLI Wizard configuration schema."""
 
@@ -323,9 +328,7 @@ class Config(BaseModel):
             # as None and raise TypeError instead of a ValidationError.
             project_name = data.get("ProjectName") or "My Project"
             if not data.get("CommandName"):
-                data["CommandName"] = (
-                    re.sub(r"[^a-zA-Z0-9]+", "-", project_name).strip("-").lower()
-                )
+                data["CommandName"] = command_name_from(project_name)
             if not data.get("PackageName"):
                 data["PackageName"] = (
                     re.sub(r"[^a-zA-Z0-9]+", "_", project_name).strip("_").lower()
