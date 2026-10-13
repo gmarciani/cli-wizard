@@ -1171,9 +1171,10 @@ class TestOutput:
         """Test a list of scalars becomes a one-column table."""
         assert render_table(["x", "y"], "minimal") == "value\n-----\nx\ny"
 
-    def test_table_of_nothing_is_empty(self):
-        """Test an empty list renders as nothing rather than a bare header."""
-        assert render_table([], "rounded") == ""
+    @pytest.mark.parametrize("data", [[], {}], ids=["list", "object"])
+    def test_table_of_nothing_is_empty(self, data):
+        """Test an empty list or object renders as nothing, not a bare header."""
+        assert render_table(data, "rounded") == ""
 
     @pytest.mark.parametrize(
         "value,expected",
