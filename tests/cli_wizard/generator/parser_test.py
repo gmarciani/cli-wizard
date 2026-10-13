@@ -650,8 +650,9 @@ class TestOpenApiParser:
         finally:
             Path(spec_path).unlink()
 
-    def test_parse_default_tag(self):
-        """Test operation without tags uses default."""
+    @pytest.mark.parametrize("tags", [{}, {"tags": []}], ids=["missing", "empty"])
+    def test_parse_default_tag(self, tags):
+        """Test operation without tags, or with an empty list, uses default."""
         spec = {
             "openapi": "3.0.0",
             "info": {"title": "Test API", "version": "1.0.0"},
@@ -659,6 +660,7 @@ class TestOpenApiParser:
                 "/health": {
                     "get": {
                         "operationId": "healthCheck",
+                        **tags,
                         "responses": {"200": {"description": "OK"}},
                     }
                 }
@@ -668,7 +670,9 @@ class TestOpenApiParser:
         try:
             parser = OpenApiParser(spec_path)
             groups = parser.parse()
-            assert "default" in groups
+            assert [op.operation_id for op in groups["default"].operations] == [
+                "healthCheck"
+            ]
         finally:
             Path(spec_path).unlink()
 
