@@ -71,6 +71,23 @@ def _string_literal(text: str) -> str:
     return json.dumps(text, ensure_ascii=False).translate(_UNSAFE_RAW_CHARACTERS)
 
 
+def _rst_heading(title: str, underline: str) -> str:
+    """Render a reStructuredText section title, underlined to its length."""
+    return f"{title}\n{underline * len(title)}"
+
+
+def _rst_inline(text: str) -> str:
+    """Turn Markdown inline code, written `like this`, into reStructuredText's."""
+    return re.sub(r"`([^`]+)`", r"``\1``", text)
+
+
+def _setting_default(value: Any) -> str | None:
+    """Render a setting's default as the profile file would spell it."""
+    if isinstance(value, bool):
+        return str(value).lower()
+    return None if value is None else str(value)
+
+
 # One sample per Click type, fed to the generated commands by the generated
 # tests. A path string needs percent-encoding so the test proves the URL is
 # escaped rather than interpolated raw.
@@ -352,6 +369,20 @@ TOOL_TEMPLATES: tuple[tuple[str, str], ...] = (
     ("tools/draft_release.sh.j2", "tools/draft_release.sh"),
 )
 
+# The Sphinx documentation, built by `make build-docs` and published by the
+# docs workflow. The Sphinx Makefile references nothing of the project.
+DOCS_TEMPLATES: tuple[tuple[str, str], ...] = (
+    ("docs/conf.py.j2", "docs/conf.py"),
+    ("docs/index.rst.j2", "docs/index.rst"),
+    ("docs/installation.rst.j2", "docs/installation.rst"),
+    ("docs/commands.rst.j2", "docs/commands.rst"),
+    ("docs/configuration.rst.j2", "docs/configuration.rst"),
+    ("docs/authentication.rst.j2", "docs/authentication.rst"),
+    ("docs/exit-codes.rst.j2", "docs/exit-codes.rst"),
+    ("docs/_templates/layout.html.j2", "docs/_templates/layout.html"),
+)
+DOCS_STATIC_FILES: tuple[str, ...] = ("docs/Makefile",)
+
 # The .github tree, generated only when IncludeGithubWorkflows is set. The
 # workflows are cli-wizard's own. The templated files reference the project;
 # the workflows pinning a single interpreter run on the default, the newest
@@ -459,6 +490,8 @@ class CliGenerator:
         self.env.filters["url_expression"] = _build_url_expression
         self.env.filters["test_case"] = _operation_test_case
         self.env.filters["string_literal"] = _string_literal
+        self.env.filters["rst_heading"] = _rst_heading
+        self.env.filters["rst"] = _rst_inline
 
     def _template_context(self, **extra: Any) -> dict[str, Any]:
         """Build template context with all config values spread at top level.
@@ -494,10 +527,10 @@ class CliGenerator:
             "PythonVersion"
         )
 
-        # Documented in the order the README should read them, with the default
-        # the generated constants module ends up holding.
+        # Documented in the order the README and the docs should read them,
+        # with the default the generated constants module ends up holding.
         profile_settings = [
-            (key, profile_defaults[key], text)
+            (key, _setting_default(profile_defaults[key]), text)
             for key, text in PROFILE_SETTING_DOCS.items()
         ]
 
@@ -509,9 +542,16 @@ class CliGenerator:
                 "CoverageThreshold", Config.get_field_default("CoverageThreshold")
             ),
             "Version": self.config.get("Version", Config.get_field_default("Version")),
-            # And an absent description cannot be quoted as a string literal.
+            # And an absent description or name cannot be quoted as a string
+            # literal.
             "Description": self.config.get(
                 "Description", Config.get_field_default("Description")
+            ),
+            "ProjectName": self.config.get(
+                "ProjectName", Config.get_field_default("ProjectName")
+            ),
+            "AuthorName": self.config.get(
+                "AuthorName", Config.get_field_default("AuthorName")
             ),
             "config": self.config,  # Also include as nested dict for compatibility
             "cli_name": self.cli_name,
@@ -568,6 +608,10 @@ class CliGenerator:
         for template_name, relative in TOOL_TEMPLATES:
             self._render(template_name, output_dir / relative)
             (output_dir / relative).chmod(0o755)
+        for template_name, relative in DOCS_TEMPLATES:
+            self._render(template_name, output_dir / relative)
+        for name in DOCS_STATIC_FILES:
+            self._copy_static(name, output_dir / name)
         self._render(
             "tests/{{ PackageName }}/commands_test.py.j2",
             tests_dir / "commands_test.py",

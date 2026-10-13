@@ -42,10 +42,14 @@ from cli_wizard.config.schema import (
 )
 from cli_wizard.errors import ConfigError, FormattingError, RuffNotFoundError
 from cli_wizard.generator.generator import (
+    PROFILE_SETTING_DOCS,
     RUFF_COMMANDS,
     CliGenerator,
     _build_url_expression,
+    _rst_heading,
+    _rst_inline,
     _sensitive_field_names,
+    _setting_default,
     _string_literal,
     resolve_ruff,
 )
@@ -191,6 +195,53 @@ UNSAFE_TEXT = [
     "Unicode \u00e9\x85\u2028\u2029\U0001f600",
     "",
 ]
+
+
+class TestRstHelpers:
+    """Tests for the reStructuredText filters the docs templates use."""
+
+    @pytest.mark.parametrize(
+        ("title", "underline", "expected"),
+        [
+            ("My Cli", "=", "My Cli\n======"),
+            ("Pet Store CLI", "-", "Pet Store CLI\n-------------"),
+        ],
+    )
+    def test_heading_is_underlined_to_its_length(self, title, underline, expected):
+        """Test that a section title gets an underline exactly as long as it."""
+        assert _rst_heading(title, underline) == expected
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("plain text", "plain text"),
+            ("the `json` format", "the ``json`` format"),
+            ("`a`, `b` or `c`", "``a``, ``b`` or ``c``"),
+            ("retry *n*", "retry *n*"),
+        ],
+    )
+    def test_markdown_inline_code_becomes_rst(self, text, expected):
+        """Test that `code` turns into ``code`` and nothing else changes."""
+        assert _rst_inline(text) == expected
+
+
+class TestSettingDefault:
+    """Tests for _setting_default helper."""
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            (None, None),
+            (True, "true"),
+            (False, "false"),
+            (30, "30"),
+            (0.5, "0.5"),
+            ("http://localhost:3000", "http://localhost:3000"),
+        ],
+    )
+    def test_default_is_spelled_as_in_the_profile_file(self, value, expected):
+        """Test that booleans are lower case and an absent default stays None."""
+        assert _setting_default(value) == expected
 
 
 class TestStringLiteral:
@@ -1714,6 +1765,117 @@ class TestGeneratedWorkflowsMatchCliWizard:
             Config.get_field_default("CoverageThreshold")
         )
         assert any(r.startswith("pytest") and "--cov=" in r for r in runs)
+
+
+class TestGeneratedDocs:
+    """A generated project builds its documentation the way cli-wizard does."""
+
+    @staticmethod
+    def _generate(temp_dir):
+        """Render a project with commands and return the output directory.
+
+        Sphinx imports the generated CLI, so it must target the oldest
+        supported version: the 3.14 default emits syntax 3.12 cannot parse.
+        """
+        output_dir = Path(temp_dir) / "test-cli"
+        generator = CliGenerator(
+            config=Config(
+                ProjectName="Test Cli",
+                RepositoryUrl="https://github.com/test/test-cli",
+                PythonVersion=SUPPORTED_PYTHON_VERSIONS[0],
+                IncludeGithubWorkflows=True,
+            ).model_dump()
+        )
+        groups = TestCliGenerator()._sample_groups()
+        generator.generate(groups, output_dir, "test-cli", "test_cli")
+        return output_dir
+
+    @staticmethod
+    def _build(output_dir, builder):
+        """Build the docs with Sphinx, warnings as errors; return the result."""
+        return subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [
+                sys.executable,
+                "-m",
+                "sphinx",
+                "-W",
+                "-q",
+                "-b",
+                builder,
+                "docs",
+                str(output_dir / "docs" / "_build" / builder),
+            ],
+            cwd=output_dir,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_docs_build_without_warnings(self, tmp_path):
+        """Test that the generated docs build cleanly, as the docs workflow does."""
+        output_dir = self._generate(tmp_path)
+
+        result = self._build(output_dir, "html")
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (output_dir / "docs" / "_build" / "html" / "index.html").is_file()
+
+    def test_every_command_is_documented(self, tmp_path):
+        """Test that the commands page documents every generated command."""
+        output_dir = self._generate(tmp_path)
+        assert self._build(output_dir, "text").returncode == 0
+
+        page = (output_dir / "docs" / "_build" / "text" / "commands.txt").read_text()
+
+        for command in ("config", "users", "list-users"):
+            assert command in page, f"{command} missing from the commands page"
+
+    def test_every_setting_is_documented(self, tmp_path):
+        """Test that the configuration page lists every profile setting."""
+        output_dir = self._generate(tmp_path)
+        assert self._build(output_dir, "text").returncode == 0
+
+        page = (
+            output_dir / "docs" / "_build" / "text" / "configuration.txt"
+        ).read_text()
+
+        for setting in PROFILE_SETTING_DOCS:
+            assert setting in page, f"{setting} missing from the configuration page"
+
+    def test_exit_codes_agree_with_the_readme(self, tmp_path):
+        """Test that the docs and the README document the same exit codes."""
+        output_dir = self._generate(tmp_path)
+
+        readme = (output_dir / "README.md").read_text()
+        docs = (output_dir / "docs" / "exit-codes.rst").read_text()
+
+        assert re.findall(r"^\| (\d+) \|", readme, re.M) == re.findall(
+            r"^   \* - (\d+)$", docs, re.M
+        )
+
+    def test_layout_links_the_repository(self, tmp_path):
+        """Test that the sidebar links the project and keeps Sphinx's own Jinja."""
+        output_dir = self._generate(tmp_path)
+
+        layout = (output_dir / "docs" / "_templates" / "layout.html").read_text()
+
+        assert 'href="https://github.com/test/test-cli"' in layout
+        assert '{% extends "!layout.html" %}' in layout
+        assert "{{ super() }}" in layout
+
+    def test_every_documented_make_target_exists(self, tmp_path):
+        """Test that DEVELOPMENT.md runs no make target the Makefile lacks."""
+        output_dir = self._generate(tmp_path)
+
+        makefile = (output_dir / "Makefile").read_text()
+        defined = set(re.findall(r"^([\w-]+):", makefile, re.M))
+        documented = set(
+            re.findall(
+                r"^make ([\w-]+)", (output_dir / "DEVELOPMENT.md").read_text(), re.M
+            )
+        )
+
+        assert documented, "expected DEVELOPMENT.md to document make targets"
+        assert documented <= defined, f"undefined targets: {documented - defined}"
 
 
 class TestGeneratedToxContract:

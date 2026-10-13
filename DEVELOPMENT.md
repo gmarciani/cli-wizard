@@ -33,7 +33,7 @@ local-only metadata that never reaches PyPI:
 
 | Group | Contents | Installed by |
 |---|---|---|
-| `test` | pytest, pytest-cov, mypy, type stubs | `tox -e py3xx`, and `dev` via `include-group` |
+| `test` | `docs`, plus pytest, pytest-cov, mypy, type stubs | `tox -e py3xx`, and `dev` via `include-group` |
 | `dev` | `test`, plus build, pre-commit, tox, twine | `make setup`, CI |
 | `docs` | sphinx and its plugins | `make install-docs` |
 

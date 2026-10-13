@@ -31,6 +31,7 @@ local-only metadata that never reaches an index:
 |---|---|---|
 | `test` | pytest, pytest-cov | the interpreter envs, and `dev` via `include-group` |
 | `dev` | `test`, plus build, mypy, pre-commit, ruff, tox, twine, type stubs | `make install`, CI |
+| `docs` | sphinx and its plugins | `make install-docs`, the docs workflow |
 
 `dev` pulls `test` in through `{include-group = "test"}`,
 so one command gets everything and there is no second recipe to keep in sync.

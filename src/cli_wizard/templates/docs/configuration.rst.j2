@@ -1,0 +1,38 @@
+Configuration
+=============
+
+Settings live in named profiles in ``{{ profile_file }}``. ``{{ cli_name }} config init``
+creates the file with an empty ``default`` profile, and any command creates it on
+first run if it is missing. ``{{ cli_name }} config show`` lists a profile with the
+defaults filled in, ``{{ cli_name }} config set --param <setting> --value <value>``
+changes one setting and ``--profile <name>`` on any command selects a profile other
+than ``default``. An API command given a profile the file does not hold fails
+without sending the request; ``config set --profile <name>`` creates it.
+
+Settings
+--------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 20 60
+
+   * - Setting
+     - Default
+     - Effect
+{% for key, default, text in profile_settings %}
+   * - ``{{ key }}``
+     - {{ 'unset' if default is none else '``' ~ default ~ '``' }}
+     - {{ text | rst }}
+{% endfor %}
+
+Precedence
+----------
+
+Each setting is resolved through four layers, highest precedence first:
+
+#. The command-line flag, for the settings that have one (``--base-url``,
+   ``--timeout``, ``--output``).
+#. The environment variable ``{{ package_name | upper }}_<SETTING>``, the setting
+   name in upper snake case: ``baseUrl`` reads ``{{ package_name | upper }}_BASE_URL``.
+#. The value stored in the profile selected with ``--profile``, or ``default``.
+#. The built-in default.
