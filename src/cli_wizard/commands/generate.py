@@ -153,10 +153,12 @@ def generate(
             err=True,
         )
 
-    # Verify the formatter and the resource files before deleting the output
+    # Verify the formatter, the resource files and the command groups before
+    # deleting the output
     resolve_ruff()
     generator = CliGenerator(config=cli_config, config_dir=config_dir)
     generator.check_resources()
+    generator.check_groups(groups)
 
     # Clean up output directory before generating
     if output_path.exists():
