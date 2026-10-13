@@ -340,11 +340,20 @@ PLAIN_TEMPLATES: tuple[tuple[str, str], ...] = (
     ),
 )
 
+# The release scripts, run by the Bump Version and Draft Release workflows or
+# by hand. They are cli-wizard's own tools/ under the generated header, and
+# executable, as their shebangs promise.
+TOOL_TEMPLATES: tuple[tuple[str, str], ...] = (
+    ("tools/bump_version.py.j2", "tools/bump_version.py"),
+    ("tools/draft_release.sh.j2", "tools/draft_release.sh"),
+)
+
 # The .github tree, generated only when IncludeGithubWorkflows is set. The
-# templated files reference the project; the three workflows pinning a single
-# interpreter must pin the project's declared minimum, since a hardcoded
-# version gave a project with a higher PythonVersion a CI job whose pip
-# install failed against its own requires-python.
+# workflows are cli-wizard's own. The templated files reference the project;
+# the workflows pinning a single interpreter must pin the project's declared
+# minimum, since a hardcoded version gave a project with a higher
+# PythonVersion a CI job whose pip install failed against its own
+# requires-python.
 GITHUB_TEMPLATES: tuple[tuple[str, str], ...] = (
     (".github/CODEOWNERS.j2", ".github/CODEOWNERS"),
     (".github/labels.yaml.j2", ".github/labels.yaml"),
@@ -357,8 +366,8 @@ GITHUB_TEMPLATES: tuple[tuple[str, str], ...] = (
         ".github/ISSUE_TEMPLATE/feature-request.yml.j2",
         ".github/ISSUE_TEMPLATE/feature-request.yml",
     ),
+    (".github/workflows/bump-version.yaml.j2", ".github/workflows/bump-version.yaml"),
     (".github/workflows/docs.yaml.j2", ".github/workflows/docs.yaml"),
-    (".github/workflows/pr-validation.yaml.j2", ".github/workflows/pr-validation.yaml"),
     (".github/workflows/release.yaml.j2", ".github/workflows/release.yaml"),
     (".github/workflows/test.yaml.j2", ".github/workflows/test.yaml"),
 )
@@ -370,6 +379,7 @@ STATIC_FILES: tuple[str, ...] = (
     ".github/PULL_REQUEST_TEMPLATE.md",
     ".github/workflows/changelog-enforcer.yaml",
     ".github/workflows/codeql.yaml",
+    ".github/workflows/draft-release.yaml",
     ".github/workflows/labeler.yaml",
     ".github/workflows/sync-labels.yaml",
 )
@@ -551,6 +561,9 @@ class CliGenerator:
             readme_groups=_readme_groups(groups),
         )
         self._render("CHANGELOG.md.j2", output_dir / "CHANGELOG.md", groups=groups)
+        for template_name, relative in TOOL_TEMPLATES:
+            self._render(template_name, output_dir / relative)
+            (output_dir / relative).chmod(0o755)
         self._render(
             "tests/{{ PackageName }}/commands_test.py.j2",
             tests_dir / "commands_test.py",
