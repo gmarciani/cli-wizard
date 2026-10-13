@@ -914,3 +914,52 @@ class TestOpenApiParser:
 
         with pytest.raises(SpecError, match=re.escape(f"'{ref}'")):
             parser.parse()
+
+    @pytest.mark.parametrize(
+        "method,path,command_name,function_name",
+        [
+            ("get", "/users/{id}", "get-users-id", "get_users_id"),
+            ("post", "/users", "post-users", "post_users"),
+            ("get", "/", "get", "get"),
+            (
+                "delete",
+                "/v1.0/user-groups/{groupId}",
+                "delete-v1-0-user-groups-group-id",
+                "delete_v1_0_user_groups_group_id",
+            ),
+        ],
+    )
+    def test_missing_operation_id_derives_valid_names(
+        self, tmp_path, method, path, command_name, function_name
+    ):
+        """Test an operation without operationId gets a kebab and Python name."""
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {path: {method: {"tags": ["Users"], "responses": {}}}},
+        }
+        spec_path = tmp_path / "openapi.json"
+        spec_path.write_text(json.dumps(spec))
+
+        op = OpenApiParser(str(spec_path)).parse()["Users"].operations[0]
+
+        assert (op.command_name, op.function_name) == (command_name, function_name)
+
+    def test_missing_operation_id_matches_operation_filters(self, tmp_path):
+        """Test include and exclude filters match the derived operation ID."""
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/users": {"get": {"tags": ["Users"], "responses": {}}},
+                "/users/{id}": {"get": {"tags": ["Users"], "responses": {}}},
+            },
+        }
+        spec_path = tmp_path / "openapi.json"
+        spec_path.write_text(json.dumps(spec))
+
+        groups = OpenApiParser(str(spec_path)).parse(exclude_operations=["get_users"])
+
+        assert [op.operation_id for op in groups["Users"].operations] == [
+            "get_users_id"
+        ]
