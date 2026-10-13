@@ -794,6 +794,78 @@ class TestCliGenerator:
             assert str(Path(temp_dir) / "missing.txt") in message
             assert not output_dir.exists()
 
+    @pytest.mark.parametrize(
+        ("tags", "message"),
+        [
+            (
+                {"Config": "config"},
+                "Tag 'Config' would be generated as commands/config.py, "
+                "overwriting the built-in config commands",
+            ),
+            (
+                {"Settings": "Config"},
+                "Tag 'Settings' would be generated as commands/Config.py, "
+                "overwriting the built-in config commands",
+            ),
+            (
+                {"Init": "__init__"},
+                "Tag 'Init' would be generated as commands/__init__.py, "
+                "overwriting the commands package",
+            ),
+            (
+                {"user-admin": "user-admin", "user_admin": "user_admin"},
+                "Tag 'user_admin' would be generated as commands/user_admin.py, "
+                "overwriting the commands of tag 'user-admin'",
+            ),
+        ],
+    )
+    def test_generate_rejects_a_group_overwriting_a_module(self, tags, message):
+        """Test that a group clashing with another module fails before writing."""
+        groups = {
+            tag: CommandGroup(name=tag, cli_name=cli_name, description="")
+            for tag, cli_name in tags.items()
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            with pytest.raises(ConfigError) as excinfo:
+                generator.generate(groups, output_dir, "test-cli", "test_cli")
+
+            assert (
+                excinfo.value.message == f"{message}; rename its group with TagMapping"
+            )
+            assert not output_dir.exists()
+
+    def test_generate_keeps_config_commands_beside_a_mapped_config_tag(self):
+        """Test that a Config tag renamed by TagMapping keeps both groups."""
+        groups = {
+            "Config": CommandGroup(
+                name="Config",
+                cli_name="settings",
+                description="",
+                operations=[
+                    Operation(
+                        operation_id="getSettings",
+                        method="GET",
+                        path="/settings",
+                        summary="Get settings",
+                        description="",
+                        tags=["Config"],
+                        parameters=[],
+                    )
+                ],
+            )
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate(groups, output_dir, "test-cli", "test_cli")
+
+            with _import_generated(output_dir, "test_cli", "cli") as module:
+                assert {"config", "settings"} <= set(module.main.commands)
+                assert "init" in module.main.commands["config"].commands
+                assert "get-settings" in module.main.commands["settings"].commands
+
     def test_generate_with_github_workflows(self):
         """Test that .github files are generated when IncludeGithubWorkflows is set."""
         config = self._default_config()

@@ -422,6 +422,13 @@ STATIC_FILES: tuple[str, ...] = (
 # resolved relative to the configuration file; each must exist when set
 RESOURCE_KEYS: tuple[str, ...] = ("CaFile", "SplashFile")
 
+# Modules of commands/ that generate() writes besides the API groups, which an
+# API group's commands/<module_name>.py would overwrite
+RESERVED_COMMAND_MODULES: dict[str, str] = {
+    "__init__": "the commands package",
+    "config": "the built-in config commands",
+}
+
 # Ruff invocations applied to generated code, as (args...) without the binary
 # or the target path. The generated tox.ini [testenv:format] must run the same
 # commands; test_format_recipe_matches_tox_template enforces that.
@@ -583,6 +590,7 @@ class CliGenerator:
         # Fail before creating anything if the formatter or a resource is missing
         resolve_ruff()
         self.check_resources()
+        self.check_groups(groups)
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -679,6 +687,28 @@ class CliGenerator:
             path = self._resource_path(key)
             if path is not None and not path.is_file():
                 raise ConfigError(f"{key} '{path}' not found")
+
+    def check_groups(self, groups: dict[str, CommandGroup]) -> None:
+        """Fail if a command group would overwrite another module of commands/.
+
+        Each group is written to commands/<module_name>.py, so a group sharing
+        its module with a built-in one or with another group silently replaces
+        those commands. Names are compared case-insensitively, as macOS and
+        Windows file systems do. Callers run this before deleting the previous
+        output.
+        """
+        owners = {
+            name.casefold(): owner for name, owner in RESERVED_COMMAND_MODULES.items()
+        }
+        for group in groups.values():
+            module = f"commands/{group.module_name}.py"
+            key = group.module_name.casefold()
+            if key in owners:
+                raise ConfigError(
+                    f"Tag '{group.name}' would be generated as {module}, "
+                    f"overwriting {owners[key]}; rename its group with TagMapping"
+                )
+            owners[key] = f"the commands of tag '{group.name}'"
 
     def _resource_path(self, key: str) -> Path | None:
         """Resolve the file a config key names, relative to the config file."""

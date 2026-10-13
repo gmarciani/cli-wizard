@@ -30,6 +30,7 @@
 - Fixed `generate` failing on an operation without `operationId`: the command is named after the method and path, for example `GET /users/{id}` becomes `get-users-id`.
 - Fixed an operation with an empty `tags` list being left out of the generated CLI: it now goes in the `default` group, as one without `tags` does.
 - [Breaking] Fixed `IncludeOperations` generating every operation: a non-empty list now generates only the listed operations, minus those in `ExcludeOperations`.
+- Fixed a tag named `Config` silently replacing the built-in `config` commands of the generated CLI. `generate` now fails with a `ConfigError` naming the tag and suggesting `TagMapping`, as it does when two tags would produce the same command group module.
 
 #### Generated code
 

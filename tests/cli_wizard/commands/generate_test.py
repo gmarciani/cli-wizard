@@ -901,6 +901,42 @@ class TestGenerateCommand:
             assert str(temp_path / "missing.txt") in error["message"]
             assert marker.read_text() == "keep me"
 
+    def test_tag_overwriting_config_commands_fails_before_deleting_output(self):
+        """Test that a Config tag is a ConfigError keeping the output."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            openapi_path, config_path = create_test_files(temp_path)
+            spec = json.loads(openapi_path.read_text())
+            spec["paths"]["/users"]["get"]["tags"] = ["Config"]
+            openapi_path.write_text(json.dumps(spec))
+
+            output_dir = temp_path / "output"
+            output_dir.mkdir()
+            marker = output_dir / "marker.txt"
+            marker.write_text("keep me")
+
+            result = runner.invoke(
+                main,
+                [
+                    "generate",
+                    "--output",
+                    str(output_dir),
+                    "--api",
+                    str(openapi_path),
+                    "--configuration",
+                    str(config_path),
+                    "--force",
+                ],
+            )
+
+            assert result.exit_code == 3  # ConfigError
+            error = json.loads(result.stdout)["error"]
+            assert error["type"] == "ConfigError"
+            assert "Tag 'Config'" in error["message"]
+            assert "TagMapping" in error["message"]
+            assert marker.read_text() == "keep me"
+
     def test_generate_circular_config_reference(self):
         """Test generate with a config value that references itself."""
         runner = CliRunner()
