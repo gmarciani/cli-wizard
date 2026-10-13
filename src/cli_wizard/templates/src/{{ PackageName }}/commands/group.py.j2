@@ -46,15 +46,15 @@ def {{ group.module_name }}() -> None:
     "{{ decl }}",
 {% endfor %}
     type=click.Choice([
-{% for e in param.enum %}
-        "{{ e }}",
+{% for choice in param.enum_literals %}
+        {{ choice }},
 {% endfor %}
     ]),
 {% if param.required %}
     required=True,
 {% endif %}
 {% if param.default is not none %}
-    default="{{ param.default }}",
+    default={{ param.default_literal }},
 {% endif %}
     help={{ param.description | string_literal }},
 )

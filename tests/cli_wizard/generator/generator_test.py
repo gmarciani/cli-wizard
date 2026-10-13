@@ -2330,6 +2330,14 @@ def _issue23_groups():
                             default=1,
                         ),
                         Parameter(
+                            name="size",
+                            location="query",
+                            param_type="integer",
+                            required=False,
+                            default=10,
+                            enum=[10, 20],
+                        ),
+                        Parameter(
                             name="active",
                             location="query",
                             param_type="boolean",
@@ -2610,7 +2618,14 @@ def _issue50_groups():
                     param_type="string",
                     required=True,
                     enum=["json", "csv"],
-                )
+                ),
+                Parameter(
+                    name="priority",
+                    location="query",
+                    param_type="integer",
+                    required=False,
+                    enum=[10, 20],
+                ),
             ],
             body_properties=[
                 RequestBodyProperty(name="title", prop_type="string", required=True),
@@ -2699,7 +2714,7 @@ class TestGeneratedCommandTests:
                 "create_report",
                 "POST",
                 "/reports",
-                {"format": "json"},
+                {"format": "json", "priority": 10},
                 {"title": "test", "ratio": 1.5},
             ),
         ],
@@ -3076,10 +3091,10 @@ class TestGeneratedQueryDefaults:
     @pytest.mark.parametrize(
         "args,expected",
         [
-            ([], {"sort": "asc", "page": 1, "active": True}),
+            ([], {"sort": "asc", "page": 1, "size": 10, "active": True}),
             (
-                ["--sort", "desc", "--page", "3"],
-                {"sort": "desc", "page": 3, "active": True},
+                ["--sort", "desc", "--page", "3", "--size", "20"],
+                {"sort": "desc", "page": 3, "size": 20, "active": True},
             ),
         ],
     )
@@ -3164,6 +3179,8 @@ class TestGeneratedReadme:
             "`--limit INTEGER`\n",
             # An enum lists its choices
             "`--format [json|csv]` (required)",
+            # A non-string enum lists its choices too
+            "`--priority [10|20]`\n",
             "`--ratio FLOAT`\n",
             # A boolean body property is a flag pair, with its description and
             # the default the help advertises
