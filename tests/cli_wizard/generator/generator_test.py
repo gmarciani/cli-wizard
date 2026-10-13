@@ -1550,6 +1550,53 @@ class TestDevToolingIsNotPublished:
         assert not offenders, f"these install an extra: {offenders}"
 
 
+# GitHub-hosted runner labels; a job asking for any other waits for a runner
+# that never comes.
+GITHUB_HOSTED_RUNNERS = {
+    "ubuntu-latest",
+    "ubuntu-24.04",
+    "ubuntu-22.04",
+    "macos-latest",
+    "windows-latest",
+}
+
+
+class TestWorkflowRunners:
+    """Every workflow job must ask for a runner GitHub actually hosts."""
+
+    @staticmethod
+    def _runners(workflow):
+        """Collect the runner labels of a workflow's jobs, expanding matrix.os."""
+        runners = set()
+        for job in workflow["jobs"].values():
+            runs_on = job["runs-on"]
+            if runs_on == "${{ matrix.os }}":
+                runners.update(job["strategy"]["matrix"]["os"])
+            else:
+                runners.add(runs_on)
+        return runners
+
+    @pytest.mark.parametrize("root", [REPO_ROOT, None], ids=["cli-wizard", "generated"])
+    def test_jobs_run_on_github_hosted_runners(self, root, tmp_path):
+        """Test that no job names a runner label GitHub does not host."""
+        if root is None:
+            root = tmp_path / "test-cli"
+            generator = CliGenerator(
+                config=Config(
+                    ProjectName="Test Cli", IncludeGithubWorkflows=True
+                ).model_dump()
+            )
+            generator.generate({}, root, "test-cli", "test_cli")
+
+        unknown = {}
+        for path in sorted((root / ".github" / "workflows").glob("*.yaml")):
+            workflow = yaml.safe_load(path.read_text())
+            for runner in self._runners(workflow) - GITHUB_HOSTED_RUNNERS:
+                unknown[runner] = path.name
+
+        assert not unknown, f"unknown runner labels: {unknown}"
+
+
 class TestGeneratedToxContract:
     """Whatever a generated project tells you to run has to exist and be correct."""
 
