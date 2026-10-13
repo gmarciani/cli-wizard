@@ -32,6 +32,7 @@
 
 - Fixed the PR Labeler workflow looking for its rules in `.github/labeler.yml` instead of the generated `.github/labeler.yaml`.
 - Fixed `--output table` failing with an unexpected error when the response is an empty object; it prints nothing, as an empty list does.
+- Fixed the splash screen being printed on stdout ahead of the JSON output: it goes to stderr.
 
 ## 3.0.0
 

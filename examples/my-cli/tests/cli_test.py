@@ -153,45 +153,25 @@ class TestCli:
                 with patch("click.secho"):
                     _show_splash()
 
-    def test_show_splash_with_color(self):
-        """Test splash screen with color."""
+    @pytest.mark.parametrize("color", ["#FF0000", None])
+    def test_splash_goes_to_stderr_leaving_stdout_json(self, color):
+        """Test the splash is printed on stderr, not mixed into the JSON."""
         with tempfile.TemporaryDirectory() as tmpdir:
             splash_file = Path(tmpdir) / "splash.txt"
             splash_file.write_text("Test Splash")
-            with patch.object(constants, "SPLASH_ENABLED", True):
-                with patch.object(constants, "SPLASH_FILE", splash_file):
-                    with patch.object(constants, "SPLASH_COLOR", "#FF0000"):
-                        with patch("my_cli.cli.SPLASH_ENABLED", True):
-                            with patch(
-                                "my_cli.cli.SPLASH_FILE",
-                                splash_file,
-                            ):
-                                with patch(
-                                    "my_cli.cli.SPLASH_COLOR",
-                                    "#FF0000",
-                                ):
-                                    with patch("click.secho"):
-                                        _show_splash()
-
-    def test_show_splash_without_color(self):
-        """Test splash screen without color."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            splash_file = Path(tmpdir) / "splash.txt"
-            splash_file.write_text("Test Splash")
-            with patch.object(constants, "SPLASH_ENABLED", True):
-                with patch.object(constants, "SPLASH_FILE", splash_file):
-                    with patch.object(constants, "SPLASH_COLOR", None):
-                        with patch("my_cli.cli.SPLASH_ENABLED", True):
-                            with patch(
-                                "my_cli.cli.SPLASH_FILE",
-                                splash_file,
-                            ):
-                                with patch(
-                                    "my_cli.cli.SPLASH_COLOR",
-                                    None,
-                                ):
-                                    with patch("click.echo"):
-                                        _show_splash()
+            with (
+                patch("my_cli.cli.SPLASH_ENABLED", True),
+                patch("my_cli.cli.SPLASH_FILE", splash_file),
+                patch("my_cli.cli.SPLASH_COLOR", color),
+                patch(
+                    "my_cli.profile.PROFILE_FILE",
+                    Path(tmpdir) / "profiles.yaml",
+                ),
+            ):
+                result = CliRunner().invoke(main, ["config", "list-profiles"])
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == {"profiles": []}
+        assert "Test Splash" in result.stderr
 
     def test_main_entry_point(self):
         """Test main entry point."""
