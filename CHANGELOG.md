@@ -19,6 +19,7 @@
 
 - The `dev` dependency group includes twine, so `pip install -e . --group dev` installs everything the release steps in `DEVELOPMENT.md` use.
 - Removed the PR Validation workflow: the Test workflow runs the tests through tox on every supported interpreter, and lint, type checks and the coverage threshold in a separate job.
+- The GitHub workflows that run on a single interpreter (Publish Documentation, Publish Release, Bump Version and the Test workflow's lint, type check and coverage job) use Python 3.14 instead of `PythonVersion`.
 
 ### Bug Fixes
 
