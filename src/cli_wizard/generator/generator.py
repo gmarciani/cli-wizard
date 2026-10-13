@@ -15,7 +15,11 @@ from urllib.parse import quote
 
 from jinja2 import Environment, PackageLoader
 
-from cli_wizard.config.schema import Config, python_versions_from
+from cli_wizard.config.schema import (
+    DEFAULT_PYTHON_VERSION,
+    Config,
+    python_versions_from,
+)
 from cli_wizard.errors import ConfigError, FormattingError, RuffNotFoundError
 from cli_wizard.generator.models import (
     CommandGroup,
@@ -350,10 +354,9 @@ TOOL_TEMPLATES: tuple[tuple[str, str], ...] = (
 
 # The .github tree, generated only when IncludeGithubWorkflows is set. The
 # workflows are cli-wizard's own. The templated files reference the project;
-# the workflows pinning a single interpreter must pin the project's declared
-# minimum, since a hardcoded version gave a project with a higher
-# PythonVersion a CI job whose pip install failed against its own
-# requires-python.
+# the workflows pinning a single interpreter run on the default, the newest
+# supported version, as cli-wizard's do, which every project's
+# requires-python admits.
 GITHUB_TEMPLATES: tuple[tuple[str, str], ...] = (
     (".github/CODEOWNERS.j2", ".github/CODEOWNERS"),
     (".github/labels.yaml.j2", ".github/labels.yaml"),
@@ -521,6 +524,7 @@ class CliGenerator:
             "profile_file": self.config.get("ProfileFile")
             or f"{self._compute_main_dir(self.package_name)}/profiles.yaml",
             "PythonVersions": python_versions_from(minimum_python),
+            "WorkflowPythonVersion": DEFAULT_PYTHON_VERSION,
         }
         context.update(extra)
         return context

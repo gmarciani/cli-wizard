@@ -23,7 +23,7 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@v7
         with:
-          python-version: '{{ PythonVersion }}'
+          python-version: '{{ WorkflowPythonVersion }}'
 
       - name: Install dependencies
         run: |

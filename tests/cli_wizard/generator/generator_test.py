@@ -33,6 +33,7 @@ from packaging.requirements import Requirement
 
 import cli_wizard
 from cli_wizard.config.schema import (
+    DEFAULT_PYTHON_VERSION,
     SUPPORTED_PYTHON_VERSIONS,
     Config,
     python_versions_from,
@@ -1869,34 +1870,44 @@ class TestGeneratedPythonVersions:
                     feature_version=feature_version,
                 )
 
-    def test_single_version_workflows_use_the_declared_minimum(self):
-        """Test that every single-interpreter workflow pins the project's minimum.
+    @pytest.mark.parametrize("minimum", SUPPORTED_PYTHON_VERSIONS)
+    def test_single_version_workflows_use_the_default_version(self, minimum):
+        """Test that every single-interpreter workflow runs on the default version.
 
-        These were static files hardcoding 3.12, so a project with a higher
-        minimum got CI whose pip install failed against its own
-        requires-python.
+        cli-wizard's own workflows run on it, whatever the project's minimum.
         """
         with tempfile.TemporaryDirectory() as temp_dir:
-            output_dir = self._generate("3.13", temp_dir)
+            output_dir = self._generate(minimum, temp_dir)
             workflows = output_dir / ".github" / "workflows"
 
-            docs = yaml.safe_load((workflows / "docs.yaml").read_text())
-            assert docs["jobs"]["build"]["steps"][1]["with"]["python-version"] == "3.13"
+            jobs = {
+                "docs.yaml": "build",
+                "release.yaml": "publish",
+                "test.yaml": "quality",
+                "bump-version.yaml": "bump",
+            }
+            for name, job in jobs.items():
+                workflow = yaml.safe_load((workflows / name).read_text())
+                steps = workflow["jobs"][job]["steps"]
+                setup = next(s for s in steps if "setup-python" in s.get("uses", ""))
+                assert setup["with"]["python-version"] == DEFAULT_PYTHON_VERSION, name
 
-            release = yaml.safe_load((workflows / "release.yaml").read_text())
-            steps = release["jobs"]["publish"]["steps"]
-            setup = next(s for s in steps if "setup-python" in s.get("uses", ""))
-            assert setup["with"]["python-version"] == "3.13"
+    def test_cli_wizard_workflows_use_the_default_version(self):
+        """Test that cli-wizard's own single-interpreter workflows use the default."""
+        versions = set()
+        for path in (REPO_ROOT / ".github" / "workflows").glob("*.yaml"):
+            versions.update(re.findall(r"python-version: '([\d.]+)'", path.read_text()))
 
-            test = yaml.safe_load((workflows / "test.yaml").read_text())
-            steps = test["jobs"]["quality"]["steps"]
-            setup = next(s for s in steps if "setup-python" in s.get("uses", ""))
-            assert setup["with"]["python-version"] == "3.13"
+        assert versions == {DEFAULT_PYTHON_VERSION}
 
-            bump = yaml.safe_load((workflows / "bump-version.yaml").read_text())
-            steps = bump["jobs"]["bump"]["steps"]
-            setup = next(s for s in steps if "setup-python" in s.get("uses", ""))
-            assert setup["with"]["python-version"] == "3.13"
+    @pytest.mark.parametrize("minimum", SUPPORTED_PYTHON_VERSIONS)
+    def test_default_version_satisfies_every_minimum(self, minimum):
+        """Test that the workflows' interpreter is one the project supports.
+
+        A version below the minimum gave CI whose pip install failed against
+        the project's own requires-python.
+        """
+        assert DEFAULT_PYTHON_VERSION in python_versions_from(minimum)
 
     def test_no_superseded_version_leaks_into_the_project(self):
         """Test that raising the minimum removes the older version everywhere."""
