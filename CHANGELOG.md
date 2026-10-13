@@ -24,6 +24,10 @@
 
 ### Bug Fixes
 
+#### cli-wizard
+
+- Fixed `generate` failing with a `FormattingError` when a parameter or body property is named like a Python keyword, such as `from`. The option and the name sent to the API are unchanged.
+
 #### Generated code
 
 - Fixed the PR Labeler workflow looking for its rules in `.github/labeler.yml` instead of the generated `.github/labeler.yaml`.

@@ -3,6 +3,7 @@
 
 """Data models for CLI generation."""
 
+import keyword
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -10,6 +11,27 @@ from typing import Any
 # Click type -> the placeholder Click's help shows after the option, which the
 # generated README repeats so the two never disagree.
 _METAVARS = {"str": "TEXT", "int": "INTEGER", "float": "FLOAT", "bool": "BOOLEAN"}
+
+
+def _python_name(name: str) -> str:
+    """Convert a wire name to a snake_case identifier usable as an argument.
+
+    A keyword, such as the `from` of a date range, gets a trailing underscore,
+    or the generated function signature does not parse.
+    """
+    name = re.sub(r"([a-z])([A-Z])", r"\1_\2", name).lower().replace("-", "_")
+    return f"{name}_" if keyword.iskeyword(name) else name
+
+
+def _option_declarations(flag: str, cli_name: str, python_name: str) -> list[str]:
+    """Get the declarations of a generated Click option.
+
+    Click names the argument after the option, so when the Python name is not
+    what Click derives from it, the option must declare that name as well.
+    """
+    if cli_name.replace("-", "_") == python_name:
+        return [flag]
+    return [flag, python_name]
 
 
 @dataclass
@@ -36,8 +58,14 @@ class Parameter:
     @property
     def python_name(self) -> str:
         """Get Python-friendly parameter name (snake_case)."""
-        name = re.sub(r"([a-z])([A-Z])", r"\1_\2", self.name).lower()
-        return name.replace("-", "_")
+        return _python_name(self.name)
+
+    @property
+    def option_declarations(self) -> list[str]:
+        """Get the declarations of the generated Click option."""
+        return _option_declarations(
+            f"--{self.cli_name}", self.cli_name, self.python_name
+        )
 
     @property
     def is_array(self) -> bool:
@@ -114,8 +142,19 @@ class RequestBodyProperty:
     @property
     def python_name(self) -> str:
         """Get Python-friendly name (snake_case)."""
-        name = re.sub(r"([a-z])([A-Z])", r"\1_\2", self.name).lower()
-        return name.replace("-", "_")
+        return _python_name(self.name)
+
+    @property
+    def option_declarations(self) -> list[str]:
+        """Get the declarations of the generated Click option.
+
+        A boolean is a tri-state `--x/--no-x` flag, an array never is.
+        """
+        if self.click_type == "bool" and not self.is_array:
+            flag = f"--{self.cli_name}/--no-{self.cli_name}"
+        else:
+            flag = f"--{self.cli_name}"
+        return _option_declarations(flag, self.cli_name, self.python_name)
 
     @property
     def is_array(self) -> bool:
