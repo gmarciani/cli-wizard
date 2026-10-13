@@ -51,8 +51,10 @@ dev = [
     "tox~=4.58",
     "twine>=6.2,<8.0",
 ]
-# mypy and the stubs too: the suite type checks the code it generates.
+# mypy and the stubs too: the suite type checks the code it generates. The
+# docs group too: it builds the documentation of the code it generates.
 test = [
+    {include-group = "docs"},
     "mypy~=2.3",
     "pytest~=9.1",
     "pytest-cov~=7.1",

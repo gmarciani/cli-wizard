@@ -12,6 +12,7 @@
 
 - With `IncludeGithubWorkflows`, the project gets cli-wizard's own GitHub workflows, adding Bump Version and Draft Release.
 - Added `tools/bump_version.py`, which bumps `VERSION` and opens the version's section in `CHANGELOG.md`, and `tools/draft_release.sh`, which drafts the GitHub release from that section; `DEVELOPMENT.md` describes the release with them.
+- Added Sphinx documentation in `docs/`, built with `make build-docs` and, with `IncludeGithubWorkflows`, published to GitHub Pages by the Publish Documentation workflow: installation, every command with its options, the settings with their defaults and precedence, authentication and exit codes.
 
 ### Changes
 

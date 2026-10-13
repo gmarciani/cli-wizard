@@ -126,7 +126,7 @@ without sending the request; `config set --profile <name>` creates it.
 | Setting | Default | Effect |
 |---|---|---|
 {% for key, default, text in profile_settings %}
-| `{{ key }}` | {{ 'unset' if default is none else '`' ~ (default | string | lower if default is sameas true or default is sameas false else default) ~ '`' }} | {{ text }} |
+| `{{ key }}` | {{ 'unset' if default is none else '`' ~ default ~ '`' }} | {{ text }} |
 {% endfor %}
 
 Each setting is resolved through four layers, highest precedence first:
