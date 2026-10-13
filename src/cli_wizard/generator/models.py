@@ -12,6 +12,23 @@ from typing import Any
 # generated README repeats so the two never disagree.
 _METAVARS = {"str": "TEXT", "int": "INTEGER", "float": "FLOAT", "bool": "BOOLEAN"}
 
+# The long options every generated command already takes: those declared in
+# the generated options.py, plus Click's own --help. A spec option named like
+# one would be consumed by both, so it is renamed by _cli_name.
+COMMON_OPTION_NAMES = frozenset(
+    {
+        "profile",
+        "debug",
+        "base-url",
+        "no-verify-ssl",
+        "ca-file",
+        "timeout",
+        "header",
+        "output",
+        "help",
+    }
+)
+
 
 def _python_name(name: str) -> str:
     """Convert a wire name to a snake_case identifier usable as an argument.
@@ -21,6 +38,25 @@ def _python_name(name: str) -> str:
     """
     name = re.sub(r"([a-z])([A-Z])", r"\1_\2", name).lower().replace("-", "_")
     return f"{name}_" if keyword.iskeyword(name) else name
+
+
+def _cli_name(name: str) -> str:
+    """Convert a wire name to a kebab-case option name."""
+    return re.sub(r"([a-z])([A-Z])", r"\1-\2", name).lower().replace("_", "-")
+
+
+def _option_name(name: str, location: str, negatable: bool = False) -> str:
+    """Get the name a spec option is derived from, distinct from a common option.
+
+    A name taken by a common option, or whose `--no-` form is taken when the
+    option is a flag pair, is prefixed with where the value goes, so `output`
+    in the query becomes `--query-output`. The argument is renamed with it:
+    Click stores both options under their argument name, and the last one
+    given would set both.
+    """
+    cli_name = _cli_name(name)
+    taken = {cli_name, f"no-{cli_name}"} if negatable else {cli_name}
+    return f"{location}-{name}" if taken & COMMON_OPTION_NAMES else name
 
 
 def _option_declarations(flag: str, cli_name: str, python_name: str) -> list[str]:
@@ -53,12 +89,12 @@ class Parameter:
     @property
     def cli_name(self) -> str:
         """Get CLI-friendly parameter name (kebab-case)."""
-        return re.sub(r"([a-z])([A-Z])", r"\1-\2", self.name).lower().replace("_", "-")
+        return _cli_name(_option_name(self.name, self.location))
 
     @property
     def python_name(self) -> str:
         """Get Python-friendly parameter name (snake_case)."""
-        return _python_name(self.name)
+        return _python_name(_option_name(self.name, self.location))
 
     @property
     def option_declarations(self) -> list[str]:
@@ -136,13 +172,18 @@ class RequestBodyProperty:
     @property
     def cli_name(self) -> str:
         """Get CLI-friendly name (kebab-case)."""
-        name = re.sub(r"([a-z])([A-Z])", r"\1-\2", self.name).lower()
-        return name.replace("_", "-")
+        return _cli_name(self._option_name)
 
     @property
     def python_name(self) -> str:
         """Get Python-friendly name (snake_case)."""
-        return _python_name(self.name)
+        return _python_name(self._option_name)
+
+    @property
+    def _option_name(self) -> str:
+        """Get the name the option is derived from; a boolean is a flag pair."""
+        negatable = self.click_type == "bool" and not self.is_array
+        return _option_name(self.name, "body", negatable)
 
     @property
     def option_declarations(self) -> list[str]:

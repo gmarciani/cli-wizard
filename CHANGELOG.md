@@ -36,6 +36,7 @@
 - Fixed the PR Labeler workflow looking for its rules in `.github/labeler.yml` instead of the generated `.github/labeler.yaml`.
 - Fixed `--output table` failing with an unexpected error when the response is an empty object; it prints nothing, as an empty list does.
 - Fixed the splash screen being printed on stdout ahead of the JSON output: it goes to stderr.
+- Fixed a parameter or body property named like a common option, such as `output` or `timeout`, setting both the value sent to the API and the CLI's own option. It gets an option prefixed with where it is sent, such as `--query-output` or `--body-timeout`.
 
 ## 3.0.0
 
