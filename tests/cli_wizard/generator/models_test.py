@@ -3,9 +3,14 @@
 
 """Tests for generator models."""
 
+import re
+from pathlib import Path
+
 import pytest
 
+from cli_wizard.generator import models
 from cli_wizard.generator.models import (
+    COMMON_OPTION_NAMES,
     CommandGroup,
     Operation,
     Parameter,
@@ -64,6 +69,24 @@ class TestParameter:
         """Test the option declares the argument name only when it differs."""
         param = Parameter(
             name=name, location="query", param_type="string", required=False
+        )
+        assert param.option_declarations == declarations
+
+    @pytest.mark.parametrize(
+        "name,location,declarations",
+        [
+            ("output", "query", ["--query-output"]),
+            ("timeout", "query", ["--query-timeout"]),
+            ("baseUrl", "query", ["--query-base-url"]),
+            ("help", "path", ["--path-help"]),
+        ],
+    )
+    def test_option_named_like_a_common_option_is_prefixed_with_its_location(
+        self, name, location, declarations
+    ):
+        """Test a name taken by a common option gets a distinct option."""
+        param = Parameter(
+            name=name, location=location, param_type="string", required=False
         )
         assert param.option_declarations == declarations
 
@@ -138,6 +161,23 @@ class TestParameter:
         assert param.python_annotation == "int | None"
 
 
+class TestCommonOptionNames:
+    """Tests for the names reserved by the common options."""
+
+    def test_names_match_the_generated_common_options(self):
+        """Test the reserved names are the long options options.py declares."""
+        template = (
+            Path(models.__file__).parents[1]
+            / "templates"
+            / "src"
+            / "{{ PackageName }}"
+            / "options.py.j2"
+        )
+        declared = re.findall(r'_option\(\s*"--([a-z-]+)"', template.read_text())
+
+        assert COMMON_OPTION_NAMES == {*declared, "help"}
+
+
 class TestRequestBodyProperty:
     """Tests for RequestBodyProperty model."""
 
@@ -171,6 +211,25 @@ class TestRequestBodyProperty:
         prop = RequestBodyProperty(
             name=name, prop_type=prop_type, required=False, items_type=items_type
         )
+        assert prop.option_declarations == declarations
+
+    @pytest.mark.parametrize(
+        "name,prop_type,declarations",
+        [
+            ("output", "string", ["--body-output"]),
+            (
+                "verifySsl",
+                "boolean",
+                ["--body-verify-ssl/--no-body-verify-ssl"],
+            ),
+            ("verifySsl", "string", ["--verify-ssl"]),
+        ],
+    )
+    def test_option_named_like_a_common_option_is_prefixed_with_body(
+        self, name, prop_type, declarations
+    ):
+        """Test a name, or a flag's --no- form, taken by a common option is moved."""
+        prop = RequestBodyProperty(name=name, prop_type=prop_type, required=False)
         assert prop.option_declarations == declarations
 
     def test_click_type(self):

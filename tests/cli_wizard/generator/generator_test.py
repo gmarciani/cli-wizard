@@ -605,6 +605,56 @@ class TestCliGenerator:
         assert error["type"] == "ClientError"
         assert error["message"] == "422 Unprocessable Entity\n  name: Field required"
 
+    def test_generated_spec_option_named_like_a_common_option_stays_apart(self):
+        """Test a query parameter named like a common option leaves it alone."""
+        response = requests.Response()
+        response.status_code = 200
+        response._content = b"{}"
+        groups = {
+            "Users": CommandGroup(
+                name="Users",
+                cli_name="users",
+                description="",
+                operations=[
+                    Operation(
+                        operation_id="export",
+                        method="GET",
+                        path="/export",
+                        summary="",
+                        description="",
+                        tags=["Users"],
+                        parameters=[
+                            Parameter("output", "query", "string", False),
+                            Parameter("timeout", "query", "integer", False),
+                        ],
+                    )
+                ],
+            )
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "test-cli"
+            generator = CliGenerator(config=self._default_config())
+            generator.generate(groups, output_dir, "test-cli", "test_cli")
+
+            with _import_generated(output_dir, "test_cli", "commands.users") as module:
+                runner = importlib.import_module("test_cli.runner")
+                client = MagicMock()
+                client.get.return_value = response
+                argv = ["export", "--query-output", "yaml", "--query-timeout", "7"]
+                with patch.object(
+                    runner, "create_client", return_value=client
+                ) as create_client:
+                    with patch.object(runner, "load_profile"):
+                        result = CliRunner().invoke(
+                            module.users, [*argv, "--output", "json", "--timeout", "3"]
+                        )
+
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.stdout) == {}
+        assert create_client.call_args.args[0]["timeout"] == 3
+        assert client.get.call_args.kwargs["params"] == {"output": "yaml", "timeout": 7}
+
     def test_generated_command_modules_share_one_runner(self):
         """Test every command module runs through the runner, building no client."""
         groups = {
