@@ -8,6 +8,12 @@
 
 - Added `--project-name` to `bootstrap`: it sets `ProjectName` without prompting for it, and the command name prompt defaults to a name derived from it.
 
+### Changes
+
+#### Generated code
+
+- The `dev` dependency group includes twine, so `pip install -e . --group dev` installs everything the release steps in `DEVELOPMENT.md` use.
+
 ## 3.0.0
 
 ### New Features

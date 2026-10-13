@@ -1322,10 +1322,10 @@ class TestGeneratedTypeCheck:
 
 
 # Tooling nobody installing from an index should be offered. cli-wizard also
-# publishes to PyPI (twine), builds docs (sphinx) and bundles ruff as a runtime
-# dependency, so the two lists are not the same.
+# builds docs (sphinx) and bundles ruff as a runtime dependency, so the two
+# lists are not the same.
 CLI_WIZARD_TOOLING = ("build", "mypy", "pre-commit", "pytest", "tox", "twine", "sphinx")
-GENERATED_TOOLING = ("build", "mypy", "pre-commit", "pytest", "ruff", "tox")
+GENERATED_TOOLING = ("build", "mypy", "pre-commit", "pytest", "ruff", "tox", "twine")
 
 
 class TestDevToolingIsNotPublished:
