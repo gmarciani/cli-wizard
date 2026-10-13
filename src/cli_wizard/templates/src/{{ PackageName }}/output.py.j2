@@ -86,6 +86,7 @@ def render_table(data: Any, style: str = "rounded") -> str:
     any of them has, in first-seen order. A single object becomes a key/value
     table and a list of scalars a single-column one. A nested value is shown
     as compact JSON in its cell, so nothing the response holds is dropped.
+    An empty list or object renders as nothing.
 
     Args:
         data: The decoded JSON of the response
@@ -105,11 +106,11 @@ def render_table(data: Any, style: str = "rounded") -> str:
 
 def _tabulate(data: Any) -> tuple[list[str], list[list[str]]]:
     """Choose the columns and rows that show the data without losing any of it."""
+    if isinstance(data, (dict, list)) and not data:
+        return [], []
     if isinstance(data, dict):
         return _KEY_VALUE_COLUMNS, [[str(k), _cell(v)] for k, v in data.items()]
     if isinstance(data, list):
-        if not data:
-            return [], []
         if all(isinstance(item, dict) for item in data):
             columns: dict[str, None] = {}
             for item in data:

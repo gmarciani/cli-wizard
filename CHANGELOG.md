@@ -31,6 +31,7 @@
 #### Generated code
 
 - Fixed the PR Labeler workflow looking for its rules in `.github/labeler.yml` instead of the generated `.github/labeler.yaml`.
+- Fixed `--output table` failing with an unexpected error when the response is an empty object; it prints nothing, as an empty list does.
 
 ## 3.0.0
 
