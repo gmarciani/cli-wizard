@@ -117,7 +117,8 @@ class OpenApiParser:
                     include_operations and operation_id in include_operations
                 )
 
-                tags = operation.get("tags", ["default"])
+                # An empty list is no tags, not a member of no group
+                tags = operation.get("tags") or ["default"]
                 for tag in tags:
                     if tag in exclude_tags and not explicitly_included:
                         continue
