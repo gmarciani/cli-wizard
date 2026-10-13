@@ -27,6 +27,7 @@
 #### cli-wizard
 
 - Fixed `generate` failing with a `FormattingError` when a parameter or body property is named like a Python keyword, such as `from`. The option and the name sent to the API are unchanged.
+- Fixed `generate` failing on an operation without `operationId`: the command is named after the method and path, for example `GET /users/{id}` becomes `get-users-id`.
 
 #### Generated code
 

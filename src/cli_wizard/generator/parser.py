@@ -4,6 +4,7 @@
 """OpenAPI specification parser."""
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,18 @@ from cli_wizard.generator.models import (
     Parameter,
     RequestBodyProperty,
 )
+
+
+def _operation_id(method: str, path: str, operation: dict[str, Any]) -> str:
+    """Get the operation's ID, deriving one from the method and path if absent.
+
+    `operationId` is optional in OpenAPI. The derived ID joins the method and
+    the path's alphanumeric runs with underscores, so `GET /users/{id}` becomes
+    `get_users_id`: a valid command and Python identifier once converted.
+    """
+    if "operationId" in operation:
+        return str(operation["operationId"])
+    return "_".join([method, *re.findall(r"[A-Za-z0-9]+", path)])
 
 
 def _unwrap_nullable(schema: dict[str, Any]) -> dict[str, Any]:
@@ -94,7 +107,7 @@ class OpenApiParser:
                 if method not in ("get", "post", "put", "patch", "delete"):
                     continue
 
-                operation_id = operation.get("operationId", f"{method}_{path}")
+                operation_id = _operation_id(method, path, operation)
 
                 if operation_id in exclude_operations:
                     continue
@@ -153,7 +166,7 @@ class OpenApiParser:
             body_properties = self._parse_request_body(operation["requestBody"])
 
         return Operation(
-            operation_id=operation.get("operationId", f"{method}_{path}"),
+            operation_id=_operation_id(method, path, operation),
             method=method.upper(),
             path=path,
             summary=operation.get("summary", ""),
