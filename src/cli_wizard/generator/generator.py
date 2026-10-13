@@ -105,13 +105,14 @@ def _operation_test_case(op: Operation) -> dict[str, Any]:
     """Describe the request one generated command must make.
 
     Everything the generator already knows at render time - the option names,
-    the resolved URL, the query and body shapes with their JSON types - so the
-    generated suite asserts the spec-derived surface rather than the
+    the resolved URL, the query, header and body shapes with their JSON types -
+    so the generated suite asserts the spec-derived surface rather than the
     scaffolding that is identical for every user.
     """
     argv: list[str] = []
     encoded: dict[str, str] = {}
     params: dict[str, Any] = {}
+    headers: dict[str, str] = {}
     body: dict[str, Any] = {}
 
     for param in op.path_parameters:
@@ -122,6 +123,11 @@ def _operation_test_case(op: Operation) -> dict[str, Any]:
     for param in op.query_parameters:
         value = _sample_value(param)
         params[param.name] = [value] if param.is_array else value
+        argv += [f"--{param.cli_name}", str(value)]
+    for param in op.header_parameters:
+        value = _sample_value(param)
+        # Booleans are sent as JSON spells them, as encode_header_param does
+        headers[param.name] = str(value).lower() if value is True else str(value)
         argv += [f"--{param.cli_name}", str(value)]
     for prop in op.body_properties:
         value = _sample_value(prop)
@@ -137,6 +143,7 @@ def _operation_test_case(op: Operation) -> dict[str, Any]:
             lambda match: encoded.get(match.group(1), match.group(0)), op.path
         ),
         "params": params or None,
+        "headers": headers or None,
         # The command sends no body on a GET, whatever the spec declares.
         "body": body or None if op.method != "GET" else None,
     }
@@ -201,7 +208,7 @@ def _operation_options(op: Operation) -> list[dict[str, Any]]:
                 description=param.description,
             )
         )
-    for param in op.query_parameters:
+    for param in op.query_parameters + op.header_parameters:
         options.append(
             _option_doc(
                 f"--{param.cli_name} {param.metavar}",

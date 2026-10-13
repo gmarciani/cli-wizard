@@ -214,6 +214,11 @@ class Operation:
         return [p for p in self.parameters if p.location == "query"]
 
     @property
+    def header_parameters(self) -> list["Parameter"]:
+        """Get the parameters carried in request headers."""
+        return [p for p in self.parameters if p.location == "header"]
+
+    @property
     def _base_operation_id(self) -> str:
         """Get the base operation ID without the module path.
 
@@ -257,3 +262,12 @@ class CommandGroup:
         something to encode.
         """
         return any(op.path_parameters for op in self.operations)
+
+    @property
+    def has_header_parameters(self) -> bool:
+        """Whether any operation in the group takes a header parameter.
+
+        The generated module only imports the header encoder when it has
+        something to encode.
+        """
+        return any(op.header_parameters for op in self.operations)

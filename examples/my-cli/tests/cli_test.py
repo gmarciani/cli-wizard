@@ -31,6 +31,7 @@ from my_cli.client import (
     RETRY_STATUSES,
     ApiClient,
     create_client,
+    encode_header_param,
     encode_path_param,
     failure_class,
     format_error,
@@ -950,6 +951,37 @@ class TestApiClient:
     def test_encode_path_param(self, value, expected):
         """Test a path parameter value is encoded into a single segment."""
         assert encode_path_param(value) == expected
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            ("plain", "plain"),
+            (42, "42"),
+            (True, "true"),
+            (("a", "b"), "a,b"),
+        ],
+    )
+    def test_encode_header_param(self, value, expected):
+        """Test a header parameter value is encoded in OpenAPI's simple style."""
+        assert encode_header_param(value) == expected
+
+    @pytest.mark.parametrize(
+        "explicit,expected",
+        [
+            ({}, {"X-Tenant": "acme"}),
+            ({"x-tenant": "other"}, None),
+        ],
+    )
+    def test_client_sends_header_parameters_unless_given_explicitly(
+        self, explicit, expected
+    ):
+        """Test a header parameter is sent, unless --header gives the same one."""
+        client = ApiClient(base_url="https://api.example.com", headers=explicit)
+
+        with patch("requests.Session.get") as mock_get:
+            client.get("/users", headers={"X-Tenant": "acme"})
+
+        assert mock_get.call_args.kwargs["headers"] == expected
 
     def test_client_debug_logging(self):
         """Test client debug logging."""

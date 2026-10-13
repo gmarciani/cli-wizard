@@ -130,6 +130,19 @@ def encode_path_param(value: Any) -> str:
     return quote(str(value), safe="")
 
 
+def encode_header_param(value: Any) -> str:
+    """Encode a value as a header parameter, in OpenAPI's simple style.
+
+    An array becomes its items joined by commas, and a boolean is spelled in
+    lower case, as JSON spells it.
+    """
+    if isinstance(value, (list, tuple)):
+        return ",".join(encode_header_param(item) for item in value)
+    if isinstance(value, bool):
+        return str(value).lower()
+    return str(value)
+
+
 class ApiClient:
     """HTTP client for making API requests."""
 
@@ -221,6 +234,7 @@ class ApiClient:
         url: str,
         params: dict | None = None,
         json_data: dict | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         """Log request details when debug is enabled."""
         if not self.debug:
@@ -230,7 +244,7 @@ class ApiClient:
             log_debug(f"Params: {redact(params)}")
         if json_data:
             log_debug(f"Body: {redact(json_data)}")
-        log_debug(f"Headers: {redact(self.session.headers)}")
+        log_debug(f"Headers: {redact({**self.session.headers, **(headers or {})})}")
 
     def _log_response(self, response: requests.Response) -> None:
         """Log response details when debug is enabled."""
@@ -243,14 +257,37 @@ class ApiClient:
             # partial credential that no longer matches any pattern.
             log_debug(f"Response Body: {redact_text(response.text)[:1000]}")
 
-    def _send(self, method: str, path: str, **kwargs: Any) -> requests.Response:
-        """Send a request through the session's method for the verb, logged."""
+    def _send(
+        self,
+        method: str,
+        path: str,
+        headers: dict[str, str] | None = None,
+        **kwargs: Any,
+    ) -> requests.Response:
+        """Send a request through the session's method for the verb, logged.
+
+        The headers are the operation's header parameters. An explicit
+        --header of the same name wins, so such a parameter is dropped here
+        rather than sent over it.
+        """
         url = self._url(path)
+        overridden = {name.lower() for name in self.headers}
+        headers = {
+            name: value
+            for name, value in (headers or {}).items()
+            if name.lower() not in overridden
+        }
         self._log_request(
-            method, url, params=kwargs.get("params"), json_data=kwargs.get("json")
+            method,
+            url,
+            params=kwargs.get("params"),
+            json_data=kwargs.get("json"),
+            headers=headers,
         )
         send = getattr(self.session, method.lower())
-        response: requests.Response = send(url, timeout=self.timeout, **kwargs)
+        response: requests.Response = send(
+            url, timeout=self.timeout, headers=headers or None, **kwargs
+        )
         self._log_response(response)
         return response
 
@@ -258,45 +295,58 @@ class ApiClient:
         self,
         path: str,
         params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> requests.Response:
         """Make a GET request."""
-        return self._send("GET", path, params=params)
+        return self._send("GET", path, headers=headers, params=params)
 
     def post(
         self,
         path: str,
         json_data: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> requests.Response:
         """Make a POST request."""
-        return self._send("POST", path, json=json_data, params=params)
+        return self._send(
+            "POST", path, headers=headers, json=json_data, params=params
+        )
 
     def put(
         self,
         path: str,
         json_data: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> requests.Response:
         """Make a PUT request."""
-        return self._send("PUT", path, json=json_data, params=params)
+        return self._send(
+            "PUT", path, headers=headers, json=json_data, params=params
+        )
 
     def patch(
         self,
         path: str,
         json_data: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> requests.Response:
         """Make a PATCH request."""
-        return self._send("PATCH", path, json=json_data, params=params)
+        return self._send(
+            "PATCH", path, headers=headers, json=json_data, params=params
+        )
 
     def delete(
         self,
         path: str,
         json_data: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> requests.Response:
         """Make a DELETE request."""
-        return self._send("DELETE", path, json=json_data, params=params)
+        return self._send(
+            "DELETE", path, headers=headers, json=json_data, params=params
+        )
 
 def create_client(options: dict[str, Any]) -> ApiClient:
     """Create an API client from the common options.

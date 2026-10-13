@@ -18,6 +18,10 @@ from cli_wizard.generator.models import (
     RequestBodyProperty,
 )
 
+# Header parameters OpenAPI says to ignore, lower-cased: header names are not
+# case-sensitive.
+_RESERVED_HEADERS = {"accept", "content-type", "authorization"}
+
 
 def _operation_id(method: str, path: str, operation: dict[str, Any]) -> str:
     """Get the operation's ID, deriving one from the method and path if absent.
@@ -160,7 +164,13 @@ class OpenApiParser:
         """Parse a single operation."""
         parameters = []
         for param in operation.get("parameters", []):
-            parameters.append(self._parse_parameter(param))
+            parsed = self._parse_parameter(param)
+            # OpenAPI says these header parameters SHALL be ignored: the client
+            # sets them itself, from the body and the access token.
+            is_reserved = parsed.name.lower() in _RESERVED_HEADERS
+            if parsed.location == "header" and is_reserved:
+                continue
+            parameters.append(parsed)
 
         body_properties: list[RequestBodyProperty] = []
         if "requestBody" in operation:

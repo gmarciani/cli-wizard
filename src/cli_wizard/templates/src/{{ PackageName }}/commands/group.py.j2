@@ -6,8 +6,12 @@
 import click
 from typing import Any
 
-{% if group.has_path_parameters %}
+{% if group.has_path_parameters and group.has_header_parameters %}
+from {{ PackageName }}.client import encode_header_param, encode_path_param
+{% elif group.has_path_parameters %}
 from {{ PackageName }}.client import encode_path_param
+{% elif group.has_header_parameters %}
+from {{ PackageName }}.client import encode_header_param
 {% endif %}
 from {{ PackageName }}.options import common_options
 from {{ PackageName }}.runner import run_command
@@ -39,7 +43,7 @@ def {{ group.module_name }}() -> None:
     help={{ param.description | string_literal }},
 )
 {% endfor %}
-{% for param in op.query_parameters %}
+{% for param in op.query_parameters + op.header_parameters %}
 {% if param.enum %}
 @click.option(
 {% for decl in param.option_declarations %}
@@ -114,7 +118,7 @@ def {{ op.function_name }}(
 {% for param in op.path_parameters %}
     {{ param.python_name }}: {{ param.click_type }},
 {% endfor %}
-{% for param in op.query_parameters %}
+{% for param in op.query_parameters + op.header_parameters %}
     {{ param.python_name }}: {{ param.python_annotation }},
 {% endfor %}
 {% for prop in op.body_properties %}
@@ -126,7 +130,7 @@ def {{ op.function_name }}(
 {% for param in op.path_parameters %}
         "{{ param.name }}": {{ param.python_name }},
 {% endfor %}
-{% for param in op.query_parameters %}
+{% for param in op.query_parameters + op.header_parameters %}
         "{{ param.name }}": {{ param.python_name }},
 {% endfor %}
 {% for prop in op.body_properties %}
@@ -146,6 +150,21 @@ def {{ op.function_name }}(
 {% else %}
     if {{ param.python_name }} is not None:
         params["{{ param.name }}"] = {{ param.python_name }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if op.header_parameters %}
+
+    headers: dict[str, str] = {}
+{% for param in op.header_parameters %}
+{% if param.is_array %}
+    if {{ param.python_name }}:
+        headers["{{ param.name }}"] = encode_header_param({{ param.python_name }})
+{% elif param.required or param.default is not none %}
+    headers["{{ param.name }}"] = encode_header_param({{ param.python_name }})
+{% else %}
+    if {{ param.python_name }} is not None:
+        headers["{{ param.name }}"] = encode_header_param({{ param.python_name }})
 {% endif %}
 {% endfor %}
 {% endif %}
@@ -171,6 +190,9 @@ def {{ op.function_name }}(
 {% endif %}
 {% if op.query_parameters %}
 {% set _ = call_args.append("params=params") %}
+{% endif %}
+{% if op.header_parameters %}
+{% set _ = call_args.append("headers=headers") %}
 {% endif %}
     run_command(
         ctx,

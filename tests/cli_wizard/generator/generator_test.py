@@ -2155,7 +2155,7 @@ ISSUE23_BASE_URL = "http://api.test"
 
 
 def _issue23_groups():
-    """Build a group whose operations cover path, query and body inputs."""
+    """Build a group whose operations cover path, query, header and body inputs."""
     email = Parameter(name="email", location="path", param_type="string", required=True)
     return {
         "Ops": CommandGroup(
@@ -2298,6 +2298,35 @@ def _issue23_groups():
                         ),
                     ],
                 ),
+                Operation(
+                    operation_id="listTenantUsers",
+                    method="GET",
+                    path="/tenant/users",
+                    summary="List tenant users",
+                    description="",
+                    tags=["Ops"],
+                    parameters=[
+                        Parameter(
+                            name="X-Tenant",
+                            location="header",
+                            param_type="string",
+                            required=True,
+                        ),
+                        Parameter(
+                            name="X-Flags",
+                            location="header",
+                            param_type="array",
+                            required=False,
+                            items_type="string",
+                        ),
+                        Parameter(
+                            name="X-Dry-Run",
+                            location="header",
+                            param_type="boolean",
+                            required=False,
+                        ),
+                    ],
+                ),
             ],
         )
     }
@@ -2390,6 +2419,65 @@ class TestGeneratedPathParameters:
             ["ops", "revoke-beta-access", "--email", "a@b.com", "--reason", "spam"],
         )
         assert call.kwargs["params"] == {"reason": "spam"}
+
+
+class TestGeneratedHeaderParameters:
+    """Regression tests for #105: header parameters must reach the request."""
+
+    @pytest.mark.parametrize(
+        "args,expected",
+        [
+            (["--x-tenant", "acme"], {"X-Tenant": "acme"}),
+            (
+                [
+                    "--x-tenant",
+                    "acme",
+                    "--x-flags",
+                    "a",
+                    "--x-flags",
+                    "b",
+                    "--x-dry-run",
+                    "true",
+                ],
+                {"X-Tenant": "acme", "X-Flags": "a,b", "X-Dry-Run": "true"},
+            ),
+        ],
+    )
+    def test_header_parameters_are_sent_as_headers(self, issue23_cli, args, expected):
+        """Test given header options are sent, in simple style, and omitted ones not."""
+        call = _invoke_issue23(issue23_cli, ["ops", "list-tenant-users", *args])
+        assert call.kwargs["headers"] == expected
+        assert call.kwargs["params"] is None
+
+    def test_required_header_parameter_is_a_required_option(self, issue23_cli):
+        """Test a required header cannot be left out."""
+        with patch("requests.Session.request") as request:
+            result = CliRunner().invoke(issue23_cli, ["ops", "list-tenant-users"])
+        assert result.exit_code == 2
+        assert "--x-tenant" in result.stdout
+        request.assert_not_called()
+
+    @pytest.mark.parametrize("name", ["X-Tenant", "x-tenant"])
+    def test_explicit_header_wins_over_a_header_parameter(self, issue23_cli, name):
+        """Test --header of the same name, in any case, overrides the parameter."""
+        # Session.send gets the request with session and request headers merged
+        with patch("requests.Session.send") as send:
+            send.return_value.text = ""
+            result = CliRunner().invoke(
+                issue23_cli,
+                [
+                    "ops",
+                    "list-tenant-users",
+                    "--x-tenant",
+                    "acme",
+                    "--header",
+                    f"{name}: other",
+                    "--base-url",
+                    ISSUE23_BASE_URL,
+                ],
+            )
+        assert result.exit_code == 0, result.output
+        assert send.call_args.args[0].headers["X-Tenant"] == "other"
 
 
 class TestGeneratedKeywordParameters:
@@ -2599,6 +2687,18 @@ class TestGeneratedCommandTests:
             assert "json" not in asserted  # a GET carries no body
         else:
             assert asserted["json"] == body
+
+    def test_expected_headers_are_asserted(self, issue50_cli):
+        """Test the generated test states the header parameters the command sends."""
+        content = (issue50_cli / "tests" / "commands_test.py").read_text()
+        test = content.split("def test_list_tenant_users(")[1].split("    def ")[0]
+        asserted = re.search(r'kwargs\["headers"\] == (\{.*?\})', test, re.S)
+
+        assert ast.literal_eval(asserted.group(1)) == {
+            "X-Tenant": "test",
+            "X-Flags": "test",
+            "X-Dry-Run": "true",
+        }
 
 
 class TestGeneratedInsecureTlsWarning:
@@ -3047,6 +3147,8 @@ class TestGeneratedReadme:
             # the default the help advertises
             "`--enabled/--no-enabled` - Invite outright. Default: true.",
             "`--notify/--no-notify` (required)",
+            # A header parameter is documented as an option like the others
+            "`--x-tenant TEXT` (required)",
         ],
     )
     def test_options_show_type_requirement_and_default(self, issue50_readme, line):

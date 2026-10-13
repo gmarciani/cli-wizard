@@ -58,7 +58,7 @@ class Test{{ group.module_name.title().replace("_", "") }}Commands:
             "{{ op.method }}",
             BASE_URL + {{ case.path | pprint }}
         )
-{% for name, expected in [("params", case.params)] + ([("json", case.body)] if op.method != "GET" else []) %}
+{% for name, expected in [("params", case.params), ("headers", case.headers)] + ([("json", case.body)] if op.method != "GET" else []) %}
 {% if expected is none %}
         assert call.kwargs["{{ name }}"] is None
 {% else %}

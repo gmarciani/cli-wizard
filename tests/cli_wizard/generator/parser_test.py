@@ -145,6 +145,45 @@ class TestOpenApiParser:
         finally:
             Path(spec_path).unlink()
 
+    @staticmethod
+    def _parse_header_parameters(names):
+        """Parse an operation declaring one header parameter per name."""
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/users": {
+                    "get": {
+                        "operationId": "listUsers",
+                        "tags": ["Users"],
+                        "parameters": [
+                            {"name": name, "in": "header", "schema": {"type": "string"}}
+                            for name in names
+                        ],
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                }
+            },
+        }
+        spec_path = create_temp_spec(spec)
+        try:
+            return OpenApiParser(spec_path).parse()["Users"].operations[0].parameters
+        finally:
+            Path(spec_path).unlink()
+
+    def test_parse_with_header_parameter(self):
+        """Test a header parameter is kept, with its location."""
+        [param] = self._parse_header_parameters(["X-Tenant"])
+        assert (param.name, param.location) == ("X-Tenant", "header")
+
+    @pytest.mark.parametrize(
+        "name", ["Accept", "Content-Type", "Authorization", "authorization"]
+    )
+    def test_reserved_header_parameter_is_ignored(self, name):
+        """Test the header parameters OpenAPI says to ignore are left out."""
+        params = self._parse_header_parameters([name, "X-Tenant"])
+        assert [param.name for param in params] == ["X-Tenant"]
+
     def test_parse_with_query_parameter(self):
         """Test parsing operation with query parameter."""
         spec = {

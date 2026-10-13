@@ -43,6 +43,7 @@ class TestPrivateCommands:
         call = _run(request_mock, ["private", "get-greetings"])
         assert call.args == ("GET", BASE_URL + "/private/greetings")
         assert call.kwargs["params"] is None
+        assert call.kwargs["headers"] is None
 
 
 class TestPublicCommands:
@@ -53,3 +54,4 @@ class TestPublicCommands:
         call = _run(request_mock, ["public", "get-public-greetings"])
         assert call.args == ("GET", BASE_URL + "/public/greetings")
         assert call.kwargs["params"] is None
+        assert call.kwargs["headers"] is None

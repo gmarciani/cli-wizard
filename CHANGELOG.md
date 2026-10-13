@@ -35,6 +35,7 @@
 - Fixed the PR Labeler workflow looking for its rules in `.github/labeler.yml` instead of the generated `.github/labeler.yaml`.
 - Fixed `--output table` failing with an unexpected error when the response is an empty object; it prints nothing, as an empty list does.
 - Fixed the splash screen being printed on stdout ahead of the JSON output: it goes to stderr.
+- Fixed header parameters being silently dropped: each one is an option, required when the spec says so, and sent as a request header. A `--header` with the same name still wins.
 
 ## 3.0.0
 

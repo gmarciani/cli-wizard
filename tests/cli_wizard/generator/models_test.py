@@ -281,6 +281,32 @@ class TestOperation:
         )
         assert [p.name for p in op.query_parameters] == ["limit"]
 
+    def test_header_parameters_keeps_only_header_ones(self):
+        """Test header parameters exclude path and query parameters."""
+        op = Operation(
+            operation_id="listUsers",
+            method="GET",
+            path="/tenants/{tenantId}/users",
+            summary="List users",
+            description="",
+            tags=["Users"],
+            parameters=[
+                Parameter(
+                    name="tenantId", location="path", param_type="string", required=True
+                ),
+                Parameter(
+                    name="X-Trace",
+                    location="header",
+                    param_type="string",
+                    required=False,
+                ),
+                Parameter(
+                    name="limit", location="query", param_type="integer", required=False
+                ),
+            ],
+        )
+        assert [p.name for p in op.header_parameters] == ["X-Trace"]
+
 
 class TestCommandGroup:
     """Tests for CommandGroup model."""
@@ -333,6 +359,37 @@ class TestCommandGroup:
             ],
         )
         assert group.has_path_parameters is expected
+
+    @pytest.mark.parametrize(
+        "location,expected",
+        [("header", True), ("query", False)],
+    )
+    def test_has_header_parameters(self, location, expected):
+        """Test a group reports whether any operation takes a header parameter."""
+        group = CommandGroup(
+            name="Users",
+            cli_name="users",
+            description="User management",
+            operations=[
+                Operation(
+                    operation_id="listUsers",
+                    method="GET",
+                    path="/users",
+                    summary="List users",
+                    description="",
+                    tags=["Users"],
+                    parameters=[
+                        Parameter(
+                            name="X-Tenant",
+                            location=location,
+                            param_type="string",
+                            required=True,
+                        )
+                    ],
+                ),
+            ],
+        )
+        assert group.has_header_parameters is expected
 
 
 class TestDefaultLiteral:
