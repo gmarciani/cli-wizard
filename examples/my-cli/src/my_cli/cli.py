@@ -26,14 +26,14 @@ from my_cli.options import common_options
 
 
 def _show_splash() -> None:
-    """Display splash screen if enabled."""
+    """Display splash screen if enabled, on stderr so stdout stays JSON."""
     if SPLASH_ENABLED and SPLASH_FILE and SPLASH_FILE.exists():
         splash_text = SPLASH_FILE.read_text()
         if SPLASH_COLOR:
             rgb = hex_to_rgb(SPLASH_COLOR)
-            click.secho(splash_text, fg=rgb)
+            click.secho(splash_text, fg=rgb, err=True)
         else:
-            click.echo(splash_text)
+            click.echo(splash_text, err=True)
 
 
 class RootGroup(click.Group):
