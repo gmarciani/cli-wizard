@@ -29,7 +29,9 @@ def {{ group.module_name }}() -> None:
 )
 {% for param in op.path_parameters %}
 @click.option(
-    "--{{ param.cli_name }}",
+{% for decl in param.option_declarations %}
+    "{{ decl }}",
+{% endfor %}
 {% if param.click_type != "str" %}
     type={{ param.click_type }},
 {% endif %}
@@ -40,7 +42,9 @@ def {{ group.module_name }}() -> None:
 {% for param in op.query_parameters %}
 {% if param.enum %}
 @click.option(
-    "--{{ param.cli_name }}",
+{% for decl in param.option_declarations %}
+    "{{ decl }}",
+{% endfor %}
     type=click.Choice([
 {% for e in param.enum %}
         "{{ e }}",
@@ -56,7 +60,9 @@ def {{ group.module_name }}() -> None:
 )
 {% else %}
 @click.option(
-    "--{{ param.cli_name }}",
+{% for decl in param.option_declarations %}
+    "{{ decl }}",
+{% endfor %}
 {% if param.is_array %}
     multiple=True,
 {% endif %}
@@ -75,10 +81,12 @@ def {{ group.module_name }}() -> None:
 {% endfor %}
 {% for prop in op.body_properties %}
 @click.option(
+{% for decl in prop.option_declarations %}
+    "{{ decl }}",
+{% endfor %}
 {% if prop.click_type == "bool" and not prop.is_array %}
 {# Tri-state: the body omits the field entirely unless the user picks a side.
    A required one gets no default, which click reads as a value already given. #}
-    "--{{ prop.cli_name }}/--no-{{ prop.cli_name }}",
 {% if not prop.required %}
     default=None,
 {% endif %}
@@ -86,7 +94,6 @@ def {{ group.module_name }}() -> None:
     show_default="{{ prop.default | lower }}",
 {% endif %}
 {% else %}
-    "--{{ prop.cli_name }}",
 {% if prop.is_array %}
     multiple=True,
 {% endif %}

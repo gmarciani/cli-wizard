@@ -44,6 +44,29 @@ class TestParameter:
         )
         assert param.python_name == "user_id"
 
+    @pytest.mark.parametrize(
+        "name,python_name", [("from", "from_"), ("class", "class_"), ("In", "in_")]
+    )
+    def test_python_name_keyword_gets_trailing_underscore(self, name, python_name):
+        """Test a keyword is turned into a valid argument name."""
+        param = Parameter(
+            name=name, location="query", param_type="string", required=False
+        )
+        assert param.python_name == python_name
+
+    @pytest.mark.parametrize(
+        "name,declarations",
+        [("userId", ["--user-id"]), ("from", ["--from", "from_"])],
+    )
+    def test_option_declarations_name_the_argument_when_click_would_not(
+        self, name, declarations
+    ):
+        """Test the option declares the argument name only when it differs."""
+        param = Parameter(
+            name=name, location="query", param_type="string", required=False
+        )
+        assert param.option_declarations == declarations
+
     def test_click_type_string(self):
         """Test Click type for string."""
         param = Parameter(
@@ -127,6 +150,28 @@ class TestRequestBodyProperty:
         """Test Python name conversion."""
         prop = RequestBodyProperty(name="userName", prop_type="string", required=True)
         assert prop.python_name == "user_name"
+
+    def test_python_name_keyword_gets_trailing_underscore(self):
+        """Test a keyword is turned into a valid argument name."""
+        prop = RequestBodyProperty(name="lambda", prop_type="string", required=True)
+        assert prop.python_name == "lambda_"
+
+    @pytest.mark.parametrize(
+        "name,prop_type,items_type,declarations",
+        [
+            ("userName", "string", None, ["--user-name"]),
+            ("lambda", "string", None, ["--lambda", "lambda_"]),
+            ("enabled", "boolean", None, ["--enabled/--no-enabled"]),
+            ("global", "boolean", None, ["--global/--no-global", "global_"]),
+            ("flags", "array", "boolean", ["--flags"]),
+        ],
+    )
+    def test_option_declarations(self, name, prop_type, items_type, declarations):
+        """Test a boolean is a flag pair and a keyword declares its argument."""
+        prop = RequestBodyProperty(
+            name=name, prop_type=prop_type, required=False, items_type=items_type
+        )
+        assert prop.option_declarations == declarations
 
     def test_click_type(self):
         """Test Click type conversion."""

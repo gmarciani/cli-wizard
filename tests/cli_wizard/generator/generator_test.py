@@ -2268,6 +2268,36 @@ def _issue23_groups():
                         ),
                     ],
                 ),
+                Operation(
+                    operation_id="moveUser",
+                    method="POST",
+                    path="/users/{class}/move",
+                    summary="Move user",
+                    description="",
+                    tags=["Ops"],
+                    parameters=[
+                        Parameter(
+                            name="class",
+                            location="path",
+                            param_type="string",
+                            required=True,
+                        ),
+                        Parameter(
+                            name="from",
+                            location="query",
+                            param_type="string",
+                            required=False,
+                        ),
+                    ],
+                    body_properties=[
+                        RequestBodyProperty(
+                            name="global", prop_type="boolean", required=False
+                        ),
+                        RequestBodyProperty(
+                            name="lambda", prop_type="string", required=False
+                        ),
+                    ],
+                ),
             ],
         )
     }
@@ -2360,6 +2390,30 @@ class TestGeneratedPathParameters:
             ["ops", "revoke-beta-access", "--email", "a@b.com", "--reason", "spam"],
         )
         assert call.kwargs["params"] == {"reason": "spam"}
+
+
+class TestGeneratedKeywordParameters:
+    """Regression tests for #102: inputs named like Python keywords still work."""
+
+    def test_keyword_names_reach_the_request_unchanged(self, issue23_cli):
+        """Test path, query and body inputs keep their wire names and options."""
+        call = _invoke_issue23(
+            issue23_cli,
+            [
+                "ops",
+                "move-user",
+                "--class",
+                "a",
+                "--from",
+                "2026-01-01",
+                "--global",
+                "--lambda",
+                "x",
+            ],
+        )
+        assert call.args == ("POST", f"{ISSUE23_BASE_URL}/users/a/move")
+        assert call.kwargs["params"] == {"from": "2026-01-01"}
+        assert call.kwargs["json"] == {"global": True, "lambda": "x"}
 
 
 class TestGeneratedGlobalOptions:
