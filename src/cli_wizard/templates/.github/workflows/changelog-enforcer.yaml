@@ -1,4 +1,4 @@
-name: Enforce Changelog Updates
+name: 📝 Enforce Changelog Updates
 
 on:
   pull_request:

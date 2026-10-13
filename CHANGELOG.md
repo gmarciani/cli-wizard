@@ -8,11 +8,23 @@
 
 - Added `--project-name` to `bootstrap`: it sets `ProjectName` without prompting for it, and the command name prompt defaults to a name derived from it.
 
+#### Generated code
+
+- With `IncludeGithubWorkflows`, the project gets cli-wizard's own GitHub workflows, adding Bump Version and Draft Release.
+- Added `tools/bump_version.py`, which bumps `VERSION` and opens the version's section in `CHANGELOG.md`, and `tools/draft_release.sh`, which drafts the GitHub release from that section; `DEVELOPMENT.md` describes the release with them.
+
 ### Changes
 
 #### Generated code
 
 - The `dev` dependency group includes twine, so `pip install -e . --group dev` installs everything the release steps in `DEVELOPMENT.md` use.
+- Removed the PR Validation workflow: the Test workflow runs the tests through tox on every supported interpreter, and lint, type checks and the coverage threshold in a separate job.
+
+### Bug Fixes
+
+#### Generated code
+
+- Fixed the PR Labeler workflow looking for its rules in `.github/labeler.yml` instead of the generated `.github/labeler.yaml`.
 
 ## 3.0.0
 

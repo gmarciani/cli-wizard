@@ -1,10 +1,11 @@
-name: Test
+name: 🧪 Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -22,25 +23,40 @@ jobs:
       with:
         python-version: ${{ '{{' }} matrix.python-version }}
 
+    - name: Install tox
+      run: |
+        python -m pip install --upgrade pip
+        pip install tox
+
+    - name: Run tests on Python ${{ '{{' }} matrix.python-version }}
+      run: tox -e ${{ '{{' }} matrix.python-version }}
+
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: '{{ PythonVersion }}'
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -e . --group dev
 
-    - name: Lint with ruff
-      run: |
-        ruff check src/{{ PackageName }} tests/
-        ruff format --check src/{{ PackageName }} tests/
+    - name: Run linting
+      run: tox -e lint
 
-    - name: Type check with mypy
-      run: mypy src/{{ PackageName }}
+    - name: Run type checking
+      run: tox -e type
 
     - name: Test with pytest
       run: pytest tests/ -v --cov={{ PackageName }} --cov-report=xml
 
-    # Uploaded once rather than once per interpreter in the matrix.
     - name: Upload coverage to Codecov
-      if: matrix.python-version == '{{ PythonVersion }}'
       uses: codecov/codecov-action@v7
       with:
         token: ${{ '{{' }} secrets.CODECOV_TOKEN }}

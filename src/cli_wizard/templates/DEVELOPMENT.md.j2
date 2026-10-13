@@ -80,24 +80,34 @@ make clean-docs
 
 ## Release
 
-Update version in `VERSION`
-
-Draft the release
+Bump the version with the Bump Version workflow: run it with the target
+version, and merge the pull request it opens. The workflow runs
+`tools/bump_version.py`, which writes `VERSION` and opens the version's section
+in `CHANGELOG.md`, warning about whichever is already there; a branch already
+at that version gets no pull request. Run the script locally instead, if you
+prefer:
 
 ```shell
-VERSION="$(cat VERSION)"
-gh release create v${VERSION} \
-   --title v${VERSION} \
-   --target main \
-   --notes-file CHANGELOG.md \
-   --latest \
-   --draft
+python tools/bump_version.py 1.2.3
 ```
 
-Make changes to the release notes, and publish
+Once the bump is merged and the version's section in `CHANGELOG.md` is
+written, draft the release with the Draft Release workflow: run it, with no
+input, and it checks out `main` and runs `tools/draft_release.sh`. The script
+reads the version from `VERSION`, takes the release notes from that section,
+and creates the draft `v<VERSION>` release targeting `main` with
+[gh](https://cli.github.com). A version that is already released, drafted, or
+tagged on origin is refused with an error. Run the script locally instead, if
+you prefer:
 
 ```shell
-gh release edit v${VERSION} --draft=false
+tools/draft_release.sh
+```
+
+Review the release notes on GitHub, and publish
+
+```shell
+gh release edit "v$(cat VERSION)" --draft=false
 ```
 
 This will automatically publish to PyPI at https://pypi.org/project/{{ PackageName }}.
