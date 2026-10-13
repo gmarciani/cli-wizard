@@ -431,6 +431,8 @@ class TestMetavar:
             ("number", [], "FLOAT"),
             ("boolean", [], "BOOLEAN"),
             ("string", ["json", "csv"], "[json|csv]"),
+            ("integer", [10, 20], "[10|20]"),
+            ("number", [1.5, 2], "[1.5|2]"),
         ],
     )
     def test_parameter_metavar_follows_the_type(self, param_type, enum, expected):
@@ -443,6 +445,25 @@ class TestMetavar:
             enum=enum,
         )
         assert param.metavar == expected
+
+    @pytest.mark.parametrize(
+        ("param_type", "enum", "expected"),
+        [
+            ("string", ["json", "csv"], ["'json'", "'csv'"]),
+            ("integer", [10, 20], ["10", "20"]),
+            ("number", [1.5, 2], ["1.5", "2"]),
+        ],
+    )
+    def test_parameter_enum_literals_keep_the_type(self, param_type, enum, expected):
+        """Test each choice is rendered as a literal of its declared type."""
+        param = Parameter(
+            name="format",
+            location="query",
+            param_type=param_type,
+            required=False,
+            enum=enum,
+        )
+        assert param.enum_literals == expected
 
     def test_parameter_array_metavar_follows_the_items(self):
         """Test an array parameter's metavar names the type of one item."""

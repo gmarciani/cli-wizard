@@ -97,7 +97,7 @@ _SAMPLE_PATH_STRING = "a@b.com"
 
 def _sample_value(spec_field: Parameter | RequestBodyProperty) -> Any:
     """Pick a value of the right type for one command option."""
-    enum: list[str] = getattr(spec_field, "enum", [])
+    enum: list[Any] = getattr(spec_field, "enum", [])
     return enum[0] if enum else _SAMPLE_VALUES[spec_field.click_type]
 
 

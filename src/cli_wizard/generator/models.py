@@ -80,7 +80,7 @@ class Parameter:
     required: bool
     description: str = ""
     default: Any = None
-    enum: list[str] = field(default_factory=list)
+    enum: list[Any] = field(default_factory=list)
     items_type: str | None = None
     # Signals that the value is a credential, read by _sensitive_field_names
     spec_format: str = ""
@@ -124,11 +124,12 @@ class Parameter:
     def metavar(self) -> str:
         """Get the value placeholder shown after the option in the documentation.
 
-        An enum lists its choices the way Click renders a Choice; anything else
-        names the type of one value, which for an array is the type of an item.
+        An enum lists its choices the way Click renders a Choice, whatever
+        their type; anything else names the type of one value, which for an
+        array is the type of an item.
         """
         if self.enum:
-            return f"[{'|'.join(self.enum)}]"
+            return f"[{'|'.join(str(choice) for choice in self.enum)}]"
         return _METAVARS[self.click_type]
 
     @property
@@ -139,6 +140,15 @@ class Parameter:
         variable; numbers, booleans and lists keep their type.
         """
         return repr(self.default)
+
+    @property
+    def enum_literals(self) -> list[str]:
+        """Get the choices as Python literals for the generated Click Choice.
+
+        Each choice keeps its declared type, so Click hands the command the
+        integer or number the API expects rather than its string form.
+        """
+        return [repr(choice) for choice in self.enum]
 
     @property
     def python_annotation(self) -> str:
