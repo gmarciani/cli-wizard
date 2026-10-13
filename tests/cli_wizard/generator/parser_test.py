@@ -457,6 +457,74 @@ class TestOpenApiParser:
         finally:
             Path(spec_path).unlink()
 
+    @pytest.mark.parametrize(
+        ("filters", "expected"),
+        [
+            ({}, ["listUsers", "getUser", "listOrders"]),
+            ({"include_operations": ["listUsers"]}, ["listUsers"]),
+            (
+                {
+                    "include_operations": ["listUsers", "getUser"],
+                    "exclude_operations": ["getUser"],
+                },
+                ["listUsers"],
+            ),
+            (
+                {"include_operations": ["listOrders"], "exclude_tags": ["Orders"]},
+                ["listOrders"],
+            ),
+            (
+                {"include_operations": ["listOrders"], "include_tags": ["Users"]},
+                ["listOrders"],
+            ),
+        ],
+        ids=[
+            "no-filter",
+            "only-listed",
+            "excluded-wins",
+            "bypasses-exclude-tags",
+            "bypasses-include-tags",
+        ],
+    )
+    def test_parse_include_operations(self, filters, expected):
+        """IncludeOperations generates the listed operations only."""
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/users": {
+                    "get": {
+                        "operationId": "listUsers",
+                        "tags": ["Users"],
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                },
+                "/users/{id}": {
+                    "get": {
+                        "operationId": "getUser",
+                        "tags": ["Users"],
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                },
+                "/orders": {
+                    "get": {
+                        "operationId": "listOrders",
+                        "tags": ["Orders"],
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                },
+            },
+        }
+        spec_path = create_temp_spec(spec)
+        try:
+            groups = OpenApiParser(spec_path).parse(**filters)
+            generated = [
+                op.operation_id for group in groups.values() for op in group.operations
+            ]
+            assert generated == expected
+        finally:
+            Path(spec_path).unlink()
+
     def test_parse_tag_mapping(self):
         """Test custom tag to CLI name mapping."""
         spec = {

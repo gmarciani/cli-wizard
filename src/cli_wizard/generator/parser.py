@@ -111,11 +111,11 @@ class OpenApiParser:
 
                 if operation_id in exclude_operations:
                     continue
+                if include_operations and operation_id not in include_operations:
+                    continue
 
                 # Explicitly included operations bypass tag filtering
-                explicitly_included = (
-                    include_operations and operation_id in include_operations
-                )
+                explicitly_included = bool(include_operations)
 
                 # An empty list is no tags, not a member of no group
                 tags = operation.get("tags") or ["default"]
