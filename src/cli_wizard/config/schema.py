@@ -142,8 +142,8 @@ class Config(BaseModel):
     IncludeOperations: list[str] = Field(
         default_factory=list,
         description=(
-            "Operation IDs to include (if empty, all non-excluded operations "
-            "are included)"
+            "Operation IDs to include, regardless of their tags (if empty, all "
+            "non-excluded operations are included)"
         ),
     )
     ExcludeOperations: list[str] = Field(

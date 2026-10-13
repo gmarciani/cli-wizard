@@ -25,7 +25,7 @@ Story numbers are stable identifiers assigned when the story is written. Priorit
 | **S10** |    | [B] `get_field_default` returns the Pydantic sentinel | Honour `default_factory` instead of leaking `PydanticUndefined` |
 | **S11** |    | [B] Missing `CaFile` / `SplashFile` fail silently | Warn instead of generating a CLI with no CA configured |
 | **S12** |    | [B] `CopyrightYear` renders as `None` in LICENSE | Default the year rather than emitting a literal `None` |
-| **S13** |    | [B] `IncludeOperations` does not filter | Make the whitelist behave as its own description promises |
+| **S13** | ✅ | [B] `IncludeOperations` does not filter | Make the whitelist behave as its own description promises |
 | **S14** |    | [O] Single-source the `#[Param]` expander | One implementation instead of two copies kept in sync by hand |
 | **S15** |    | [O] Dead code cleanup | Remove unreachable branches and an unused template override |
 | **S16** |    | [O] Initialize `CliGenerator` state in the constructor | Close a latent `AttributeError` on direct method calls |
@@ -199,6 +199,8 @@ IncludeOperations=['opA']  =>  expected ['opA'], got ['opA', 'opB', 'opC']
 ```
 
 The current behaviour is documented in `CLAUDE.md`, so the code may be deliberate and the field description wrong — but the two contradict each other and one has to change. Since the project is published, resolving it in favour of the whitelist changes behaviour for anyone relying on today's semantics, and belongs in a major release with a migration note.
+
+Decision: `IncludeOperations` is a whitelist. A non-empty list generates exactly the listed operations, minus any in `ExcludeOperations`; the tag filters do not apply to them.
 
 **Acceptance criteria**
 - A decision is recorded on whether `IncludeOperations` is a whitelist or a tag-filter bypass.
