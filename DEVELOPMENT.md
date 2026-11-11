@@ -137,6 +137,7 @@ secret they need.
 | [Claude Code](.github/workflows/claude.yaml) | a comment, review comment or new issue mentions `@claude` | answers, or implements the request on a branch and opens a pull request |
 | [Claude CI Diagnosis](.github/workflows/claude-ci-diagnosis.yaml) | the Test workflow fails on a pull request | reproduces the failure and posts one comment with the root cause and a suggested fix; never pushes |
 | [Product Manager](.github/workflows/product-manager.yaml) | Mondays, or run by hand | proposes five features and five bug fixes, each bug reproduced first, and opens an issue for each, labelled with its type, `Triage` and a priority |
+| [Claude Planned Issues](.github/workflows/claude-planned-issues.yaml) | Thursdays, or run by hand | implements up to three open issues labelled `Planned`, oldest first, and opens a pull request for each |
 
 They need, once:
 
@@ -151,6 +152,25 @@ GitHub withholds secrets from pull requests opened from forks, so the
 workflows that run on a pull request skip them; review those by hand.
 Only users with write access can trigger `@claude`, the action refuses
 everyone else.
+
+The last two make a weekly loop:
+
+1. On Monday, Product Manager opens its proposals, labelled `Triage`.
+2. Triage them: close those not worth doing, adjust the priority, and edit
+   the text until it says exactly what should be built.
+3. Label `Planned` the issues to implement, yours or proposed ones. The label
+   approves the text as it stands: an issue edited afterwards is skipped
+   until it is labelled again, and Claude never reads its comments.
+4. On Thursday, Claude Planned Issues opens a pull request from
+   `claude/issue-<number>` for each, closing the issue on merge. An issue it
+   cannot implement gets a comment saying why and loses `Planned`; clarify
+   it and label it again.
+
+Run Claude Planned Issues by hand to implement one issue now, or to retry
+one that already had a pull request, and with `max-issues` to change how
+many it takes on. Its pull requests are opened with the workflow's token,
+which triggers no workflow, so it starts the Test workflow on the branch
+itself; close and reopen the pull request for the other checks to run.
 
 ## Release
 

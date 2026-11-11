@@ -1,0 +1,412 @@
+# Implements the open issues labelled Planned, opening a pull request for each.
+#
+# Labelling an issue Planned approves its text: an issue whose title or body
+# was edited after it was labelled is skipped until it is labelled again, and
+# Claude reads the title and body only, never the comments, so nobody can
+# steer it after a maintainer has approved the issue.
+#
+# Three jobs keep Claude away from write access:
+# - select picks up to max-issues approved issues, oldest first, skipping
+#   those that already had a pull request from their claude/issue-<number>
+#   branch. Run it for one issue to retry it whatever its pull requests.
+# - implement runs Claude Code with a read-only token: it changes the code,
+#   runs the checks, and the job uploads the change as a patch.
+# - publish applies the patch in a fresh checkout and opens the pull request,
+#   or, when Claude implemented nothing, explains why on the issue and removes
+#   Planned, so the issue is not retried until it is labelled again.
+#
+# A pull request opened with the workflow's token triggers no workflow, so
+# publish starts the Test workflow on the branch; close and reopen the pull
+# request for the other pull request checks to run.
+#
+# Requires the Claude GitHub App and the ANTHROPIC_API_KEY secret; see
+# "Continuous AI" in DEVELOPMENT.md.
+name: 🛠️ Claude Planned Issues
+
+on:
+  schedule:
+    # Thursdays, after the issues the Product Manager workflow proposes on
+    # Monday have been triaged.
+    - cron: '43 6 * * 4'
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: 'One issue to implement, retried even if it already had a pull request'
+        required: false
+        type: string
+      max-issues:
+        description: 'Most issues to implement in this run'
+        required: false
+        default: '3'
+        type: string
+
+concurrency:
+  group: claude-planned-issues
+  cancel-in-progress: false
+
+env:
+  # The issue as of now: its text, its labels, and when its text last changed
+  # and when it was labelled Planned.
+  ISSUE_QUERY: >-
+    query($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) {
+        issue(number: $number) {
+          number title body state lastEditedAt
+          labels(first: 50) { nodes { name } }
+          timelineItems(last: 100, itemTypes: [LABELED_EVENT, RENAMED_TITLE_EVENT]) {
+            nodes {
+              __typename
+              ... on LabeledEvent { createdAt label { name } }
+              ... on RenamedTitleEvent { createdAt }
+            }
+          }
+        }
+      }
+    }
+  # true when the issue is open, labelled Planned, and its title and body have
+  # not changed since it was last labelled Planned.
+  APPROVED_FILTER: >-
+    (.state == "OPEN")
+    and (.labels.nodes | map(.name) | index("Planned") != null)
+    and (
+      ([.timelineItems.nodes[] | select(.__typename == "LabeledEvent" and .label.name == "Planned") | .createdAt] | max) as $planned
+      | ([.lastEditedAt] + [.timelineItems.nodes[] | select(.__typename == "RenamedTitleEvent") | .createdAt] | map(select(. != null)) | max) as $edited
+      | $planned != null and ($edited == null or $edited <= $planned)
+    )
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      pull-requests: read
+    outputs:
+      issues: ${{ steps.select.outputs.issues }}
+    steps:
+      - name: Select the approved Planned issues
+        id: select
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ONE_ISSUE: ${{ inputs.issue }}
+          MAX_ISSUES: ${{ inputs.max-issues || '3' }}
+        run: |
+          if [ -n "$ONE_ISSUE" ]; then
+            candidates="${ONE_ISSUE#\#}"
+          else
+            candidates="$(gh issue list --repo "$GITHUB_REPOSITORY" --label Planned --state open \
+              --limit 200 --json number --jq 'map(.number) | sort | .[]')"
+          fi
+
+          selected=()
+          for number in $candidates; do
+            [ "${#selected[@]}" -ge "$MAX_ISSUES" ] && break
+            issue="$(gh api graphql -f query="$ISSUE_QUERY" -f owner="${GITHUB_REPOSITORY%/*}" \
+              -f repo="${GITHUB_REPOSITORY#*/}" -F number="$number" --jq .data.repository.issue)"
+            # An assignment, so a jq error fails the run instead of skipping the issue.
+            approved="$(jq -r "$APPROVED_FILTER" <<< "$issue")"
+            if [ "$approved" != true ]; then
+              echo "::notice::Skipped #$number: not open and labelled Planned, or edited since it was labelled Planned."
+              continue
+            fi
+            if [ -z "$ONE_ISSUE" ]; then
+              pulls="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "claude/issue-$number" \
+                --state all --json number --jq length)"
+              if [ "$pulls" != 0 ]; then
+                echo "::notice::Skipped #$number: it already had a pull request; run the workflow for it to retry."
+                continue
+              fi
+            fi
+            selected+=("$number")
+          done
+
+          issues="$(printf '%s\n' "${selected[@]}" | jq -Rnc '[inputs | select(length > 0) | tonumber]')"
+          echo "issues=$issues" >> "$GITHUB_OUTPUT"
+          echo "Issues to implement: $issues" >> "$GITHUB_STEP_SUMMARY"
+
+  implement:
+    needs: select
+    if: needs.select.outputs.issues != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        issue: ${{ fromJSON(needs.select.outputs.issues) }}
+    permissions:
+      contents: read
+      issues: read
+      id-token: write
+    env:
+      ISSUE: ${{ matrix.issue }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Read the issue
+        id: issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "base-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          issue="$(gh api graphql -f query="$ISSUE_QUERY" -f owner="${GITHUB_REPOSITORY%/*}" \
+            -f repo="${GITHUB_REPOSITORY#*/}" -F number="$ISSUE" --jq .data.repository.issue)"
+          approved="$(jq -r "$APPROVED_FILTER" <<< "$issue")"
+          echo "approved=$approved" >> "$GITHUB_OUTPUT"
+          # The title and body as approved, read once here so the text Claude
+          # reads is the text that was checked.
+          jq -r '"# \(.title)\n\n\(.body)"' <<< "$issue" > claude-issue.md
+
+      - name: Set up Python
+        if: steps.issue.outputs.approved == 'true'
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        if: steps.issue.outputs.approved == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . --group dev
+
+      - name: Implement the issue
+        id: claude
+        if: steps.issue.outputs.approved == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Implement GitHub issue #${{ matrix.issue }} of this repository,
+            cli-wizard. Its title and body are in claude-issue.md: that is
+            the whole specification. A maintainer approved it by labelling
+            it Planned.
+
+            1. Read CLAUDE.md and DEVELOPMENT.md, and follow their
+               conventions: where code belongs, how errors are raised, how
+               generated code is formatted, how tests are laid out.
+            2. Make the smallest change that meets every acceptance
+               criterion in the issue, with tests under tests/ that fail
+               without it.
+            3. If the change touches the templates under
+               src/cli_wizard/templates, regenerate the example with
+               `cli-wizard generate --configuration examples/cli-wizard.yaml
+               --api examples/openapi.json --output examples/my-cli --force`.
+            4. Add an entry to the topmost version section of CHANGELOG.md,
+               under the subsection and heading its existing entries use.
+            5. Run `ruff check --fix src/cli_wizard tools/ tests/`,
+               `ruff format src/cli_wizard tools/ tests/`,
+               `mypy src/cli_wizard tools/` and `pytest tests/ -q`, and fix
+               what fails because of your change.
+
+            Leave the change in the working tree: do not commit, branch or
+            push, and do not touch .github/workflows or claude-issue.md.
+            Leave no scratch files behind.
+
+            If the issue is unclear, contradicts the code or CLAUDE.md, or
+            is too large for one pull request, change nothing, set
+            implemented to false, and say why in reason, so a maintainer can
+            clarify it.
+
+            Otherwise set implemented to true and return a title in the
+            repository's Conventional Commits style, such as
+            `fix(generator): ...` or `feat: ...`; a description of what
+            changed and why; and the tests you added and the checks you ran,
+            with their results.
+          claude_args: >-
+            --max-turns 80
+            --allowedTools "Read,Glob,Grep,Write,Edit,MultiEdit,Bash(cli-wizard:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*),Bash(tox:*),Bash(ls:*),Bash(git diff:*),Bash(git status:*),Bash(git log:*)"
+            --json-schema '{
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["implemented", "title", "description", "tests", "reason"],
+              "properties": {
+                "implemented": {"type": "boolean"},
+                "title": {"type": "string", "maxLength": 100},
+                "description": {"type": "string"},
+                "tests": {"type": "string"},
+                "reason": {"type": "string"}
+              }
+            }'
+
+      - name: Collect the change
+        if: always()
+        env:
+          OUT: ${{ runner.temp }}/out
+          APPROVED: ${{ steps.issue.outputs.approved }}
+          BASE_SHA: ${{ steps.issue.outputs.base-sha }}
+          CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
+          RESULT: ${{ steps.claude.outputs.structured_output }}
+        run: |
+          mkdir -p "$OUT"
+          rm -f claude-issue.md
+          git add -A
+          git diff --cached --binary > "$OUT/changes.patch"
+          git diff --cached --name-only > "$OUT/changed-files.txt"
+          python3 - <<'PYTHON'
+          import json
+          import os
+
+          out = os.environ["OUT"]
+          changed = open(f"{out}/changed-files.txt", encoding="utf-8").read().split()
+          result = {"base_sha": os.environ.get("BASE_SHA", "")}
+          try:
+              claude = json.loads(os.environ.get("RESULT") or "{}")
+          except json.JSONDecodeError:
+              claude = {}
+
+          if os.environ.get("APPROVED") != "true":
+              status, reason = "skipped", (
+                  "The issue changed after it was labelled `Planned`, or is no longer "
+                  "open and labelled `Planned`, so it was not implemented."
+              )
+          elif os.environ.get("CLAUDE_OUTCOME") != "success":
+              status, reason = "failed", (
+                  f"Claude Code did not finish ({os.environ.get('CLAUDE_OUTCOME') or 'not run'}); "
+                  "see the workflow run."
+              )
+          elif not claude.get("implemented"):
+              status, reason = "declined", claude.get("reason") or "No reason was given."
+          elif any(path.startswith(".github/workflows/") for path in changed):
+              status, reason = "declined", (
+                  "The change touches `.github/workflows`, which this workflow cannot push."
+              )
+          elif not changed:
+              status, reason = "declined", "Claude Code reported success but changed no file."
+          elif not claude.get("title", "").strip() or "\n" in claude["title"]:
+              status, reason = "failed", "Claude Code returned no single-line title."
+          else:
+              status, reason = "implemented", ""
+
+          result.update(status=status, reason=reason, claude=claude, changed_files=changed)
+          with open(f"{out}/result.json", "w", encoding="utf-8") as f:
+              json.dump(result, f, indent=2)
+          print(f"Issue #{os.environ['ISSUE']}: {status}. {reason}")
+          PYTHON
+
+      - name: Upload the change
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: issue-${{ matrix.issue }}
+          path: |
+            ${{ runner.temp }}/out/result.json
+            ${{ runner.temp }}/out/changes.patch
+          retention-days: 7
+
+  publish:
+    needs: [select, implement]
+    if: always() && needs.select.result == 'success' && needs.select.outputs.issues != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        issue: ${{ fromJSON(needs.select.outputs.issues) }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    env:
+      ISSUE: ${{ matrix.issue }}
+      BRANCH: claude/issue-${{ matrix.issue }}
+    steps:
+      - name: Download the change
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: issue-${{ matrix.issue }}
+          path: ${{ runner.temp }}/out
+
+      - name: Read the result
+        id: result
+        env:
+          OUT: ${{ runner.temp }}/out
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PYTHON'
+          import json
+          import os
+
+          out = os.environ["OUT"]
+          issue = os.environ["ISSUE"]
+          run_url = os.environ["RUN_URL"]
+          try:
+              result = json.load(open(f"{out}/result.json", encoding="utf-8"))
+          except (OSError, json.JSONDecodeError):
+              result = {"status": "failed", "reason": "The implement job left no result; see the workflow run."}
+
+          claude = result.get("claude", {})
+          # One line each: a newline in a value would let it write other outputs.
+          title = " ".join(str(claude.get("title", "")).split())
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"status={result['status']}\n")
+              output.write(f"base-sha={''.join(str(result.get('base_sha', '')).split())}\n")
+              output.write(f"title={title}\n")
+
+          with open(f"{out}/pr-body.md", "w", encoding="utf-8") as body:
+              body.write("\n\n".join([
+                  f"### Description of changes\n\n{claude.get('description', '')}",
+                  f"### Tests\n\n{claude.get('tests', '')}",
+                  f"### References\n\n* Closes #{issue}",
+                  "---\n"
+                  f"_Generated by the [Claude Planned Issues]({run_url}) workflow from #{issue}. "
+                  "The Test workflow was started on the branch; close and reopen the pull "
+                  "request for the other pull request checks to run._",
+              ]))
+          with open(f"{out}/issue-comment.md", "w", encoding="utf-8") as comment:
+              comment.write(
+                  f"The [Claude Planned Issues]({run_url}) workflow did not open a pull "
+                  f"request for this issue.\n\n{result.get('reason', '')}\n\n"
+                  "Clarify the issue if needed, then label it `Planned` again to retry."
+              )
+          PYTHON
+
+      - name: Checkout Repository
+        if: steps.result.outputs.status == 'implemented'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.result.outputs.base-sha }}
+
+      - name: Apply the change
+        if: steps.result.outputs.status == 'implemented'
+        run: git apply --binary "$RUNNER_TEMP/out/changes.patch"
+
+      - name: Create a Pull Request
+        id: pr
+        if: steps.result.outputs.status == 'implemented'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          base: main
+          branch: ${{ env.BRANCH }}
+          delete-branch: true
+          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          commit-message: |
+            ${{ steps.result.outputs.title }}
+
+            Closes #${{ matrix.issue }}
+          title: ${{ steps.result.outputs.title }}
+          body-path: ${{ runner.temp }}/out/pr-body.md
+
+      - name: Start the Test workflow
+        if: steps.pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ steps.pr.outputs.pull-request-url }}
+        run: |
+          gh workflow run test.yaml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
+          echo "Opened $PR_URL for #$ISSUE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Explain why on the issue
+        if: steps.result.outputs.status != 'implemented'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STATUS: ${{ steps.result.outputs.status }}
+        run: |
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/out/issue-comment.md"
+          gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --remove-label Planned
+          echo "#$ISSUE: $STATUS" >> "$GITHUB_STEP_SUMMARY"
