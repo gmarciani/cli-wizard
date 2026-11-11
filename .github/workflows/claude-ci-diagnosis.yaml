@@ -1,0 +1,121 @@
+# Diagnoses a failed Test run on a pull request: Claude Code reads the failed
+# job logs, reproduces the failure on the pull request's commit, and posts one
+# comment with the root cause and the fix it suggests. It does not push: the
+# author decides. Pushes to the same pull request update that comment.
+#
+# A workflow_run job runs on main with the repository's secrets, so it only
+# checks out commits from branches of this repository, never from forks; those
+# have no pull request number here anyway.
+#
+# Requires the Claude GitHub App and the ANTHROPIC_API_KEY secret; see
+# "Continuous AI" in DEVELOPMENT.md.
+name: 🩺 Claude CI Diagnosis
+
+on:
+  workflow_run:
+    workflows: ["🧪 Test"]
+    types: [completed]
+
+concurrency:
+  group: claude-ci-diagnosis-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    if: >-
+      github.event.workflow_run.event == 'pull_request'
+      && github.event.workflow_run.conclusion == 'failure'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.pull_requests[0] != null
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: read
+      id-token: write
+    env:
+      PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      DIAGNOSIS: claude-ci-diagnosis.md
+    steps:
+      - name: Checkout the pull request's commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . --group dev
+
+      - name: Download the failed job logs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > ci-failure.log
+          wc -l ci-failure.log
+
+      - name: Diagnose the failure
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            The Test workflow failed on pull request #${{ env.PR_NUMBER }} at
+            commit ${{ github.event.workflow_run.head_sha }}, which is checked
+            out here with the toolchain installed. The logs of the failed jobs
+            are in ci-failure.log. Diagnose the failure; do not fix it.
+
+            1. Read ci-failure.log and find every failing check: a test, a
+               ruff violation, a mypy error, or a coverage threshold.
+            2. Reproduce each one here with the narrowest command that shows
+               it, such as `pytest <file>::<test> -v`, `ruff check <path>` or
+               `mypy src/cli_wizard`. Say so if one does not reproduce.
+            3. Find the root cause in the code, reading CLAUDE.md for the
+               conventions a change is expected to follow.
+
+            Then write the diagnosis to ${{ env.DIAGNOSIS }} as GitHub
+            Markdown, and nothing else: no other file, no git commands that
+            change anything. Keep it under 400 words. Structure it as:
+
+            - A one-line verdict: what broke and why.
+            - For each failing check: the command that reproduces it, the
+              relevant lines of its output in a code block, and the root cause
+              with the file and line.
+            - The fix you suggest, as a short diff or a precise description.
+              If the failure looks like flakiness or an infrastructure problem
+              rather than the change, say that instead.
+
+            Start the file with the line `### Claude's diagnosis of the Test
+            failure` and nothing before it.
+          claude_args: >-
+            --max-turns 20
+            --allowedTools "Read,Glob,Grep,Write,Bash(tox:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*),Bash(git diff:*),Bash(git log:*),Bash(git status:*)"
+
+      - name: Post the diagnosis
+        if: hashFiles('claude-ci-diagnosis.md') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          marker="<!-- claude-ci-diagnosis -->"
+          {
+            echo "$marker"
+            cat "$DIAGNOSIS"
+            echo
+            echo "---"
+            echo "_From [this Test run]($RUN_URL), by the Claude CI Diagnosis workflow._"
+          } > comment.md
+
+          existing="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --paginate --jq "[.[] | select(.body | startswith(\"$marker\")) | .id] | first // empty" | head -n 1)"
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" -F body=@comment.md
+          else
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file comment.md
+          fi
