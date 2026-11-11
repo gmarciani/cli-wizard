@@ -1,7 +1,78 @@
+# Every pull request is labelled Skip Changelog Update: dependency bumps do not
+# touch CHANGELOG.md, and the Enforce Changelog Updates workflow would fail
+# them otherwise.
+#
+# Groups keep the number of pull requests down: a dependency goes in the first
+# group it matches, and one that matches none gets a pull request of its own.
+# open-pull-requests-limit caps version updates per ecosystem; security updates
+# have a fixed cap of 10 that cannot be configured.
 version: 2
 updates:
+  # Runtime dependencies and the PEP 735 dependency groups in pyproject.toml.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 10
+    labels:
+      - Dependencies
+      - Skip Changelog Update
+    groups:
+      # Every security fix in one pull request, whatever its update type.
+      python-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      # What cli-wizard installs for its users. ruff is left out: it is pinned
+      # with ~= in the generated pyproject.toml and pre-commit config too, so
+      # its bump comes alone and those pins are bumped alongside it.
+      python-runtime:
+        dependency-type: production
+        exclude-patterns:
+          - "ruff"
+        update-types:
+          - minor
+          - patch
+      # The development toolchain in the dependency groups.
+      python-tooling:
+        exclude-patterns:
+          - "ruff"
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      # Major bumps are not grouped: each gets a pull request of its own, so a
+      # breaking change is reviewed and reverted on its own.
+
+  # The actions every workflow in .github/workflows uses, in one pull request.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    labels:
+      - Dependencies
+      - Skip Changelog Update
+    groups:
+      github-actions-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      github-actions:
+        patterns:
+          - "*"
+
+  # The hook revisions in .pre-commit-config.yaml, in one pull request.
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    labels:
+      - Dependencies
+      - Skip Changelog Update
+    groups:
+      pre-commit-hooks:
+        patterns:
+          - "*"

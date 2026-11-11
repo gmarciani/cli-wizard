@@ -123,6 +123,55 @@ Clean the documentation:
 make clean-docs
 ```
 
+## Continuous AI
+
+These workflows run [Claude Code](https://code.claude.com/docs/en/github-actions)
+on the repository through
+[anthropics/claude-code-action](https://github.com/anthropics/claude-code-action).
+None of them is generated: a generated project has no reason to hold the
+secret they need.
+
+| Workflow | Runs when | Does |
+|---|---|---|
+| [Claude Code Review](.github/workflows/claude-review.yaml) | a pull request is opened, pushed to, reopened or marked ready | reviews the change and posts inline comments; read-only |
+| [Claude Code](.github/workflows/claude.yaml) | a comment, review comment or new issue mentions `@claude` | answers, or implements the request on a branch and opens a pull request |
+| [Claude CI Diagnosis](.github/workflows/claude-ci-diagnosis.yaml) | the Test workflow fails on a pull request | reproduces the failure and posts one comment with the root cause and a suggested fix; never pushes |
+| [Product Manager](.github/workflows/product-manager.yaml) | Mondays, or run by hand | proposes five features and five bug fixes, each bug reproduced first, and opens an issue for each, labelled with its type, `Triage` and a priority |
+| [Claude Planned Issues](.github/workflows/claude-planned-issues.yaml) | Thursdays, or run by hand | implements up to three open issues labelled `Planned`, oldest first, and opens a pull request for each |
+
+They need, once:
+
+1. The [Claude GitHub App](https://github.com/apps/claude) installed on the
+   repository, so comments and pull requests are posted as Claude. Running
+   `/install-github-app` in Claude Code does this and the next step together.
+2. The `ANTHROPIC_API_KEY` repository secret. A `CLAUDE_CODE_OAUTH_TOKEN`
+   from a Claude subscription works instead; pass it as
+   `claude_code_oauth_token` in place of `anthropic_api_key`.
+
+GitHub withholds secrets from pull requests opened from forks, so the
+workflows that run on a pull request skip them; review those by hand.
+Only users with write access can trigger `@claude`, the action refuses
+everyone else.
+
+The last two make a weekly loop:
+
+1. On Monday, Product Manager opens its proposals, labelled `Triage`.
+2. Triage them: close those not worth doing, adjust the priority, and edit
+   the text until it says exactly what should be built.
+3. Label `Planned` the issues to implement, yours or proposed ones. The label
+   approves the text as it stands: an issue edited afterwards is skipped
+   until it is labelled again, and Claude never reads its comments.
+4. On Thursday, Claude Planned Issues opens a pull request from
+   `claude/issue-<number>` for each, closing the issue on merge. An issue it
+   cannot implement gets a comment saying why and loses `Planned`; clarify
+   it and label it again.
+
+Run Claude Planned Issues by hand to implement one issue now, or to retry
+one that already had a pull request, and with `max-issues` to change how
+many it takes on. Its pull requests are opened with the workflow's token,
+which triggers no workflow, so it starts the Test workflow on the branch
+itself; close and reopen the pull request for the other checks to run.
+
 ## Release
 
 Bump the version with the [Bump Version](https://github.com/gmarciani/cli-wizard/actions/workflows/bump-version.yaml)

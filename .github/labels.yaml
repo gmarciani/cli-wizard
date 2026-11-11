@@ -38,6 +38,9 @@ labels:
   - name: Medium Priority
     description: Medium priority items.
     color: FBCA04
+  - name: Planned
+    description: Approved for implementation by the Claude Planned Issues workflow.
+    color: 5319E7
   - name: Question
     description: Further information is requested.
     color: D876E3
@@ -73,6 +76,7 @@ repos:
       - Invalid
       - Low Priority
       - Medium Priority
+      - Planned
       - Question
       - Security
       - Skip Changelog Update
