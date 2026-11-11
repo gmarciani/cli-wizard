@@ -134,6 +134,7 @@ secret they need.
 | Workflow | Runs when | Does |
 |---|---|---|
 | [Claude Code Review](.github/workflows/claude-review.yaml) | a pull request is opened, pushed to, reopened or marked ready | reviews the change and posts inline comments; read-only |
+| [Claude Code](.github/workflows/claude.yaml) | a comment, review comment or new issue mentions `@claude` | answers, or implements the request on a branch and opens a pull request |
 
 They need, once:
 
@@ -146,6 +147,8 @@ They need, once:
 
 GitHub withholds secrets from pull requests opened from forks, so the
 workflows that run on a pull request skip them; review those by hand.
+Only users with write access can trigger `@claude`, the action refuses
+everyone else.
 
 ## Release
 
