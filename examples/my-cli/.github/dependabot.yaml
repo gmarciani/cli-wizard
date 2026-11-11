@@ -1,7 +1,41 @@
+# Every pull request is labelled Skip Changelog Update: dependency bumps do not
+# touch CHANGELOG.md, and the Enforce Changelog Updates workflow would fail
+# them otherwise.
 version: 2
 updates:
+  # Runtime dependencies and the PEP 735 dependency groups in pyproject.toml.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 10
+    labels:
+      - Dependencies
+      - Skip Changelog Update
+    groups:
+      python-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # The actions every workflow in .github/workflows uses, in one pull request.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - Dependencies
+      - Skip Changelog Update
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # The hook revisions in .pre-commit-config.yaml.
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - Dependencies
+      - Skip Changelog Update
