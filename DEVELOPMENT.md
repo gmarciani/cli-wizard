@@ -136,6 +136,7 @@ secret they need.
 | [Claude Code Review](.github/workflows/claude-review.yaml) | a pull request is opened, pushed to, reopened or marked ready | reviews the change and posts inline comments; read-only |
 | [Claude Code](.github/workflows/claude.yaml) | a comment, review comment or new issue mentions `@claude` | answers, or implements the request on a branch and opens a pull request |
 | [Claude CI Diagnosis](.github/workflows/claude-ci-diagnosis.yaml) | the Test workflow fails on a pull request | reproduces the failure and posts one comment with the root cause and a suggested fix; never pushes |
+| [Product Manager](.github/workflows/product-manager.yaml) | Mondays, or run by hand | proposes five features and five bug fixes, each bug reproduced first, and opens an issue for each, labelled with its type, `Triage` and a priority |
 
 They need, once:
 
