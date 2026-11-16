@@ -2,6 +2,11 @@
 
 ## 3.2.0
 
+### Changes
+
+#### Generated code
+
+- Dependabot also updates the GitHub Actions and the pre-commit hooks, groups its updates into fewer pull requests, and labels them, security updates as `Security`.
 
 ## 3.1.0
 

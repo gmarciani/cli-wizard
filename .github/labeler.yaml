@@ -15,3 +15,8 @@ Developer Experience:
         - .github/**
         - .gitignore
         - .pre-commit
+# A Dependabot security update, which comes from a *-security group in
+# .github/dependabot.yaml and is named after it.
+Security:
+  - head-branch:
+      - '^dependabot/.+-security-'
