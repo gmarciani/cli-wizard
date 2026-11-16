@@ -131,7 +131,7 @@ on the repository through
 
 | Workflow | Runs when | Does |
 |---|---|---|
-| [Code Review](.github/workflows/code-review.yaml) | a pull request is opened, pushed to, reopened or marked ready | reviews the change and posts inline comments; read-only |
+| [Code Review](.github/workflows/code-review.yaml) | a pull request is opened, pushed to, reopened or marked ready, or run by hand with a pull request's link | reviews the change and posts inline comments, or one comment when run by hand; read-only |
 | [Product Manager](.github/workflows/product-manager.yaml) | Fridays at 9am ET, or run by hand | proposes five features and five bug fixes, each bug reproduced first, and opens an issue for each, labelled with its type, `Triage` and a priority |
 | [Engineer](.github/workflows/engineer.yaml) | Tuesdays at 9am ET, or run by hand | implements up to three open issues labelled `Planned`, oldest first, and opens a draft pull request for each |
 
@@ -149,7 +149,7 @@ They need, once:
    ```
 
 GitHub withholds secrets from pull requests opened from forks, so Code
-Review skips them; review those by hand.
+Review skips them: run it by hand with the pull request's link to review one.
 
 Product Manager and Engineer make a weekly loop: triage Friday's proposals,
 label `Planned` the issues to build, and Engineer opens a draft pull request
@@ -166,6 +166,9 @@ The logic of both workflows' steps lives in scripts that run by hand too;
 ```shell
 # Print the issues a file of proposals would open, without opening them
 tools/product_manager.py open proposals.json --dry-run
+
+# Check a pull request link the way a Code Review run by hand does
+tools/code_review.py resolve --pull-request https://github.com/gmarciani/cli-wizard/pull/153
 
 # List the issues Engineer would implement
 tools/engineer.py select --max-issues 5

@@ -1,12 +1,14 @@
 # Copyright (c) 2026, Giacomo Marciani
 # Licensed under the MIT License
 
-"""What tools/engineer.py and tools/product_manager.py share.
+"""What the scripts of the continuous AI workflows share.
 
-Running ``gh`` and ``git``, the options that GitHub Actions fills from the
-environment, and the entry point that reports an error and exits.
+Running ``gh`` and ``git``, reading an issue or pull request link, the options
+that GitHub Actions fills from the environment, and the entry point that
+reports an error and exits.
 """
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -71,6 +73,21 @@ def repository(repo: str | None) -> str:
     )
 
 
+def number_from_link(link: str, repo: str, kind: str) -> int:
+    """Return the number in ``link``, an ``issues`` or ``pull`` link of ``repo``."""
+    match = re.fullmatch(
+        rf"https://github\.com/([^/\s]+/[^/\s]+)/{kind}/(\d+)/?", link.strip()
+    )
+    if not match:
+        raise RuntimeError(
+            f"'{link}' is not a link of the form "
+            f"https://github.com/{repo}/{kind}/<number>"
+        )
+    if match.group(1).lower() != repo.lower():
+        raise RuntimeError(f"'{link}' is not in {repo}")
+    return int(match.group(2))
+
+
 def append(path: Path | None, text: str) -> None:
     """Print ``text``, and append it to the file if one is given."""
     click.echo(text, nl=False)
@@ -79,7 +96,7 @@ def append(path: Path | None, text: str) -> None:
             file.write(text)
 
 
-def main(cli: click.Group) -> int:
+def main(cli: click.Command) -> int:
     """Run the commands of ``cli`` from the command line; return the exit code."""
     try:
         cli()

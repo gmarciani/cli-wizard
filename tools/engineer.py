@@ -25,7 +25,6 @@ from the environment; by hand, options name them.
 
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -38,6 +37,7 @@ from common import (
     gh,
     git,
     main,
+    number_from_link,
     output_option,
     repo_option,
     repository,
@@ -51,7 +51,6 @@ ISSUE_FILE = "claude-issue.md"
 PR_BODY_FILE = "claude-pr.md"
 CHANGELOG = "CHANGELOG.md"
 WORKFLOWS = ".github/workflows/"
-ISSUE_LINK = re.compile(r"https://github\.com/([^/\s]+/[^/\s]+)/issues/(\d+)/?")
 
 # What a change must pass before it is submitted: the tox environments the
 # Test workflow runs on a pull request.
@@ -161,19 +160,6 @@ def is_approved(issue: Issue) -> bool:
     return not edited or max(edited) <= max(labelled)
 
 
-def issue_number_from(link: str, repo: str) -> int:
-    """Return the number of the issue of ``repo`` that ``link`` names."""
-    match = ISSUE_LINK.fullmatch(link.strip())
-    if not match:
-        raise RuntimeError(
-            f"'{link}' is not an issue link, "
-            f"expected https://github.com/{repo}/issues/<number>"
-        )
-    if match.group(1).lower() != repo.lower():
-        raise RuntimeError(f"'{link}' is not an issue of {repo}")
-    return int(match.group(2))
-
-
 @click.group()
 def cli() -> None:
     """Take an issue from approved to a draft pull request."""
@@ -212,7 +198,7 @@ def select(
     repo = repository(repo)
 
     if link:
-        candidates = [issue_number_from(link, repo)]
+        candidates = [number_from_link(link, repo, "issues")]
         limit = 1
     else:
         try:
