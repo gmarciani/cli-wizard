@@ -125,6 +125,80 @@ Clean the documentation:
 make clean-docs
 ```
 
+## Continuous AI
+
+These workflows run [Claude Code](https://code.claude.com/docs/en/github-actions)
+on the repository through
+[anthropics/claude-code-action](https://github.com/anthropics/claude-code-action).
+
+| Workflow | Runs when | Does |
+|---|---|---|
+| [Code Review](.github/workflows/code-review.yaml) | a pull request is opened, pushed to, reopened or marked ready, or run by hand with a pull request's link | reviews the change and posts inline comments, or one comment when run by hand; read-only |
+| [Product Manager: New Ideas](.github/workflows/product-manager-new-ideas.yaml) | Fridays at 9am ET, or run by hand | proposes five features and five bug fixes, each bug reproduced first, and opens an issue for each, labelled with its type, `Triage` and a priority |
+| [Product Manager: Grooming](.github/workflows/product-manager-grooming.yaml) | Saturdays at 9am ET, or run by hand, for every open issue or the one whose link it is given | judges the labels and the priority of the open issues and changes those that differ; never `Triage` or `Planned` |
+| [Engineer](.github/workflows/engineer.yaml) | Tuesdays at 9am ET, or run by hand | implements up to three open issues labelled `Planned`, oldest first, and opens a draft pull request for each |
+
+They need one thing, once: the `CLAUDE_CODE_OAUTH_TOKEN` repository secret, a
+token from your Claude subscription. Create it with Claude Code, signing in to
+your Claude account in the browser it opens, then store the token it prints:
+
+```shell
+claude setup-token
+gh secret set CLAUDE_CODE_OAUTH_TOKEN
+```
+
+The workflows can act on this repository only:
+
+- On GitHub, Claude uses the workflow's own `GITHUB_TOKEN`, which GitHub
+  issues for this repository alone; the workflows do not use the Claude GitHub
+  App, whose token would reach every repository the app is installed on.
+- Each workflow grants nothing by default, and each job states the least it
+  needs: only Engineer's implement job can write code, and only to open its
+  draft pull request.
+- `CLAUDE_CODE_OAUTH_TOKEN` is a secret of this repository, so no other
+  repository's workflows can read it. It gives access to Claude, not to
+  GitHub.
+
+Tests fail if a workflow grants more, uses another secret or hands Claude
+another token.
+
+GitHub withholds secrets from pull requests opened from forks, so Code
+Review skips them: run it by hand with the pull request's link to review one.
+
+The Product Manager workflows and Engineer make a weekly loop: New Ideas
+opens its proposals on Friday, Grooming puts the labels and priorities of the
+open issues right on Saturday, you triage them and label `Planned` the ones
+to build, and Engineer opens a draft pull request for each on Tuesday, once
+the change passes `tox -e lint,type,test`. The label approves the issue's
+text as it stands, so an issue edited afterwards waits to be labelled again.
+An issue Engineer cannot implement gets a comment saying why and loses the
+label.
+
+Run Engineer by hand with either `issue`, the link of one issue to implement
+even if it already had a pull request, or `max-issues`; not both.
+
+The logic of both workflows' steps lives in scripts that run by hand too;
+`--help` lists their commands and options:
+
+```shell
+# Print the issues a file of proposals would open, without opening them
+tools/product_manager.py open proposals.json --dry-run
+
+# Print the label changes a grooming file would make, without making them
+tools/product_manager.py groom grooming.json --dry-run
+
+# Check a pull request link the way a Code Review run by hand does
+tools/code_review.py resolve --pull-request https://github.com/gmarciani/cli-wizard/pull/153
+
+# List the issues Engineer would implement
+tools/engineer.py select --max-issues 5
+tools/engineer.py select --issue https://github.com/gmarciani/cli-wizard/issues/42
+
+# From the branch engineer/issue-42, with the change committed: run the checks,
+# then push it and open the draft pull request described in claude-pr.md
+tools/engineer.py submit --number 42
+```
+
 ## Release
 
 Bump the version with the [Bump Version](https://github.com/gmarciani/cli-wizard/actions/workflows/bump-version.yaml)
