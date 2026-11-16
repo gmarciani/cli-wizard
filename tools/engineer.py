@@ -26,13 +26,23 @@ from the environment; by hand, options name them.
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 import click
+from common import (
+    append,
+    executable,
+    gh,
+    git,
+    main,
+    output_option,
+    repo_option,
+    repository,
+    summary_option,
+)
 
 PLANNED = "Planned"
 SKIP_CHANGELOG = "Skip Changelog Update"
@@ -69,65 +79,9 @@ query($owner: String!, $repo: String!, $number: Int!) {
 
 Issue = dict[str, Any]
 
-repo_option = click.option(
-    "--repo",
-    envvar="GITHUB_REPOSITORY",
-    show_envvar=True,
-    help="The repository, OWNER/NAME; the one gh infers when not given.",
-)
 number_option = click.option(
     "--number", required=True, type=int, help="The issue number."
 )
-summary_option = click.option(
-    "--summary",
-    envvar="GITHUB_STEP_SUMMARY",
-    show_envvar=True,
-    type=click.Path(dir_okay=False, path_type=Path),
-    help="A Markdown file to append a summary line to.",
-)
-output_option = click.option(
-    "--github-output",
-    envvar="GITHUB_OUTPUT",
-    show_envvar=True,
-    type=click.Path(dir_okay=False, path_type=Path),
-    help="A file to append the outputs to.",
-)
-
-
-def executable(tool: str) -> str:
-    """Return the path of ``tool``, which must be installed."""
-    path = shutil.which(tool)
-    if path is None:
-        raise RuntimeError(f"{tool} is not installed")
-    return path
-
-
-def capture(tool: str, *args: str) -> str:
-    """Run ``tool`` with ``args`` and return its output."""
-    result = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        [executable(tool), *args], capture_output=True, text=True
-    )
-    if result.returncode != 0:
-        command = " ".join([tool, *args[:2]])
-        raise RuntimeError(f"{command} failed: {result.stderr.strip()}")
-    return result.stdout.strip()
-
-
-def gh(*args: str) -> str:
-    """Run ``gh`` with ``args`` and return its output."""
-    return capture("gh", *args)
-
-
-def git(*args: str) -> str:
-    """Run ``git`` with ``args`` in the current directory and return its output."""
-    return capture("git", *args)
-
-
-def repository(repo: str | None) -> str:
-    """Return the repository, OWNER/NAME: the given one, or the one gh infers."""
-    return repo or gh(
-        "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"
-    )
 
 
 def branch_of(number: int) -> str:
@@ -157,14 +111,6 @@ def open_pull_request(repo: str, number: int) -> str | None:
 def note(message: str) -> None:
     """Print a message, as a notice on the run when in GitHub Actions."""
     click.echo(f"::notice::{message}" if os.environ.get("GITHUB_ACTIONS") else message)
-
-
-def append(path: Path | None, text: str) -> None:
-    """Print ``text``, and append it to the file if one is given."""
-    click.echo(text, nl=False)
-    if path:
-        with path.open("a") as file:
-            file.write(text)
 
 
 def fetch_issue(repo: str, number: int) -> Issue:
@@ -499,15 +445,5 @@ def conclude(
     append(summary, f"#{number}: no pull request. {reason}\n")
 
 
-def main() -> int:
-    """Run a command from the command line; return the exit code."""
-    try:
-        cli()
-    except RuntimeError as e:
-        click.echo(f"Error: {e}", err=True)
-        return 1
-    return 0
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(cli))

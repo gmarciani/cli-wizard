@@ -124,8 +124,8 @@ jobs:
       - name: Create the issue's branch
         if: steps.issue.outputs.approved == 'true'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "claude[bot]"
+          git config user.email "giacomo.marciani@gmail.com"
           git checkout -b "$BRANCH"
 
       - name: Implement the issue

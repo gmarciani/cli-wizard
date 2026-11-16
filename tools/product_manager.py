@@ -20,13 +20,21 @@ from the environment; by hand, options name them.
 
 import json
 import re
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 import click
+from common import (
+    append,
+    gh,
+    git,
+    main,
+    output_option,
+    repo_option,
+    repository,
+    summary_option,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 PRIORITIES = ("High", "Medium", "Low")
@@ -35,26 +43,6 @@ MAX_BUGS = 5
 TITLE_PREFIX = re.compile(r"^\[(bug|feature request)\]:\s*", re.IGNORECASE)
 
 Proposal = dict[str, Any]
-
-repo_option = click.option(
-    "--repo",
-    envvar="GITHUB_REPOSITORY",
-    show_envvar=True,
-    help="The repository, OWNER/NAME; the one gh infers when not given.",
-)
-
-
-def gh(*args: str) -> str:
-    """Run ``gh`` with ``args`` and return its output."""
-    executable = shutil.which("gh")
-    if executable is None:
-        raise RuntimeError("gh is not installed, see https://cli.github.com")
-    result = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        [executable, *args], capture_output=True, text=True
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"gh {' '.join(args[:2])} failed: {result.stderr.strip()}")
-    return result.stdout.strip()
 
 
 @click.group()
@@ -70,20 +58,15 @@ def cli() -> None:
     type=click.Path(dir_okay=False, path_type=Path),
     help="The JSON file to write the existing issues to.",
 )
-@click.option(
-    "--github-output",
-    envvar="GITHUB_OUTPUT",
-    show_envvar=True,
-    type=click.Path(dir_okay=False, path_type=Path),
-    help="A file to append the version output to.",
-)
+@output_option
 def collect(repo: str | None, output: Path, github_output: Path | None) -> None:
     """Write the existing issues to a file and print the version."""
     listed = json.loads(
         gh(
             "issue",
             "list",
-            *(["--repo", repo] if repo else []),
+            "--repo",
+            repository(repo),
             "--state",
             "all",
             "--limit",
@@ -99,22 +82,9 @@ def collect(repo: str | None, output: Path, github_output: Path | None) -> None:
     output.write_text(json.dumps(issues, indent=2) + "\n")
     click.echo(f"Wrote {len(issues)} issues to {output}")
 
-    git = shutil.which("git")
-    commit = ""
-    if git:
-        result = subprocess.run(  # noqa: S603 - fixed argv, no shell
-            [git, "rev-parse", "--short", "HEAD"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-        )
-        commit = result.stdout.strip()
     version = (ROOT / "VERSION").read_text().strip()
-    line = f"version={version} ({commit})\n" if commit else f"version={version}\n"
-    click.echo(line, nl=False)
-    if github_output:
-        with github_output.open("a") as file:
-            file.write(line)
+    commit = git("rev-parse", "--short", "HEAD", cwd=ROOT)
+    append(github_output, f"version={version} ({commit})\n")
 
 
 def load_proposals(source: str) -> tuple[list[Proposal], list[Proposal], str]:
@@ -203,13 +173,7 @@ def bug_body(proposal: Proposal, version: str, run_url: str | None) -> str:
     help="The version a bug was reproduced on.",
 )
 @click.option("--run-url", help="The workflow run to link from each issue.")
-@click.option(
-    "--summary",
-    envvar="GITHUB_STEP_SUMMARY",
-    show_envvar=True,
-    type=click.Path(dir_okay=False, path_type=Path),
-    help="A Markdown file to append the summary table to.",
-)
+@summary_option
 @click.option(
     "--dry-run", is_flag=True, help="Print the issues instead of opening them."
 )
@@ -223,7 +187,7 @@ def open_issues(
 ) -> None:
     """Open an issue for each proposal in PROPOSALS, a JSON file or - for stdin."""
     features, bugs, shortfall = load_proposals(proposals)
-    repo_args = ["--repo", repo] if repo else []
+    repo_args = ["--repo", repository(repo)]
     existing = json.loads(
         gh(
             "issue",
@@ -284,15 +248,5 @@ def open_issues(
             file.write("## Proposals\n\n" + "\n".join(rows) + "\n")
 
 
-def main() -> int:
-    """Run a command from the command line; return the exit code."""
-    try:
-        cli()
-    except RuntimeError as e:
-        click.echo(f"Error: {e}", err=True)
-        return 1
-    return 0
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(cli))
