@@ -1,5 +1,6 @@
 # Reviews every pull request with Claude Code and posts its findings as inline
-# comments. The review is read-only: it never pushes, approves or blocks.
+# comments. It can read the code and comment on the pull request, nothing
+# else: it never pushes, approves or blocks.
 #
 # Secrets are withheld from pull requests opened from forks, so those are
 # skipped. Drafts are skipped until marked ready.
@@ -10,8 +11,9 @@
 # pull request events only, so a review started by hand posts its findings as
 # one pull request comment.
 #
-# Requires the Claude GitHub App and the CLAUDE_CODE_OAUTH_TOKEN secret; see
-# "Continuous AI" in DEVELOPMENT.md.
+# Requires the CLAUDE_CODE_OAUTH_TOKEN repository secret; see "Continuous AI"
+# in DEVELOPMENT.md. Claude acts on GitHub with the workflow's own token, which
+# reaches this repository only, and each job grants it the least it needs.
 name: 🔍 Code Review
 
 on:
@@ -28,6 +30,9 @@ on:
         required: true
         type: string
 
+# Nothing is granted by default: each job states what it needs.
+permissions: {}
+
 concurrency:
   group: code-review-${{ github.event.pull_request.number || inputs.pull-request }}
   cancel-in-progress: true
@@ -41,9 +46,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      # To post the review's comments.
+      pull-requests: write
       issues: read
-      id-token: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
@@ -55,6 +60,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           plugin_marketplaces: "https://github.com/anthropics/claude-plugins-official.git"
           plugins: "code-review@claude-plugins-official"
           prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
@@ -85,6 +91,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           plugin_marketplaces: "https://github.com/anthropics/claude-plugins-official.git"
           plugins: "code-review@claude-plugins-official"
           prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ steps.pr.outputs.number }}"

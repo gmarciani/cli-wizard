@@ -13,8 +13,9 @@
 # Run by hand, it grooms every open issue, or only the one whose link it is
 # given.
 #
-# Requires the Claude GitHub App and the CLAUDE_CODE_OAUTH_TOKEN secret; see
-# "Continuous AI" in DEVELOPMENT.md.
+# Requires the CLAUDE_CODE_OAUTH_TOKEN repository secret; see "Continuous AI"
+# in DEVELOPMENT.md. Claude acts on GitHub with the workflow's own token, which
+# reaches this repository only, and each job grants it the least it needs.
 name: "🧹 Product Manager: Grooming"
 
 on:
@@ -30,6 +31,9 @@ on:
         required: false
         type: string
 
+# Nothing is granted by default: each job states what it needs.
+permissions: {}
+
 concurrency:
   group: product-manager-grooming
   cancel-in-progress: false
@@ -41,7 +45,6 @@ jobs:
     permissions:
       contents: read
       issues: read
-      id-token: write
     outputs:
       grooming: ${{ steps.claude.outputs.structured_output }}
     steps:
@@ -76,6 +79,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             You are the product manager of cli-wizard, the tool in this
             checkout. Groom its open issues: say, for each one, the labels

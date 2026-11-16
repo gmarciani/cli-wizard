@@ -14,8 +14,9 @@
 # Triage the issues, and label those worth doing Planned: the Engineer
 # workflow implements them.
 #
-# Requires the Claude GitHub App and the CLAUDE_CODE_OAUTH_TOKEN secret; see
-# "Continuous AI" in DEVELOPMENT.md.
+# Requires the CLAUDE_CODE_OAUTH_TOKEN repository secret; see "Continuous AI"
+# in DEVELOPMENT.md. Claude acts on GitHub with the workflow's own token, which
+# reaches this repository only, and each job grants it the least it needs.
 name: "💡 Product Manager: New Ideas"
 
 on:
@@ -25,6 +26,9 @@ on:
     - cron: '0 9 * * 5'
       timezone: America/New_York
   workflow_dispatch:
+
+# Nothing is granted by default: each job states what it needs.
+permissions: {}
 
 concurrency:
   group: product-manager-new-ideas
@@ -37,7 +41,6 @@ jobs:
     permissions:
       contents: read
       issues: read
-      id-token: write
     outputs:
       proposals: ${{ steps.claude.outputs.structured_output }}
       version: ${{ steps.context.outputs.version }}
@@ -68,6 +71,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             You are the product manager of cli-wizard, the tool in this
             checkout: it generates pip-installable Click CLIs from an OpenAPI
