@@ -16,9 +16,9 @@ name: "🧹 Product Manager: Grooming"
 
 on:
   schedule:
-    # Mondays at 9am Eastern, after New Ideas opens its proposals on Friday
-    # and before the Engineer workflow runs on Tuesday.
-    - cron: '0 9 * * 1'
+    # Saturdays at 9am Eastern, the morning after New Ideas opens its
+    # proposals, and before the Engineer workflow runs on Tuesday.
+    - cron: '0 9 * * 6'
       timezone: America/New_York
   workflow_dispatch:
 

@@ -20,8 +20,8 @@ name: "💡 Product Manager: New Ideas"
 
 on:
   schedule:
-    # Fridays at 9am Eastern, so the proposals can be groomed on Monday and
-    # triaged before the Engineer workflow runs on Tuesday.
+    # Fridays at 9am Eastern, so the proposals are groomed the morning after
+    # and can be triaged before the Engineer workflow runs on Tuesday.
     - cron: '0 9 * * 5'
       timezone: America/New_York
   workflow_dispatch:
