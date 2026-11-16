@@ -159,6 +159,11 @@ jobs:
         with:
           python-version: '3.14'
 
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . --group dev
+
       - name: Open an issue for each proposal
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

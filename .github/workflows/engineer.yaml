@@ -14,16 +14,17 @@
 # - select picks the approved issues, oldest first, skipping those that
 #   already had a pull request from their engineer/issue-<number> branch.
 # - implement runs Claude Code on the issue's branch: it changes the code as
-#   CLAUDE.md says, commits, pushes and opens a draft pull request. When it
-#   opens none, the job explains why on the issue and removes Planned, so the
-#   issue is not retried until it is labelled again.
+#   CLAUDE.md says, commits, and submits the change with tools/engineer.py,
+#   which runs the project's checks and, only if they pass, pushes the branch
+#   and opens the draft pull request. Claude has no other way to push. When
+#   the run ends without a pull request, the job explains why on the issue and
+#   removes Planned, so the issue is not retried until it is labelled again.
+#
+# A draft opened with the workflow's token runs no check, and none is relied
+# on: the change is validated before it is submitted.
 #
 # tools/engineer.py holds the logic of the steps around Claude, and runs by
 # hand too.
-#
-# Claude pushes with the workflow's token, which cannot change workflow files
-# and triggers no workflow, so the job starts the Test workflow on the branch;
-# marking the pull request ready for review runs the other checks.
 #
 # Requires the Claude GitHub App and the CLAUDE_CODE_OAUTH_TOKEN secret; see
 # "Continuous AI" in DEVELOPMENT.md.
@@ -68,6 +69,11 @@ jobs:
         with:
           python-version: '3.14'
 
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . --group dev
+
       - name: Select the approved Planned issues
         id: select
         env:
@@ -90,7 +96,6 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-      actions: write
       id-token: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -107,15 +112,14 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Read the issue
-        id: issue
-        run: tools/engineer.py read --number "$ISSUE" --output claude-issue.md
-
       - name: Install dependencies
-        if: steps.issue.outputs.approved == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -e . --group dev
+
+      - name: Read the issue
+        id: issue
+        run: tools/engineer.py read --number "$ISSUE"
 
       - name: Create the issue's branch
         if: steps.issue.outputs.approved == 'true'
@@ -139,15 +143,14 @@ jobs:
             its commit and pull request are written.
 
             You are on the branch ${{ env.BRANCH }}. Once the change is
-            complete and its checks pass:
+            complete:
 
-            1. Commit it as one commit, whose message ends with
-               `Closes #${{ matrix.issue }}`.
-            2. Push it with `git push --force origin ${{ env.BRANCH }}`: the
-               branch is this workflow's own, and a retry replaces it.
-            3. Open the pull request as a draft with `gh pr create --draft
-               --base main --head ${{ env.BRANCH }}`, naming
-               `Closes #${{ matrix.issue }}` among its references.
+            1. Commit it as one commit.
+            2. Write the pull request description to claude-pr.md.
+            3. Run `tools/engineer.py submit --number ${{ matrix.issue }}`.
+               It runs the project's checks and, only if they pass, pushes
+               the branch and opens the draft pull request. If it fails, fix
+               what it reports, amend the commit and run it again.
 
             Do not touch .github/workflows, which this workflow's token
             cannot push, or claude-issue.md.
@@ -158,7 +161,7 @@ jobs:
             maintainer can clarify it.
           claude_args: >-
             --max-turns 80
-            --allowedTools "Read,Glob,Grep,Write,Edit,MultiEdit,Bash(cli-wizard:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*),Bash(tox:*),Bash(ls:*),Bash(git diff:*),Bash(git status:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh pr create:*)"
+            --allowedTools "Read,Glob,Grep,Write,Edit,MultiEdit,Bash(cli-wizard:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*),Bash(tox:*),Bash(ls:*),Bash(git diff:*),Bash(git status:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(tools/engineer.py submit:*)"
             --json-schema '{
               "type": "object",
               "additionalProperties": false,
@@ -169,16 +172,15 @@ jobs:
               }
             }'
 
-      - name: Report the outcome
+      - name: Explain a missing pull request
         if: always() && steps.issue.outputs.approved == 'true'
         env:
           CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
           RESULT: ${{ steps.claude.outputs.structured_output }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: >-
-          tools/engineer.py report
+          tools/engineer.py conclude
           --number "$ISSUE"
-          --branch "$BRANCH"
           --result "$RESULT"
           --claude-outcome "$CLAUDE_OUTCOME"
           --run-url "$RUN_URL"

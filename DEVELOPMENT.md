@@ -153,7 +153,7 @@ Review skips them; review those by hand.
 
 Product Manager and Engineer make a weekly loop: triage Friday's proposals,
 label `Planned` the issues to build, and Engineer opens a draft pull request
-for each on Tuesday. The label approves the issue's text as it stands, so an
+for each on Tuesday, once the change passes `tox -e lint,type,test`. The label approves the issue's text as it stands, so an
 issue edited afterwards waits to be labelled again. An issue Engineer cannot
 implement gets a comment saying why and loses the label.
 
@@ -170,6 +170,10 @@ tools/product_manager.py open proposals.json --dry-run
 # List the issues Engineer would implement
 tools/engineer.py select --max-issues 5
 tools/engineer.py select --issue https://github.com/gmarciani/cli-wizard/issues/42
+
+# From the branch engineer/issue-42, with the change committed: run the checks,
+# then push it and open the draft pull request described in claude-pr.md
+tools/engineer.py submit --number 42
 ```
 
 ## Release

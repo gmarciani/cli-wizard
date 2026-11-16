@@ -18,15 +18,15 @@ In GitHub Actions the repository, the step outputs and the run summary come
 from the environment; by hand, options name them.
 """
 
-import argparse
 import json
-import os
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+import click
 
 ROOT = Path(__file__).resolve().parent.parent
 PRIORITIES = ("High", "Medium", "Low")
@@ -35,6 +35,13 @@ MAX_BUGS = 5
 TITLE_PREFIX = re.compile(r"^\[(bug|feature request)\]:\s*", re.IGNORECASE)
 
 Proposal = dict[str, Any]
+
+repo_option = click.option(
+    "--repo",
+    envvar="GITHUB_REPOSITORY",
+    show_envvar=True,
+    help="The repository, OWNER/NAME; the one gh infers when not given.",
+)
 
 
 def gh(*args: str) -> str:
@@ -50,20 +57,33 @@ def gh(*args: str) -> str:
     return result.stdout.strip()
 
 
-def env_path(name: str) -> Path | None:
-    """Return the file an environment variable names, if it is set."""
-    value = os.environ.get(name)
-    return Path(value) if value else None
+@click.group()
+def cli() -> None:
+    """Collect what the Product Manager reads, and open what it proposes."""
 
 
-def collect(args: argparse.Namespace) -> int:
+@cli.command()
+@repo_option
+@click.option(
+    "--output",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="The JSON file to write the existing issues to.",
+)
+@click.option(
+    "--github-output",
+    envvar="GITHUB_OUTPUT",
+    show_envvar=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="A file to append the version output to.",
+)
+def collect(repo: str | None, output: Path, github_output: Path | None) -> None:
     """Write the existing issues to a file and print the version."""
-    repo = ["--repo", args.repo] if args.repo else []
     listed = json.loads(
         gh(
             "issue",
             "list",
-            *repo,
+            *(["--repo", repo] if repo else []),
             "--state",
             "all",
             "--limit",
@@ -76,8 +96,8 @@ def collect(args: argparse.Namespace) -> int:
         {**issue, "labels": [label["name"] for label in issue["labels"]]}
         for issue in listed
     ]
-    args.output.write_text(json.dumps(issues, indent=2) + "\n")
-    print(f"Wrote {len(issues)} issues to {args.output}")
+    output.write_text(json.dumps(issues, indent=2) + "\n")
+    click.echo(f"Wrote {len(issues)} issues to {output}")
 
     git = shutil.which("git")
     commit = ""
@@ -91,11 +111,10 @@ def collect(args: argparse.Namespace) -> int:
         commit = result.stdout.strip()
     version = (ROOT / "VERSION").read_text().strip()
     line = f"version={version} ({commit})\n" if commit else f"version={version}\n"
-    print(line, end="")
-    if args.github_output:
-        with args.github_output.open("a") as output:
-            output.write(line)
-    return 0
+    click.echo(line, nl=False)
+    if github_output:
+        with github_output.open("a") as file:
+            file.write(line)
 
 
 def load_proposals(source: str) -> tuple[list[Proposal], list[Proposal], str]:
@@ -174,15 +193,42 @@ def bug_body(proposal: Proposal, version: str, run_url: str | None) -> str:
     )
 
 
-def open_issues(args: argparse.Namespace) -> list[str]:
-    """Open the issues; return the lines of the summary table."""
-    features, bugs, shortfall = load_proposals(args.proposals)
-    repo = ["--repo", args.repo] if args.repo else []
+@cli.command("open")
+@repo_option
+@click.argument("proposals")
+@click.option(
+    "--version",
+    default=(ROOT / "VERSION").read_text().strip(),
+    show_default="the VERSION file",
+    help="The version a bug was reproduced on.",
+)
+@click.option("--run-url", help="The workflow run to link from each issue.")
+@click.option(
+    "--summary",
+    envvar="GITHUB_STEP_SUMMARY",
+    show_envvar=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="A Markdown file to append the summary table to.",
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Print the issues instead of opening them."
+)
+def open_issues(
+    repo: str | None,
+    proposals: str,
+    version: str,
+    run_url: str | None,
+    summary: Path | None,
+    dry_run: bool,
+) -> None:
+    """Open an issue for each proposal in PROPOSALS, a JSON file or - for stdin."""
+    features, bugs, shortfall = load_proposals(proposals)
+    repo_args = ["--repo", repo] if repo else []
     existing = json.loads(
         gh(
             "issue",
             "list",
-            *repo,
+            *repo_args,
             "--state",
             "all",
             "--limit",
@@ -195,115 +241,57 @@ def open_issues(args: argparse.Namespace) -> list[str]:
 
     rows = ["| Type | Priority | Issue |", "|---|---|---|"]
     kinds = [
-        ("Feature Request", features, lambda p: feature_body(p, args.run_url)),
-        ("Bug", bugs, lambda p: bug_body(p, args.version, args.run_url)),
+        ("Feature Request", features, lambda p: feature_body(p, run_url)),
+        ("Bug", bugs, lambda p: bug_body(p, version, run_url)),
     ]
-    for label, proposals, render in kinds:
-        for proposal in proposals:
+    for label, items, render in kinds:
+        for proposal in items:
             title = re.sub(r"\s+", " ", proposal["title"]).strip()
             priority = proposal["priority"]
             if normalize(title) in seen:
-                print(f"Skipped, an issue already has this title: {title}")
+                click.echo(f"Skipped, an issue already has this title: {title}")
                 rows.append(f"| {label} | {priority} | skipped, duplicate: {title} |")
                 continue
             seen.add(normalize(title))
             labels = [label, "Triage", f"{priority} Priority"]
-            if args.dry_run:
-                print(f"Would open '[{label}]: {title}' labelled {', '.join(labels)}")
-                print(f"{render(proposal)}\n")
+            if dry_run:
+                click.echo(
+                    f"Would open '[{label}]: {title}' labelled {', '.join(labels)}"
+                )
+                click.echo(f"{render(proposal)}\n")
                 rows.append(f"| {label} | {priority} | not opened, dry run: {title} |")
                 continue
             url = gh(
                 "issue",
                 "create",
-                *repo,
+                *repo_args,
                 "--title",
                 f"[{label}]: {title}",
                 "--body",
                 render(proposal),
                 *[option for name in labels for option in ("--label", name)],
             )
-            print(f"Opened {url}")
+            click.echo(f"Opened {url}")
             rows.append(f"| {label} | {priority} | {url} |")
 
     if len(bugs) < MAX_BUGS:
         reason = shortfall or "no reason given"
         note = f"Only {len(bugs)} bug(s) could be reproduced: {reason}"
-        print(note)
+        click.echo(note)
         rows.extend(["", note])
-    return rows
+    if summary:
+        with summary.open("a") as file:
+            file.write("## Proposals\n\n" + "\n".join(rows) + "\n")
 
 
-def open_command(args: argparse.Namespace) -> int:
-    """Open the issues and append the summary table, if asked."""
-    rows = open_issues(args)
-    if args.summary:
-        with args.summary.open("a") as summary:
-            summary.write("## Proposals\n\n" + "\n".join(rows) + "\n")
-    return 0
-
-
-def main(argv: list[str] | None = None) -> int:
+def main() -> int:
     """Run a command from the command line; return the exit code."""
-    parser = argparse.ArgumentParser(
-        description="Collect what the Product Manager reads, open what it proposes."
-    )
-    commands = parser.add_subparsers(dest="command", required=True)
-
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument(
-        "--repo",
-        default=os.environ.get("GITHUB_REPOSITORY"),
-        help="the repository, OWNER/NAME (default: $GITHUB_REPOSITORY, "
-        "or the one gh infers)",
-    )
-
-    collecting = commands.add_parser(
-        "collect", parents=[common], help="write the existing issues to a file"
-    )
-    collecting.add_argument(
-        "--output", required=True, type=Path, help="the JSON file to write"
-    )
-    collecting.add_argument(
-        "--github-output",
-        type=Path,
-        default=env_path("GITHUB_OUTPUT"),
-        help="a file to append the version output to (default: $GITHUB_OUTPUT)",
-    )
-    collecting.set_defaults(run=collect)
-
-    opening = commands.add_parser(
-        "open", parents=[common], help="open an issue for each proposal"
-    )
-    opening.add_argument(
-        "proposals", help="the JSON file holding the proposals, or - for stdin"
-    )
-    opening.add_argument(
-        "--version",
-        default=(ROOT / "VERSION").read_text().strip(),
-        help="the version a bug was reproduced on (default: the VERSION file)",
-    )
-    opening.add_argument("--run-url", help="the workflow run to link from each issue")
-    opening.add_argument(
-        "--summary",
-        type=Path,
-        default=env_path("GITHUB_STEP_SUMMARY"),
-        help="a Markdown file to append the summary table to "
-        "(default: $GITHUB_STEP_SUMMARY)",
-    )
-    opening.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="print the issues instead of opening them",
-    )
-    opening.set_defaults(run=open_command)
-
-    args = parser.parse_args(argv)
     try:
-        return int(args.run(args))
+        cli()
     except RuntimeError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        click.echo(f"Error: {e}", err=True)
         return 1
+    return 0
 
 
 if __name__ == "__main__":

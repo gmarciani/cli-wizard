@@ -2,24 +2,27 @@
 # Copyright (c) 2026, Giacomo Marciani
 # Licensed under the MIT License
 
-"""Pick the issues the Engineer workflow implements, and report on each.
+"""Take an issue from approved to a draft pull request, for the Engineer workflow.
 
-The workflow runs the three commands in order:
+The workflow runs the commands in order:
 
-``select``  list the issues to implement: the one a link names, or the open
-            issues labelled Planned, oldest first.
-``read``    write an approved issue's title and body for Claude Code to read.
-``report``  after Claude Code ran, start the Test workflow on the pull request
-            it opened, or explain on the issue why there is none.
-
-In GitHub Actions the repository, the step outputs and the run summary come
-from the environment; by hand, options name them.
+``select``    list the issues to implement: the one a link names, or the open
+              issues labelled Planned, oldest first.
+``read``      write an approved issue's title and body for Claude Code to read.
+``submit``    run by Claude Code once its change is committed: run the
+              project's checks and, only if they pass, push the branch and
+              open the draft pull request.
+``conclude``  when the run ends without a pull request, explain why on the
+              issue and remove Planned, so the issue is not retried until it
+              is labelled again.
 
 An issue is approved when it is open, labelled Planned, and its title and body
 have not changed since it was last labelled Planned.
+
+In GitHub Actions the repository, the step outputs and the run summary come
+from the environment; by hand, options name them.
 """
 
-import argparse
 import json
 import os
 import re
@@ -29,9 +32,20 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import click
+
 PLANNED = "Planned"
+SKIP_CHANGELOG = "Skip Changelog Update"
 DEFAULT_MAX_ISSUES = 3
+ISSUE_FILE = "claude-issue.md"
+PR_BODY_FILE = "claude-pr.md"
+CHANGELOG = "CHANGELOG.md"
+WORKFLOWS = ".github/workflows/"
 ISSUE_LINK = re.compile(r"https://github\.com/([^/\s]+/[^/\s]+)/issues/(\d+)/?")
+
+# What a change must pass before it is submitted: the tox environments the
+# Test workflow runs on a pull request.
+CHECKS: tuple[tuple[str, ...], ...] = (("tox", "-e", "lint,type,test"),)
 
 # The issue as of now: its text, its labels, and when its text last changed
 # and when it was labelled.
@@ -55,24 +69,58 @@ query($owner: String!, $repo: String!, $number: Int!) {
 
 Issue = dict[str, Any]
 
+repo_option = click.option(
+    "--repo",
+    envvar="GITHUB_REPOSITORY",
+    show_envvar=True,
+    help="The repository, OWNER/NAME; the one gh infers when not given.",
+)
+number_option = click.option(
+    "--number", required=True, type=int, help="The issue number."
+)
+summary_option = click.option(
+    "--summary",
+    envvar="GITHUB_STEP_SUMMARY",
+    show_envvar=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="A Markdown file to append a summary line to.",
+)
+output_option = click.option(
+    "--github-output",
+    envvar="GITHUB_OUTPUT",
+    show_envvar=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="A file to append the outputs to.",
+)
 
-def gh(*args: str) -> str:
-    """Run ``gh`` with ``args`` and return its output."""
-    executable = shutil.which("gh")
-    if executable is None:
-        raise RuntimeError("gh is not installed, see https://cli.github.com")
+
+def executable(tool: str) -> str:
+    """Return the path of ``tool``, which must be installed."""
+    path = shutil.which(tool)
+    if path is None:
+        raise RuntimeError(f"{tool} is not installed")
+    return path
+
+
+def capture(tool: str, *args: str) -> str:
+    """Run ``tool`` with ``args`` and return its output."""
     result = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        [executable, *args], capture_output=True, text=True
+        [executable(tool), *args], capture_output=True, text=True
     )
     if result.returncode != 0:
-        raise RuntimeError(f"gh {' '.join(args[:2])} failed: {result.stderr.strip()}")
+        command = " ".join([tool, *args[:2]])
+        raise RuntimeError(f"{command} failed: {result.stderr.strip()}")
     return result.stdout.strip()
 
 
-def env_path(name: str) -> Path | None:
-    """Return the file an environment variable names, if it is set."""
-    value = os.environ.get(name)
-    return Path(value) if value else None
+def gh(*args: str) -> str:
+    """Run ``gh`` with ``args`` and return its output."""
+    return capture("gh", *args)
+
+
+def git(*args: str) -> str:
+    """Run ``git`` with ``args`` in the current directory and return its output."""
+    return capture("git", *args)
 
 
 def repository(repo: str | None) -> str:
@@ -82,18 +130,41 @@ def repository(repo: str | None) -> str:
     )
 
 
+def branch_of(number: int) -> str:
+    """Return the branch an issue is implemented on."""
+    return f"engineer/issue-{number}"
+
+
+def open_pull_request(repo: str, number: int) -> str | None:
+    """Return the link of the open pull request of an issue's branch, if any."""
+    pulls = json.loads(
+        gh(
+            "pr",
+            "list",
+            "--repo",
+            repo,
+            "--head",
+            branch_of(number),
+            "--state",
+            "open",
+            "--json",
+            "url",
+        )
+    )
+    return pulls[0]["url"] if pulls else None
+
+
 def note(message: str) -> None:
     """Print a message, as a notice on the run when in GitHub Actions."""
-    print(f"::notice::{message}" if os.environ.get("GITHUB_ACTIONS") else message)
+    click.echo(f"::notice::{message}" if os.environ.get("GITHUB_ACTIONS") else message)
 
 
-def write_outputs(path: Path | None, outputs: dict[str, str]) -> None:
-    """Print the outputs, and append them to the GitHub output file if given."""
-    lines = "".join(f"{name}={value}\n" for name, value in outputs.items())
-    print(lines, end="")
+def append(path: Path | None, text: str) -> None:
+    """Print ``text``, and append it to the file if one is given."""
+    click.echo(text, nl=False)
     if path:
-        with path.open("a") as output:
-            output.write(lines)
+        with path.open("a") as file:
+            file.write(text)
 
 
 def fetch_issue(repo: str, number: int) -> Issue:
@@ -157,23 +228,54 @@ def issue_number_from(link: str, repo: str) -> int:
     return int(match.group(2))
 
 
-def select(args: argparse.Namespace) -> int:
-    """List the issues to implement, as a JSON array of numbers."""
-    if args.issue and args.max_issues:
-        raise RuntimeError("--issue and --max-issues are mutually exclusive")
-    repo = repository(args.repo)
+@click.group()
+def cli() -> None:
+    """Take an issue from approved to a draft pull request."""
 
-    if args.issue:
-        candidates = [issue_number_from(args.issue, repo)]
+
+@cli.command()
+@repo_option
+@click.option(
+    "--issue",
+    "link",
+    default="",
+    metavar="LINK",
+    help="The link of the one issue to implement, retried even if it already "
+    "had a pull request. Not with --max-issues.",
+)
+@click.option(
+    "--max-issues",
+    default="",
+    metavar="N",
+    help="The most Planned issues to implement, oldest first; "
+    f"{DEFAULT_MAX_ISSUES} when not given. Not with --issue.",
+)
+@output_option
+@summary_option
+def select(
+    repo: str | None,
+    link: str,
+    max_issues: str,
+    github_output: Path | None,
+    summary: Path | None,
+) -> None:
+    """List the issues to implement, as a JSON array of numbers."""
+    # The workflow passes both options, empty when its input is not given.
+    if link and max_issues:
+        raise RuntimeError("--issue and --max-issues are mutually exclusive")
+    repo = repository(repo)
+
+    if link:
+        candidates = [issue_number_from(link, repo)]
         limit = 1
     else:
         try:
-            limit = int(args.max_issues) if args.max_issues else DEFAULT_MAX_ISSUES
+            limit = int(max_issues) if max_issues else DEFAULT_MAX_ISSUES
         except ValueError:
             limit = 0
         if limit < 1:
             raise RuntimeError(
-                f"--max-issues must be a positive number, got '{args.max_issues}'"
+                f"--max-issues must be a positive number, got '{max_issues}'"
             )
         listed = json.loads(
             gh(
@@ -204,7 +306,7 @@ def select(args: argparse.Namespace) -> int:
             )
             continue
         # An issue named by its link is retried whatever its pull requests.
-        if not args.issue:
+        if not link:
             pulls = json.loads(
                 gh(
                     "pr",
@@ -212,7 +314,7 @@ def select(args: argparse.Namespace) -> int:
                     "--repo",
                     repo,
                     "--head",
-                    f"engineer/issue-{number}",
+                    branch_of(number),
                     "--state",
                     "all",
                     "--json",
@@ -228,162 +330,183 @@ def select(args: argparse.Namespace) -> int:
         selected.append(number)
 
     issues = json.dumps(selected, separators=(",", ":"))
-    write_outputs(args.github_output, {"issues": issues})
-    if args.summary:
-        with args.summary.open("a") as summary:
-            summary.write(f"Issues to implement: {issues}\n")
-    return 0
+    append(github_output, f"issues={issues}\n")
+    if summary:
+        with summary.open("a") as file:
+            file.write(f"Issues to implement: {issues}\n")
 
 
-def read(args: argparse.Namespace) -> int:
+@cli.command()
+@repo_option
+@number_option
+@click.option(
+    "--output",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=ISSUE_FILE,
+    show_default=True,
+    help="The file to write the issue to.",
+)
+@output_option
+def read(
+    repo: str | None, number: int, output: Path, github_output: Path | None
+) -> None:
     """Write the issue's title and body to a file, if it is still approved."""
-    issue = fetch_issue(repository(args.repo), args.number)
+    issue = fetch_issue(repository(repo), number)
     approved = is_approved(issue)
     if approved:
         # The title and body as approved, read once here so the text Claude
         # Code reads is the text that was checked.
-        args.output.write_text(f"# {issue['title']}\n\n{issue['body']}\n")
-        # Keep the file out of what Claude Code commits.
-        exclude = args.output.resolve().parent / ".git" / "info" / "exclude"
+        output.write_text(f"# {issue['title']}\n\n{issue['body']}\n")
+        # Keep the issue and the pull request description out of the commit.
+        exclude = output.resolve().parent / ".git" / "info" / "exclude"
         if exclude.exists():
             with exclude.open("a") as ignored:
-                ignored.write(f"{args.output.name}\n")
+                ignored.write(f"{output.name}\n{PR_BODY_FILE}\n")
     else:
-        note(f"Skipped #{args.number}: it changed after it was selected.")
-    write_outputs(args.github_output, {"approved": str(approved).lower()})
-    return 0
+        note(f"Skipped #{number}: it changed after it was selected.")
+    append(github_output, f"approved={str(approved).lower()}\n")
 
 
-def report(args: argparse.Namespace) -> int:
-    """Start the tests of the pull request, or explain why there is none."""
-    repo = repository(args.repo)
-    pulls = json.loads(
-        gh(
+@cli.command()
+@repo_option
+@number_option
+@click.option(
+    "--body-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=PR_BODY_FILE,
+    show_default=True,
+    help="The file holding the pull request description.",
+)
+@click.option(
+    "--base", default="main", show_default=True, help="The branch to merge into."
+)
+@summary_option
+def submit(
+    repo: str | None, number: int, body_file: Path, base: str, summary: Path | None
+) -> None:
+    """Run the project's checks, then push the branch and open the draft pull request.
+
+    Run from the issue's branch, with the change committed. Nothing is pushed
+    unless every check passes.
+    """
+    repo = repository(repo)
+    branch = branch_of(number)
+    current = git("rev-parse", "--abbrev-ref", "HEAD")
+    if current != branch:
+        raise RuntimeError(f"On branch {current}, expected {branch}")
+    if git("status", "--porcelain"):
+        raise RuntimeError("There are uncommitted changes: commit them, then submit")
+    fork_point = git("merge-base", f"origin/{base}", "HEAD")
+    changed = git("diff", "--name-only", fork_point, "HEAD").split()
+    if not changed:
+        raise RuntimeError(f"Nothing to submit: {branch} changes nothing in {base}")
+    if any(path.startswith(WORKFLOWS) for path in changed):
+        raise RuntimeError(
+            f"The change touches {WORKFLOWS}, which the workflow's token cannot push"
+        )
+
+    for check in CHECKS:
+        click.echo(f"Running {' '.join(check)}")
+        result = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [executable(check[0]), *check[1:]]
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"'{' '.join(check)}' failed, so nothing was submitted: fix what "
+                "it reports, amend the commit and submit again"
+            )
+
+    # The branch is this workflow's own: a retry replaces it.
+    git("push", "--force", "origin", f"HEAD:refs/heads/{branch}")
+    url = open_pull_request(repo, number)
+    if url:
+        line = f"Updated {url} for #{number}"
+    else:
+        body = body_file.read_text()
+        closes = f"Closes #{number}"
+        if closes not in body:
+            body = f"{body.rstrip()}\n\n{closes}\n"
+        # CLAUDE.md: a change with no changelog entry gets the label.
+        label = [] if CHANGELOG in changed else ["--label", SKIP_CHANGELOG]
+        url = gh(
             "pr",
-            "list",
+            "create",
             "--repo",
             repo,
+            "--draft",
+            "--base",
+            base,
             "--head",
-            args.branch,
-            "--state",
-            "open",
-            "--json",
-            "url",
-        )
-    )
-    if pulls:
-        # A pull request opened with the workflow's token triggers no workflow.
-        gh("workflow", "run", "test.yaml", "--repo", repo, "--ref", args.branch)
-        line = f"Opened {pulls[0]['url']} for #{args.number}"
-    else:
-        try:
-            reason = json.loads(args.result or "null")["reason"]
-        except (json.JSONDecodeError, KeyError, TypeError):
-            reason = ""
-        reason = reason or (
-            f"Claude Code did not finish ({args.claude_outcome or 'not run'}); "
-            "see the workflow run."
-        )
-        workflow = f"[Engineer]({args.run_url})" if args.run_url else "Engineer"
-        gh(
-            "issue",
-            "comment",
-            str(args.number),
-            "--repo",
-            repo,
+            branch,
+            "--title",
+            git("log", "-1", "--format=%s"),
             "--body",
-            f"The {workflow} workflow did not open a pull request for this issue."
-            f"\n\n{reason}\n\n"
-            f"Clarify the issue if needed, then label it `{PLANNED}` again to retry.",
+            body,
+            *label,
         )
-        gh("issue", "edit", str(args.number), "--repo", repo, "--remove-label", PLANNED)
-        line = f"#{args.number}: no pull request. {reason}"
-    print(line)
-    if args.summary:
-        with args.summary.open("a") as summary:
-            summary.write(f"{line}\n")
-    return 0
+        line = f"Opened {url} for #{number}"
+    append(summary, f"{line}\n")
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Run a command from the command line; return the exit code."""
-    parser = argparse.ArgumentParser(
-        description="Pick the issues the Engineer workflow implements, and report."
-    )
-    commands = parser.add_subparsers(dest="command", required=True)
+@cli.command()
+@repo_option
+@number_option
+@click.option(
+    "--result", default="", help="The JSON Claude Code returned, with its reason."
+)
+@click.option("--claude-outcome", default="", help="How the Claude Code step ended.")
+@click.option("--run-url", help="The workflow run to link.")
+@summary_option
+def conclude(
+    repo: str | None,
+    number: int,
+    result: str,
+    claude_outcome: str,
+    run_url: str | None,
+    summary: Path | None,
+) -> None:
+    """Explain on the issue why it has no pull request, and remove Planned.
 
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument(
-        "--repo",
-        default=os.environ.get("GITHUB_REPOSITORY"),
-        help="the repository, OWNER/NAME (default: $GITHUB_REPOSITORY, "
-        "or the one gh infers)",
-    )
-    common.add_argument(
-        "--summary",
-        type=Path,
-        default=env_path("GITHUB_STEP_SUMMARY"),
-        help="a Markdown file to append a summary line to "
-        "(default: $GITHUB_STEP_SUMMARY)",
-    )
-    outputs = argparse.ArgumentParser(add_help=False)
-    outputs.add_argument(
-        "--github-output",
-        type=Path,
-        default=env_path("GITHUB_OUTPUT"),
-        help="a file to append the outputs to (default: $GITHUB_OUTPUT)",
-    )
-
-    selecting = commands.add_parser(
-        "select", parents=[common, outputs], help="list the issues to implement"
-    )
-    selecting.add_argument(
-        "--issue",
-        default="",
-        metavar="LINK",
-        help="the link of the one issue to implement, retried even if it already "
-        "had a pull request; not with --max-issues",
-    )
-    selecting.add_argument(
-        "--max-issues",
-        default="",
-        metavar="N",
-        help="the most Planned issues to implement, oldest first "
-        f"(default: {DEFAULT_MAX_ISSUES}); not with --issue",
-    )
-    selecting.set_defaults(run=select)
-
-    reading = commands.add_parser(
-        "read", parents=[common, outputs], help="write an approved issue to a file"
-    )
-    reading.add_argument("--number", required=True, type=int, help="the issue number")
-    reading.add_argument(
-        "--output", required=True, type=Path, help="the file to write the issue to"
-    )
-    reading.set_defaults(run=read)
-
-    reporting = commands.add_parser(
-        "report", parents=[common], help="report what became of an issue"
-    )
-    reporting.add_argument("--number", required=True, type=int, help="the issue number")
-    reporting.add_argument(
-        "--branch", required=True, help="the branch Claude Code worked on"
-    )
-    reporting.add_argument(
-        "--result", default="", help="the JSON Claude Code returned, with its reason"
-    )
-    reporting.add_argument(
-        "--claude-outcome", default="", help="how the Claude Code step ended"
-    )
-    reporting.add_argument("--run-url", help="the workflow run to link")
-    reporting.set_defaults(run=report)
-
-    args = parser.parse_args(argv)
+    Does nothing when the issue's pull request is open. Otherwise the issue
+    would stay Planned and be retried, unexplained, on every scheduled run.
+    """
+    repo = repository(repo)
+    url = open_pull_request(repo, number)
+    if url:
+        click.echo(f"#{number} has {url}: nothing to explain")
+        return
     try:
-        return int(args.run(args))
+        reason = json.loads(result or "null")["reason"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        reason = ""
+    reason = reason or (
+        f"Claude Code did not finish ({claude_outcome or 'not run'}); "
+        "see the workflow run."
+    )
+    workflow = f"[Engineer]({run_url})" if run_url else "Engineer"
+    gh(
+        "issue",
+        "comment",
+        str(number),
+        "--repo",
+        repo,
+        "--body",
+        f"The {workflow} workflow did not open a pull request for this issue."
+        f"\n\n{reason}\n\n"
+        f"Clarify the issue if needed, then label it `{PLANNED}` again to retry.",
+    )
+    gh("issue", "edit", str(number), "--repo", repo, "--remove-label", PLANNED)
+    append(summary, f"#{number}: no pull request. {reason}\n")
+
+
+def main() -> int:
+    """Run a command from the command line; return the exit code."""
+    try:
+        cli()
     except RuntimeError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        click.echo(f"Error: {e}", err=True)
         return 1
+    return 0
 
 
 if __name__ == "__main__":
