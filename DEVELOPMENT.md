@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.12, 3.13 or 3.14 — see [Python versions](#python-versions).
+- Python 3.11, 3.12, 3.13 or 3.14 — see [Python versions](#python-versions).
   The default is 3.14: `make setup` pins the release named in the `Makefile`,
   and tox, mypy and the single-version CI jobs run on it.
 - [pyenv](https://github.com/pyenv/pyenv), used by `make setup` to create the
@@ -62,19 +62,19 @@ A coverage run fails when total coverage drops below 90% (`fail_under` in
 
 ### Python versions
 
-cli-wizard supports Python 3.12, 3.13 and 3.14, and generates projects that
+cli-wizard supports Python 3.11, 3.12, 3.13 and 3.14, and generates projects that
 support the same range. `tox` runs the suite on each of them:
 
 ```shell
-tox -e py312       # Run the suite on a single version
-tox -e py312,py313,py314
+tox -e py311       # Run the suite on a single version
+tox -e py311,py312,py313,py314
 ```
 
 Every other tox environment (`test`, `lint`, `type`, `format`, `coverage`) runs
 on the default interpreter, 3.14, declared as its `base_python` in `tox.ini`. The same
 `DEFAULT_PYTHON_VERSION` is what a generated project targets when its config
 leaves `PythonVersion` unset. Ruff
-targets the oldest supported version so it never emits syntax 3.12 rejects;
+targets the oldest supported version so it never emits syntax 3.11 rejects;
 mypy checks against the default.
 
 tox does not install interpreters, it only discovers them, and it fails rather
@@ -82,14 +82,14 @@ than skipping when one is missing. Install the versions you do not have first �
 with pyenv:
 
 ```shell
-pyenv install 3.12 3.13 3.14
+pyenv install 3.11 3.12 3.13 3.14
 ```
 
 pyenv only exposes the interpreter selected by `.python-version`, so put the
 others on `PATH` before running the matrix:
 
 ```shell
-export PATH="$HOME/.pyenv/versions/3.12.13/bin:$HOME/.pyenv/versions/3.13.13/bin:$PATH"
+export PATH="$HOME/.pyenv/versions/3.11.16/bin:$HOME/.pyenv/versions/3.12.13/bin:$HOME/.pyenv/versions/3.13.13/bin:$PATH"
 ```
 
 The supported range is declared once, in `SUPPORTED_PYTHON_VERSIONS` in

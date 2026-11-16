@@ -2,11 +2,22 @@
 
 ## 3.2.0
 
+### New Features
+
+#### cli-wizard
+
+- Added support for Python 3.11: cli-wizard installs and runs on it, and its package metadata declares Python 3.11 as the oldest supported version.
+
+#### Generated code
+
+- `PythonVersion` accepts `"3.11"`: the project then declares Python 3.11 as its oldest supported version in its package metadata, and runs on it.
+
 ### Changes
 
 #### Generated code
 
 - Dependabot also updates the GitHub Actions and the pre-commit hooks, groups its updates into fewer pull requests, and labels them, security updates as `Security`.
+- Lowered sphinx from ~9.1 to ~9.0, the newest series that runs on Python 3.11.
 
 ## 3.1.0
 

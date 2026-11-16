@@ -114,7 +114,7 @@ _COMMON_OPTIONS = (
 )
 
 
-def common_options[F: Callable[..., Any]](command: F) -> F:
+def common_options(command: Callable[..., Any]) -> Callable[..., Any]:
     """Add the options every command takes; read their values from ctx.obj."""
     # Decorators apply bottom-up and Click lists them top-down, so the last
     # option is applied first to keep the declared order in --help.

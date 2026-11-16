@@ -22,7 +22,7 @@ from pydantic.fields import FieldInfo
 
 # Supported Python versions, oldest first. Adding one means updating tox.ini,
 # the CI workflows and the README badge too; the tests fail if they disagree.
-SUPPORTED_PYTHON_VERSIONS: tuple[str, ...] = ("3.12", "3.13", "3.14")
+SUPPORTED_PYTHON_VERSIONS: tuple[str, ...] = ("3.11", "3.12", "3.13", "3.14")
 
 # The default Python version, 3.14: what a generated project targets unless
 # PythonVersion says otherwise, and what cli-wizard itself develops on.
