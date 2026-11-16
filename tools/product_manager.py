@@ -8,14 +8,16 @@ The New Ideas and the Grooming workflow run the commands around Claude Code:
 
 ``collect``  write the issues to a file: every issue ever opened, so New Ideas
              proposes nothing twice, or the open ones with their text, for
-             Grooming to judge. Also print the version of the checkout.
+             Grooming to judge, or the one a link names. Also print the
+             version of the checkout.
 ``open``     for New Ideas: read the proposals, five features and up to five
              bug fixes, and open an issue for each with ``gh``, in the
              sections of the repository's issue templates. An issue is
              labelled with its type, ``Triage`` and its priority; a proposal
              whose title an issue already has is skipped.
 ``groom``    for Grooming: read the labels and the priority each open issue
-             should have, and change the issues that differ.
+             should have, and change the issues that differ, or only the one a
+             link names.
 
 In GitHub Actions the repository, the step outputs and the run summary come
 from the environment; by hand, options name them.
@@ -36,6 +38,11 @@ Examples, from the repository root::
     tools/product_manager.py groom grooming.json --dry-run
     tools/product_manager.py groom grooming.json
 
+    # One issue only, by its link: collect it, then groom it
+    link=https://github.com/OWNER/NAME/issues/42
+    tools/product_manager.py collect --state open --issue "$link" --output open.json
+    tools/product_manager.py groom grooming.json --issue "$link"
+
     # Another repository, with the proposals read from stdin
     tools/product_manager.py open - --repo OWNER/NAME --dry-run < proposals.json
 """
@@ -52,6 +59,7 @@ from common import (
     gh,
     git,
     main,
+    number_from_link,
     output_option,
     repo_option,
     repository,
@@ -63,6 +71,9 @@ PRIORITIES = ("High", "Medium", "Low")
 # The labels Grooming decides, besides the priority: what an issue is and what
 # it touches. It leaves every other label alone, Triage and Planned above all,
 # which only a maintainer sets or removes.
+ISSUE_HELP = (
+    "The link of the one issue to consider; every issue when not given or empty."
+)
 GROOMED_LABELS = (
     "Bug",
     "Feature Request",
@@ -102,30 +113,42 @@ def cli() -> None:
     help="The issues to write: every one ever opened, or the open ones.",
 )
 @click.option("--with-body", is_flag=True, help="Write the text of each issue as well.")
+@click.option("--issue", "link", default="", metavar="LINK", help=ISSUE_HELP)
 @output_option
 def collect(
     repo: str | None,
     output: Path,
     state: str,
     with_body: bool,
+    link: str,
     github_output: Path | None,
 ) -> None:
     """Write the issues to a file and print the version."""
+    repo = repository(repo)
     fields = "number,title,state,labels" + (",body" if with_body else "")
-    listed = json.loads(
-        gh(
-            "issue",
-            "list",
-            "--repo",
-            repository(repo),
-            "--state",
-            state,
-            "--limit",
-            "1000",
-            "--json",
-            fields,
+    if link:
+        number = number_from_link(link, repo, "issues")
+        issue = json.loads(
+            gh("issue", "view", str(number), "--repo", repo, "--json", fields)
         )
-    )
+        if state == "open" and issue["state"] != "OPEN":
+            raise RuntimeError(f"Issue #{number} is {issue['state'].lower()}")
+        listed = [issue]
+    else:
+        listed = json.loads(
+            gh(
+                "issue",
+                "list",
+                "--repo",
+                repo,
+                "--state",
+                state,
+                "--limit",
+                "1000",
+                "--json",
+                fields,
+            )
+        )
     issues = [
         {**issue, "labels": [label["name"] for label in issue["labels"]]}
         for issue in listed
@@ -307,18 +330,26 @@ def open_issues(
 @cli.command()
 @repo_option
 @click.argument("grooming")
+@click.option("--issue", "link", default="", metavar="LINK", help=ISSUE_HELP)
 @summary_option
 @click.option(
     "--dry-run", is_flag=True, help="Print the changes instead of making them."
 )
-def groom(repo: str | None, grooming: str, summary: Path | None, dry_run: bool) -> None:
+def groom(
+    repo: str | None, grooming: str, link: str, summary: Path | None, dry_run: bool
+) -> None:
     """Label the open issues as GROOMING says, a JSON file or - for stdin.
 
     GROOMING gives, for each open issue, the labels saying what it is and
     what it touches, and its priority. Only an issue that differs is changed,
     and only in those labels: every other label is left alone.
     """
+    repo = repository(repo)
     wanted = read_json(grooming, "grooming").get("issues", [])
+    if link:
+        # Whatever else GROOMING holds, only the issue asked for is changed.
+        only = number_from_link(link, repo, "issues")
+        wanted = [issue for issue in wanted if issue.get("number") == only]
     for issue in wanted:
         labels = issue.get("labels") or []
         unknown = [label for label in labels if label not in GROOMED_LABELS]
@@ -329,7 +360,6 @@ def groom(repo: str | None, grooming: str, summary: Path | None, dry_run: bool) 
                 f"{', '.join(PRIORITIES)}"
             )
 
-    repo = repository(repo)
     listed = json.loads(
         gh(
             "issue",

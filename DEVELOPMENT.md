@@ -133,7 +133,7 @@ on the repository through
 |---|---|---|
 | [Code Review](.github/workflows/code-review.yaml) | a pull request is opened, pushed to, reopened or marked ready, or run by hand with a pull request's link | reviews the change and posts inline comments, or one comment when run by hand; read-only |
 | [Product Manager: New Ideas](.github/workflows/product-manager-new-ideas.yaml) | Fridays at 9am ET, or run by hand | proposes five features and five bug fixes, each bug reproduced first, and opens an issue for each, labelled with its type, `Triage` and a priority |
-| [Product Manager: Grooming](.github/workflows/product-manager-grooming.yaml) | Saturdays at 9am ET, or run by hand | judges the labels and the priority of every open issue and changes those that differ; never `Triage` or `Planned` |
+| [Product Manager: Grooming](.github/workflows/product-manager-grooming.yaml) | Saturdays at 9am ET, or run by hand, for every open issue or the one whose link it is given | judges the labels and the priority of the open issues and changes those that differ; never `Triage` or `Planned` |
 | [Engineer](.github/workflows/engineer.yaml) | Tuesdays at 9am ET, or run by hand | implements up to three open issues labelled `Planned`, oldest first, and opens a draft pull request for each |
 
 They need, once:
