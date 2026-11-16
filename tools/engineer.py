@@ -21,6 +21,26 @@ have not changed since it was last labelled Planned.
 
 In GitHub Actions the repository, the step outputs and the run summary come
 from the environment; by hand, options name them.
+
+Examples, from the repository root::
+
+    # The issues a scheduled run would implement, then up to five of them
+    tools/engineer.py select
+    tools/engineer.py select --max-issues 5
+
+    # One issue, by its link, even if it already had a pull request
+    tools/engineer.py select --issue https://github.com/OWNER/NAME/issues/42
+
+    # Write issue 42 to claude-issue.md, if it is still approved
+    tools/engineer.py read --number 42
+
+    # From the branch engineer/issue-42, with the change committed and the pull
+    # request description in claude-pr.md: run the checks and, if they pass,
+    # push the branch and open the draft pull request
+    tools/engineer.py submit --number 42
+
+    # Explain on issue 42 why it has no pull request, and remove Planned
+    tools/engineer.py conclude --number 42 --claude-outcome failure
 """
 
 import json

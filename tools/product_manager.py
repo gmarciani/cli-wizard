@@ -19,6 +19,25 @@ The New Ideas and the Grooming workflow run the commands around Claude Code:
 
 In GitHub Actions the repository, the step outputs and the run summary come
 from the environment; by hand, options name them.
+
+Examples, from the repository root::
+
+    # Every issue ever opened, as New Ideas reads them
+    tools/product_manager.py collect --output existing-issues.json
+
+    # The open issues with their text, as Grooming reads them
+    tools/product_manager.py collect --state open --with-body --output open.json
+
+    # Print the issues a file of proposals would open, then open them
+    tools/product_manager.py open proposals.json --dry-run
+    tools/product_manager.py open proposals.json
+
+    # Print the label changes a grooming file would make, then make them
+    tools/product_manager.py groom grooming.json --dry-run
+    tools/product_manager.py groom grooming.json
+
+    # Another repository, with the proposals read from stdin
+    tools/product_manager.py open - --repo OWNER/NAME --dry-run < proposals.json
 """
 
 import json
