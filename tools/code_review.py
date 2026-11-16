@@ -9,6 +9,18 @@
 
 In GitHub Actions the repository and the step outputs come from the
 environment; by hand, options name them.
+
+Examples, from the repository root::
+
+    # Print the number of a pull request of this repository, if it is open
+    tools/code_review.py resolve --pull-request https://github.com/OWNER/NAME/pull/42
+
+    # A pull request of another repository
+    link=https://github.com/OWNER/NAME/pull/42
+    tools/code_review.py resolve --repo OWNER/NAME --pull-request "$link"
+
+    # Also write number=42 to a file, as the workflow's step does
+    tools/code_review.py resolve --pull-request "$link" --github-output out.txt
 """
 
 import json
