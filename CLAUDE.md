@@ -43,6 +43,15 @@ cli-wizard generate --configuration examples/cli-wizard.yaml --api examples/open
   `fix(generator): ...` or `feat: ...`. A pull request's description fills
   the sections of `.github/PULL_REQUEST_TEMPLATE.md`.
 
+## Issues
+
+An issue carries the labels saying what it is and what it touches, each
+described in `.github/labels.yaml`, and one priority: `High Priority` for data
+loss or a broken generated CLI, `Medium Priority` for wrong behaviour with a
+workaround, `Low Priority` for polish. `Triage` marks an issue no maintainer
+has looked at yet and `Planned` one approved for implementation; only a
+maintainer sets or removes those two.
+
 ## Architecture
 
 **Two unrelated config systems, easy to conflate.** `~/.cli_wizard/cli-wizard.yaml`

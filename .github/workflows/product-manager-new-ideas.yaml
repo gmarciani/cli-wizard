@@ -1,32 +1,33 @@
 # Proposes five new features and five bug fixes for cli-wizard every week, and
 # opens an issue for each, labelled Feature Request or Bug, Triage, and the
-# priority Claude Code proposes.
+# priority Claude Code proposes. One of the two Product Manager workflows:
+# Grooming keeps the labels and priorities of the open issues right.
 #
 # Claude only reads: it studies the code, the roadmap, the changelog and every
 # existing issue, reproduces each bug in this checkout, and returns its
 # proposals as JSON. A second job, the only one allowed to write issues,
 # validates them and opens the issues. tools/product_manager.py holds the
-# logic of the steps around Claude, and runs by hand too. A bug that cannot be reproduced is
-# never proposed, so a week may bring fewer than five; the run summary says
-# why.
+# logic of the steps around Claude, and runs by hand too. A bug that cannot be
+# reproduced is never proposed, so a week may bring fewer than five; the run
+# summary says why.
 #
 # Triage the issues, and label those worth doing Planned: the Engineer
 # workflow implements them.
 #
 # Requires the Claude GitHub App and the CLAUDE_CODE_OAUTH_TOKEN secret; see
 # "Continuous AI" in DEVELOPMENT.md.
-name: 💡 Product Manager
+name: "💡 Product Manager: New Ideas"
 
 on:
   schedule:
-    # Fridays at 9am Eastern, so the proposals can be triaged before the
-    # Engineer workflow runs on Tuesday.
+    # Fridays at 9am Eastern, so the proposals can be groomed on Monday and
+    # triaged before the Engineer workflow runs on Tuesday.
     - cron: '0 9 * * 5'
       timezone: America/New_York
   workflow_dispatch:
 
 concurrency:
-  group: product-manager
+  group: product-manager-new-ideas
   cancel-in-progress: false
 
 jobs:
@@ -90,11 +91,9 @@ jobs:
             fewer than five, and say why in bugs_shortfall_reason, rather
             than a speculative one.
 
-            Give each proposal a priority, High, Medium or Low, which
-            becomes the priority label of its issue: data loss or a broken
-            generated CLI is High, wrong behaviour with a workaround is
-            Medium, polish is Low. Do not write the priority anywhere else.
-            Write
+            Give each proposal a priority, High, Medium or Low, as CLAUDE.md
+            defines them: it becomes the priority label of its issue. Do not
+            write the priority anywhere else. Write
             acceptance criteria a developer can check one by one. Write
             GitHub Markdown, put code, commands and file names in backticks,
             and never @-mention anyone. Titles are plain text, without a

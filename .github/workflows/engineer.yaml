@@ -32,8 +32,8 @@ name: 🛠️ Engineer
 
 on:
   schedule:
-    # Tuesdays at 9am Eastern, after the issues the Product Manager workflow
-    # proposes on Friday have been triaged.
+    # Tuesdays at 9am Eastern, after the issues the New Ideas workflow
+    # proposes on Friday have been groomed and triaged.
     - cron: '0 9 * * 2'
       timezone: America/New_York
   workflow_dispatch:

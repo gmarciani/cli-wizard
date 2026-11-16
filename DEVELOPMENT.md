@@ -132,7 +132,8 @@ on the repository through
 | Workflow | Runs when | Does |
 |---|---|---|
 | [Code Review](.github/workflows/code-review.yaml) | a pull request is opened, pushed to, reopened or marked ready, or run by hand with a pull request's link | reviews the change and posts inline comments, or one comment when run by hand; read-only |
-| [Product Manager](.github/workflows/product-manager.yaml) | Fridays at 9am ET, or run by hand | proposes five features and five bug fixes, each bug reproduced first, and opens an issue for each, labelled with its type, `Triage` and a priority |
+| [Product Manager: New Ideas](.github/workflows/product-manager-new-ideas.yaml) | Fridays at 9am ET, or run by hand | proposes five features and five bug fixes, each bug reproduced first, and opens an issue for each, labelled with its type, `Triage` and a priority |
+| [Product Manager: Grooming](.github/workflows/product-manager-grooming.yaml) | Mondays at 9am ET, or run by hand | judges the labels and the priority of every open issue and changes those that differ; never `Triage` or `Planned` |
 | [Engineer](.github/workflows/engineer.yaml) | Tuesdays at 9am ET, or run by hand | implements up to three open issues labelled `Planned`, oldest first, and opens a draft pull request for each |
 
 They need, once:
@@ -151,11 +152,13 @@ They need, once:
 GitHub withholds secrets from pull requests opened from forks, so Code
 Review skips them: run it by hand with the pull request's link to review one.
 
-Product Manager and Engineer make a weekly loop: triage Friday's proposals,
-label `Planned` the issues to build, and Engineer opens a draft pull request
-for each on Tuesday, once the change passes `tox -e lint,type,test`. The label approves the issue's text as it stands, so an
-issue edited afterwards waits to be labelled again. An issue Engineer cannot
-implement gets a comment saying why and loses the label.
+The Product Manager workflows and Engineer make a weekly loop: New Ideas
+opens its proposals on Friday, Grooming puts the labels and priorities of the
+open issues right on Monday, you triage them and label `Planned` the ones to
+build, and Engineer opens a draft pull request for each on Tuesday, once the
+change passes `tox -e lint,type,test`. The label approves the issue's text as
+it stands, so an issue edited afterwards waits to be labelled again. An issue
+Engineer cannot implement gets a comment saying why and loses the label.
 
 Run Engineer by hand with either `issue`, the link of one issue to implement
 even if it already had a pull request, or `max-issues`; not both.
@@ -166,6 +169,9 @@ The logic of both workflows' steps lives in scripts that run by hand too;
 ```shell
 # Print the issues a file of proposals would open, without opening them
 tools/product_manager.py open proposals.json --dry-run
+
+# Print the label changes a grooming file would make, without making them
+tools/product_manager.py groom grooming.json --dry-run
 
 # Check a pull request link the way a Code Review run by hand does
 tools/code_review.py resolve --pull-request https://github.com/gmarciani/cli-wizard/pull/153
