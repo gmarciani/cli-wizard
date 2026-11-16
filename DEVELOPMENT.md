@@ -132,6 +132,7 @@ on the repository through
 | Workflow | Runs when | Does |
 |---|---|---|
 | [Code Review](.github/workflows/code-review.yaml) | a pull request is opened, pushed to, reopened or marked ready | reviews the change and posts inline comments; read-only |
+| [Product Manager](.github/workflows/product-manager.yaml) | Fridays at 9am ET, or run by hand | proposes five features and five bug fixes, each bug reproduced first, and opens an issue for each, labelled with its type, `Triage` and a priority |
 
 They need, once:
 
@@ -148,6 +149,14 @@ They need, once:
 
 GitHub withholds secrets from pull requests opened from forks, so Code
 Review skips them; review those by hand.
+
+Product Manager opens its issues with a script that runs by hand too;
+`--help` lists its options:
+
+```shell
+# Print the issues a file of proposals would open, without opening them
+tools/product_manager.py proposals.json --dry-run
+```
 
 ## Release
 
