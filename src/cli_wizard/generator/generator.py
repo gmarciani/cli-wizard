@@ -18,6 +18,7 @@ from jinja2 import Environment, PackageLoader
 from cli_wizard.config.schema import (
     DEFAULT_PYTHON_VERSION,
     Config,
+    ci_python_versions_from,
     python_versions_from,
 )
 from cli_wizard.errors import ConfigError, FormattingError, RuffNotFoundError
@@ -571,6 +572,7 @@ class CliGenerator:
             "profile_file": self.config.get("ProfileFile")
             or f"{self._compute_main_dir(self.package_name)}/profiles.yaml",
             "PythonVersions": python_versions_from(minimum_python),
+            "CiPythonVersions": ci_python_versions_from(minimum_python),
             "WorkflowPythonVersion": DEFAULT_PYTHON_VERSION,
         }
         context.update(extra)

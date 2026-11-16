@@ -21,7 +21,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.fields import FieldInfo
 
 # Supported Python versions, oldest first. Adding one means updating tox.ini,
-# the CI workflows and the README badge too; the tests fail if they disagree.
+# the README badge and, when it becomes the oldest or the newest, the Test
+# workflow too; the tests fail if they disagree.
 SUPPORTED_PYTHON_VERSIONS: tuple[str, ...] = ("3.11", "3.12", "3.13", "3.14")
 
 # The default Python version, 3.14: what a generated project targets unless
@@ -42,6 +43,17 @@ def python_versions_from(minimum: str) -> list[str]:
             f"Supported versions are {', '.join(SUPPORTED_PYTHON_VERSIONS)}."
         )
     return list(SUPPORTED_PYTHON_VERSIONS[SUPPORTED_PYTHON_VERSIONS.index(minimum) :])
+
+
+def ci_python_versions_from(minimum: str) -> list[str]:
+    """Return the versions CI tests: the oldest and the newest at or above ``minimum``.
+
+    The versions in between are still supported and still tested by tox; CI
+    skips them because what passes on both ends of the range passes on them.
+    A project supporting a single version gets that one alone.
+    """
+    versions = python_versions_from(minimum)
+    return list(dict.fromkeys([versions[0], versions[-1]]))
 
 
 def tox_env_name(version: str) -> str:

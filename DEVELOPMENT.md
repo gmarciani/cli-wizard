@@ -94,11 +94,13 @@ export PATH="$HOME/.pyenv/versions/3.11.16/bin:$HOME/.pyenv/versions/3.12.13/bin
 
 The supported range is declared once, in `SUPPORTED_PYTHON_VERSIONS` in
 [src/cli_wizard/config/schema.py](src/cli_wizard/config/schema.py). It drives
-cli-wizard's classifiers, tox envlist, CI matrices and README badge, and —
+cli-wizard's classifiers, tox envlist, CI matrix and README badge, and —
 through a generated project's `PythonVersion` — the same in everything
-cli-wizard generates. Tests fail if any of them disagree, so adding a version
-means updating `tox.ini`, `.github/workflows/test.yaml` and the README badge
-alongside the constant. The `Required checks` ruleset on `main` names each
+cli-wizard generates. tox runs every version; CI runs only the oldest and the
+newest, since what passes on both ends of the range passes in between. Tests
+fail if any of them disagree, so adding a version means updating `tox.ini`,
+the README badge and, when it becomes the oldest or the newest,
+`.github/workflows/test.yaml` alongside the constant. The `Required checks` ruleset on `main` names each
 `test (<version>)` job, so update it in the repository settings as well.
 
 ## Documentation

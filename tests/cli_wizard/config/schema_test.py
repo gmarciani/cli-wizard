@@ -17,6 +17,7 @@ from cli_wizard.config.schema import (
     DEFAULT_PYTHON_VERSION,
     SUPPORTED_PYTHON_VERSIONS,
     Config,
+    ci_python_versions_from,
     command_name_from,
     python_versions_from,
     ruff_target_version,
@@ -433,6 +434,24 @@ class TestSupportedPythonVersions:
             SUPPORTED_PYTHON_VERSIONS[-1]
         ]
 
+    @pytest.mark.parametrize(
+        "minimum, expected",
+        [
+            ("3.11", ["3.11", "3.14"]),
+            ("3.12", ["3.12", "3.14"]),
+            ("3.13", ["3.13", "3.14"]),
+            ("3.14", ["3.14"]),
+        ],
+    )
+    def test_ci_python_versions_from_returns_oldest_and_newest(self, minimum, expected):
+        """Test that CI tests both ends of the range, once when they are the same."""
+        assert ci_python_versions_from(minimum) == expected
+
+    def test_ci_python_versions_from_rejects_unsupported(self):
+        """Test that an unsupported minimum is refused, as for the full range."""
+        with pytest.raises(ValueError, match="Unsupported Python version"):
+            ci_python_versions_from("3.10")
+
     @pytest.mark.parametrize("version", ["3.10", "3.15", "4.0", "", "python3.12"])
     def test_python_versions_from_rejects_unsupported(self, version):
         """Test that an unsupported minimum raises rather than silently passing."""
@@ -488,15 +507,17 @@ class TestSupportedPythonVersions:
         expected = [tox_env_name(v) for v in SUPPORTED_PYTHON_VERSIONS]
         assert [e for e in envs if e.startswith("py3")] == expected
 
-    def test_cli_wizard_ci_matrix_covers_supported_versions(self):
-        """Test that CI executes the suite on every supported interpreter."""
+    def test_cli_wizard_ci_matrix_covers_oldest_and_newest_versions(self):
+        """Test that CI executes the suite on the oldest and newest interpreters."""
         workflow = yaml.safe_load(
             (REPO_ROOT / ".github" / "workflows" / "test.yaml").read_text(
                 encoding="utf-8"
             )
         )
         matrix = workflow["jobs"]["test"]["strategy"]["matrix"]["python-version"]
-        assert [str(v) for v in matrix] == list(SUPPORTED_PYTHON_VERSIONS)
+        assert [str(v) for v in matrix] == ci_python_versions_from(
+            SUPPORTED_PYTHON_VERSIONS[0]
+        )
 
     @pytest.mark.parametrize(
         "workflow, job",
