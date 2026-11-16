@@ -123,6 +123,32 @@ Clean the documentation:
 make clean-docs
 ```
 
+## Continuous AI
+
+These workflows run [Claude Code](https://code.claude.com/docs/en/github-actions)
+on the repository through
+[anthropics/claude-code-action](https://github.com/anthropics/claude-code-action).
+
+| Workflow | Runs when | Does |
+|---|---|---|
+| [Code Review](.github/workflows/code-review.yaml) | a pull request is opened, pushed to, reopened or marked ready | reviews the change and posts inline comments; read-only |
+
+They need, once:
+
+1. The [Claude GitHub App](https://github.com/apps/claude) installed on the
+   repository, so comments and pull requests are posted as Claude.
+2. The `CLAUDE_CODE_OAUTH_TOKEN` repository secret, a token from your Claude
+   subscription. Create it with Claude Code, signing in to your Claude
+   account in the browser it opens, then store the token it prints:
+
+   ```shell
+   claude setup-token
+   gh secret set CLAUDE_CODE_OAUTH_TOKEN
+   ```
+
+GitHub withholds secrets from pull requests opened from forks, so Code
+Review skips them; review those by hand.
+
 ## Release
 
 Bump the version with the [Bump Version](https://github.com/gmarciani/cli-wizard/actions/workflows/bump-version.yaml)
