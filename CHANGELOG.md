@@ -17,6 +17,7 @@
 #### Generated code
 
 - Dependabot also updates the GitHub Actions and the pre-commit hooks, groups its updates into fewer pull requests, and labels them, security updates as `Security`.
+- The Test workflow runs the tests on the oldest and the newest supported Python version instead of every version; `tox` still runs them all.
 - Lowered sphinx from ~9.1 to ~9.0, the newest series that runs on Python 3.11.
 
 ## 3.1.0

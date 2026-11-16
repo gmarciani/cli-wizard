@@ -36,6 +36,7 @@ from cli_wizard.config.schema import (
     DEFAULT_PYTHON_VERSION,
     SUPPORTED_PYTHON_VERSIONS,
     Config,
+    ci_python_versions_from,
     python_versions_from,
     ruff_target_version,
     tox_env_name,
@@ -2127,7 +2128,7 @@ class TestGeneratedPythonVersions:
                 )
             )
             matrix = workflow["jobs"]["test"]["strategy"]["matrix"]["python-version"]
-            assert [str(v) for v in matrix] == expected
+            assert [str(v) for v in matrix] == ci_python_versions_from(minimum)
 
     @pytest.mark.parametrize("minimum", SUPPORTED_PYTHON_VERSIONS)
     def test_generated_sources_parse_on_the_declared_minimum(self, minimum):
