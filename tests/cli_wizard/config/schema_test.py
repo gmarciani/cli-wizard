@@ -433,13 +433,13 @@ class TestSupportedPythonVersions:
             SUPPORTED_PYTHON_VERSIONS[-1]
         ]
 
-    @pytest.mark.parametrize("version", ["3.11", "3.15", "4.0", "", "python3.12"])
+    @pytest.mark.parametrize("version", ["3.10", "3.15", "4.0", "", "python3.12"])
     def test_python_versions_from_rejects_unsupported(self, version):
         """Test that an unsupported minimum raises rather than silently passing."""
         with pytest.raises(ValueError, match="Unsupported Python version"):
             python_versions_from(version)
 
-    @pytest.mark.parametrize("version", ["3.11", "3.15", "4.0", "nonsense"])
+    @pytest.mark.parametrize("version", ["3.10", "3.15", "4.0", "nonsense"])
     def test_config_rejects_unsupported_python_version(self, version):
         """Test that Config validation rejects a version cli-wizard cannot target."""
         with pytest.raises(ValidationError, match="Unsupported Python version"):
