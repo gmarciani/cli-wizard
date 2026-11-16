@@ -1,18 +1,25 @@
-# Implements the open issues labelled Planned, opening a pull request for each.
+# Implements the open issues labelled Planned, opening a draft pull request for
+# each.
 #
 # Labelling an issue Planned approves its text: an issue whose title or body
 # was edited after it was labelled is skipped until it is labelled again, and
 # Claude reads the title and body only, never the comments, so nobody can
 # steer it after a maintainer has approved the issue.
 #
+# Run by hand, it takes either the link of one issue to implement, retried
+# even if it already had a pull request, or the most issues to take on; not
+# both.
+#
 # Two jobs:
-# - select picks up to max-issues approved issues, oldest first, skipping
-#   those that already had a pull request from their engineer/issue-<number>
-#   branch. Run it for one issue to retry it whatever its pull requests.
+# - select picks the approved issues, oldest first, skipping those that
+#   already had a pull request from their engineer/issue-<number> branch.
 # - implement runs Claude Code on the issue's branch: it changes the code as
 #   CLAUDE.md says, commits, pushes and opens a draft pull request. When it
 #   opens none, the job explains why on the issue and removes Planned, so the
 #   issue is not retried until it is labelled again.
+#
+# tools/engineer.py holds the logic of the steps around Claude, and runs by
+# hand too.
 #
 # Claude pushes with the workflow's token, which cannot change workflow files
 # and triggers no workflow, so the job starts the Test workflow on the branch;
@@ -31,97 +38,44 @@ on:
   workflow_dispatch:
     inputs:
       issue:
-        description: 'One issue to implement, retried even if it already had a pull request'
+        description: 'Link of the one issue to implement; not with max-issues'
         required: false
         type: string
       max-issues:
-        description: 'Most issues to implement in this run'
+        description: 'Most issues to implement, 3 by default; not with issue'
         required: false
-        default: '3'
         type: string
 
 concurrency:
   group: engineer
   cancel-in-progress: false
 
-env:
-  # The issue as of now: its text, its labels, and when its text last changed
-  # and when it was labelled Planned.
-  ISSUE_QUERY: >-
-    query($owner: String!, $repo: String!, $number: Int!) {
-      repository(owner: $owner, name: $repo) {
-        issue(number: $number) {
-          number title body state lastEditedAt
-          labels(first: 50) { nodes { name } }
-          timelineItems(last: 100, itemTypes: [LABELED_EVENT, RENAMED_TITLE_EVENT]) {
-            nodes {
-              __typename
-              ... on LabeledEvent { createdAt label { name } }
-              ... on RenamedTitleEvent { createdAt }
-            }
-          }
-        }
-      }
-    }
-  # true when the issue is open, labelled Planned, and its title and body have
-  # not changed since it was last labelled Planned.
-  APPROVED_FILTER: >-
-    (.state == "OPEN")
-    and (.labels.nodes | map(.name) | index("Planned") != null)
-    and (
-      ([.timelineItems.nodes[] | select(.__typename == "LabeledEvent" and .label.name == "Planned") | .createdAt] | max) as $planned
-      | ([.lastEditedAt] + [.timelineItems.nodes[] | select(.__typename == "RenamedTitleEvent") | .createdAt] | map(select(. != null)) | max) as $edited
-      | $planned != null and ($edited == null or $edited <= $planned)
-    )
-
 jobs:
   select:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       issues: read
       pull-requests: read
     outputs:
       issues: ${{ steps.select.outputs.issues }}
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
       - name: Select the approved Planned issues
         id: select
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ONE_ISSUE: ${{ inputs.issue }}
-          MAX_ISSUES: ${{ inputs.max-issues || '3' }}
-        run: |
-          if [ -n "$ONE_ISSUE" ]; then
-            candidates="${ONE_ISSUE#\#}"
-          else
-            candidates="$(gh issue list --repo "$GITHUB_REPOSITORY" --label Planned --state open \
-              --limit 200 --json number --jq 'map(.number) | sort | .[]')"
-          fi
-
-          selected=()
-          for number in $candidates; do
-            [ "${#selected[@]}" -ge "$MAX_ISSUES" ] && break
-            issue="$(gh api graphql -f query="$ISSUE_QUERY" -f owner="${GITHUB_REPOSITORY%/*}" \
-              -f repo="${GITHUB_REPOSITORY#*/}" -F number="$number" --jq .data.repository.issue)"
-            # An assignment, so a jq error fails the run instead of skipping the issue.
-            approved="$(jq -r "$APPROVED_FILTER" <<< "$issue")"
-            if [ "$approved" != true ]; then
-              echo "::notice::Skipped #$number: not open and labelled Planned, or edited since it was labelled Planned."
-              continue
-            fi
-            if [ -z "$ONE_ISSUE" ]; then
-              pulls="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "engineer/issue-$number" \
-                --state all --json number --jq length)"
-              if [ "$pulls" != 0 ]; then
-                echo "::notice::Skipped #$number: it already had a pull request; run the workflow for it to retry."
-                continue
-              fi
-            fi
-            selected+=("$number")
-          done
-
-          issues="$(printf '%s\n' "${selected[@]}" | jq -Rnc '[inputs | select(length > 0) | tonumber]')"
-          echo "issues=$issues" >> "$GITHUB_OUTPUT"
-          echo "Issues to implement: $issues" >> "$GITHUB_STEP_SUMMARY"
+          ISSUE_LINK: ${{ inputs.issue }}
+          MAX_ISSUES: ${{ inputs.max-issues }}
+        run: >-
+          tools/engineer.py select
+          --repo "$GITHUB_REPOSITORY"
+          --issue "$ISSUE_LINK"
+          --max-issues "$MAX_ISSUES"
+          --github-output "$GITHUB_OUTPUT"
+          --summary "$GITHUB_STEP_SUMMARY"
 
   implement:
     needs: select
@@ -151,19 +105,12 @@ jobs:
 
       - name: Read the issue
         id: issue
-        run: |
-          issue="$(gh api graphql -f query="$ISSUE_QUERY" -f owner="${GITHUB_REPOSITORY%/*}" \
-            -f repo="${GITHUB_REPOSITORY#*/}" -F number="$ISSUE" --jq .data.repository.issue)"
-          approved="$(jq -r "$APPROVED_FILTER" <<< "$issue")"
-          echo "approved=$approved" >> "$GITHUB_OUTPUT"
-          if [ "$approved" != true ]; then
-            echo "::notice::Skipped #$ISSUE: it changed after it was selected."
-            exit 0
-          fi
-          # The title and body as approved, read once here so the text Claude
-          # reads is the text that was checked. Git ignores the file.
-          jq -r '"# \(.title)\n\n\(.body)"' <<< "$issue" > claude-issue.md
-          echo claude-issue.md >> .git/info/exclude
+        run: >-
+          tools/engineer.py read
+          --repo "$GITHUB_REPOSITORY"
+          --number "$ISSUE"
+          --output claude-issue.md
+          --github-output "$GITHUB_OUTPUT"
 
       - name: Set up Python
         if: steps.issue.outputs.approved == 'true'
@@ -235,24 +182,12 @@ jobs:
           CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
           RESULT: ${{ steps.claude.outputs.structured_output }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          url="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open \
-            --json url --jq '.[0].url // empty')"
-          if [ -n "$url" ]; then
-            gh workflow run test.yaml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
-            echo "Opened $url for #$ISSUE" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          reason="$(jq -r '.reason // empty' <<< "${RESULT:-null}" 2>/dev/null || true)"
-          [ -n "$reason" ] || reason="Claude Code did not finish ($CLAUDE_OUTCOME); see the workflow run."
-          {
-            echo "The [Engineer]($RUN_URL) workflow did not open a pull request for this issue."
-            echo
-            echo "$reason"
-            echo
-            echo "Clarify the issue if needed, then label it \`Planned\` again to retry."
-          } > "$RUNNER_TEMP/issue-comment.md"
-          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/issue-comment.md"
-          gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --remove-label Planned
-          echo "#$ISSUE: no pull request. $reason" >> "$GITHUB_STEP_SUMMARY"
+        run: >-
+          tools/engineer.py report
+          --repo "$GITHUB_REPOSITORY"
+          --number "$ISSUE"
+          --branch "$BRANCH"
+          --result "$RESULT"
+          --claude-outcome "$CLAUDE_OUTCOME"
+          --run-url "$RUN_URL"
+          --summary "$GITHUB_STEP_SUMMARY"

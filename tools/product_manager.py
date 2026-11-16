@@ -2,13 +2,17 @@
 # Copyright (c) 2026, Giacomo Marciani
 # Licensed under the MIT License
 
-"""Open a GitHub issue for each proposal of the Product Manager workflow.
+"""Collect what the Product Manager workflow reads, and open what it proposes.
 
-Reads the proposals, five features and up to five bug fixes, as the JSON the
-workflow's schema describes, and opens an issue for each with ``gh``, in the
-sections of the repository's issue templates. An issue is labelled with its
-type, ``Triage`` and its priority; a proposal whose title an issue already
-has is skipped.
+The workflow runs the two commands around Claude Code:
+
+``collect``  write every existing issue to a file, so nothing is proposed
+             twice, and print the version the proposals are made on.
+``open``     read the proposals, five features and up to five bug fixes, as
+             the JSON the workflow's schema describes, and open an issue for
+             each with ``gh``, in the sections of the repository's issue
+             templates. An issue is labelled with its type, ``Triage`` and its
+             priority; a proposal whose title an issue already has is skipped.
 """
 
 import argparse
@@ -40,6 +44,48 @@ def gh(*args: str) -> str:
     if result.returncode != 0:
         raise RuntimeError(f"gh {' '.join(args[:2])} failed: {result.stderr.strip()}")
     return result.stdout.strip()
+
+
+def collect(args: argparse.Namespace) -> int:
+    """Write the existing issues to a file and print the version."""
+    repo = ["--repo", args.repo] if args.repo else []
+    listed = json.loads(
+        gh(
+            "issue",
+            "list",
+            *repo,
+            "--state",
+            "all",
+            "--limit",
+            "1000",
+            "--json",
+            "number,title,state,labels",
+        )
+    )
+    issues = [
+        {**issue, "labels": [label["name"] for label in issue["labels"]]}
+        for issue in listed
+    ]
+    args.output.write_text(json.dumps(issues, indent=2) + "\n")
+    print(f"Wrote {len(issues)} issues to {args.output}")
+
+    git = shutil.which("git")
+    commit = ""
+    if git:
+        result = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [git, "rev-parse", "--short", "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        commit = result.stdout.strip()
+    version = (ROOT / "VERSION").read_text().strip()
+    line = f"version={version} ({commit})\n" if commit else f"version={version}\n"
+    print(line, end="")
+    if args.github_output:
+        with args.github_output.open("a") as output:
+            output.write(line)
+    return 0
 
 
 def load_proposals(source: str) -> tuple[list[Proposal], list[Proposal], str]:
@@ -178,41 +224,66 @@ def open_issues(args: argparse.Namespace) -> list[str]:
     return rows
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Open the issues from the command line; return the exit code."""
-    parser = argparse.ArgumentParser(
-        description="Open a GitHub issue for each Product Manager proposal."
-    )
-    parser.add_argument(
-        "proposals", help="the JSON file holding the proposals, or - for stdin"
-    )
-    parser.add_argument(
-        "--repo", help="the repository, OWNER/NAME (default: the one gh infers)"
-    )
-    parser.add_argument(
-        "--version",
-        default=(ROOT / "VERSION").read_text().strip(),
-        help="the version a bug was reproduced on (default: the VERSION file)",
-    )
-    parser.add_argument("--run-url", help="the workflow run to link from each issue")
-    parser.add_argument(
-        "--summary", type=Path, help="a Markdown file to append the summary table to"
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="print the issues instead of opening them",
-    )
-    args = parser.parse_args(argv)
-    try:
-        rows = open_issues(args)
-    except RuntimeError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
+def open_command(args: argparse.Namespace) -> int:
+    """Open the issues and append the summary table, if asked."""
+    rows = open_issues(args)
     if args.summary:
         with args.summary.open("a") as summary:
             summary.write("## Proposals\n\n" + "\n".join(rows) + "\n")
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run a command from the command line; return the exit code."""
+    parser = argparse.ArgumentParser(
+        description="Collect what the Product Manager reads, open what it proposes."
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--repo", help="the repository, OWNER/NAME (default: the one gh infers)"
+    )
+
+    collecting = commands.add_parser(
+        "collect", parents=[common], help="write the existing issues to a file"
+    )
+    collecting.add_argument(
+        "--output", required=True, type=Path, help="the JSON file to write"
+    )
+    collecting.add_argument(
+        "--github-output", type=Path, help="a file to append the version output to"
+    )
+    collecting.set_defaults(run=collect)
+
+    opening = commands.add_parser(
+        "open", parents=[common], help="open an issue for each proposal"
+    )
+    opening.add_argument(
+        "proposals", help="the JSON file holding the proposals, or - for stdin"
+    )
+    opening.add_argument(
+        "--version",
+        default=(ROOT / "VERSION").read_text().strip(),
+        help="the version a bug was reproduced on (default: the VERSION file)",
+    )
+    opening.add_argument("--run-url", help="the workflow run to link from each issue")
+    opening.add_argument(
+        "--summary", type=Path, help="a Markdown file to append the summary table to"
+    )
+    opening.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the issues instead of opening them",
+    )
+    opening.set_defaults(run=open_command)
+
+    args = parser.parse_args(argv)
+    try:
+        return int(args.run(args))
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

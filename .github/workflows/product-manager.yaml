@@ -5,8 +5,8 @@
 # Claude only reads: it studies the code, the roadmap, the changelog and every
 # existing issue, reproduces each bug in this checkout, and returns its
 # proposals as JSON. A second job, the only one allowed to write issues,
-# validates them and opens the issues with tools/product_manager.py, which
-# runs by hand too. A bug that cannot be reproduced is
+# validates them and opens the issues. tools/product_manager.py holds the
+# logic of the steps around Claude, and runs by hand too. A bug that cannot be reproduced is
 # never proposed, so a week may bring fewer than five; the run summary says
 # why.
 #
@@ -60,12 +60,11 @@ jobs:
         id: context
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue list --repo "$GITHUB_REPOSITORY" --state all --limit 1000 \
-            --json number,title,state,labels \
-            --jq 'map({number, title, state, labels: [.labels[].name]})' \
-            > existing-issues.json
-          echo "version=$(cat VERSION) ($(git rev-parse --short HEAD))" >> "$GITHUB_OUTPUT"
+        run: >-
+          tools/product_manager.py collect
+          --repo "$GITHUB_REPOSITORY"
+          --output existing-issues.json
+          --github-output "$GITHUB_OUTPUT"
 
       - name: Propose features and bug fixes
         id: claude
@@ -165,9 +164,9 @@ jobs:
           PROPOSALS: ${{ needs.propose.outputs.proposals }}
           VERSION: ${{ needs.propose.outputs.version }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          printf '%s' "$PROPOSALS" | tools/product_manager.py - \
-            --repo "$GITHUB_REPOSITORY" \
-            --version "$VERSION" \
-            --run-url "$RUN_URL" \
-            --summary "$GITHUB_STEP_SUMMARY"
+        run: >-
+          printf '%s' "$PROPOSALS" | tools/product_manager.py open -
+          --repo "$GITHUB_REPOSITORY"
+          --version "$VERSION"
+          --run-url "$RUN_URL"
+          --summary "$GITHUB_STEP_SUMMARY"

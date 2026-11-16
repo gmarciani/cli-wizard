@@ -157,12 +157,19 @@ for each on Tuesday. The label approves the issue's text as it stands, so an
 issue edited afterwards waits to be labelled again. An issue Engineer cannot
 implement gets a comment saying why and loses the label.
 
-Product Manager opens its issues with a script that runs by hand too;
-`--help` lists its options:
+Run Engineer by hand with either `issue`, the link of one issue to implement
+even if it already had a pull request, or `max-issues`; not both.
+
+The logic of both workflows' steps lives in scripts that run by hand too;
+`--help` lists their commands and options:
 
 ```shell
 # Print the issues a file of proposals would open, without opening them
-tools/product_manager.py proposals.json --dry-run
+tools/product_manager.py open proposals.json --dry-run
+
+# List the issues Engineer would implement
+tools/engineer.py select --max-issues 5
+tools/engineer.py select --issue https://github.com/gmarciani/cli-wizard/issues/42
 ```
 
 ## Release
