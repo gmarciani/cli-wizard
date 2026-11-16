@@ -12,6 +12,9 @@ The workflow runs the three commands in order:
 ``report``  after Claude Code ran, start the Test workflow on the pull request
             it opened, or explain on the issue why there is none.
 
+In GitHub Actions the repository, the step outputs and the run summary come
+from the environment; by hand, options name them.
+
 An issue is approved when it is open, labelled Planned, and its title and body
 have not changed since it was last labelled Planned.
 """
@@ -64,6 +67,12 @@ def gh(*args: str) -> str:
     if result.returncode != 0:
         raise RuntimeError(f"gh {' '.join(args[:2])} failed: {result.stderr.strip()}")
     return result.stdout.strip()
+
+
+def env_path(name: str) -> Path | None:
+    """Return the file an environment variable names, if it is set."""
+    value = os.environ.get(name)
+    return Path(value) if value else None
 
 
 def repository(repo: str | None) -> str:
@@ -305,14 +314,24 @@ def main(argv: list[str] | None = None) -> int:
 
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
-        "--repo", help="the repository, OWNER/NAME (default: the one gh infers)"
+        "--repo",
+        default=os.environ.get("GITHUB_REPOSITORY"),
+        help="the repository, OWNER/NAME (default: $GITHUB_REPOSITORY, "
+        "or the one gh infers)",
     )
     common.add_argument(
-        "--summary", type=Path, help="a Markdown file to append a summary line to"
+        "--summary",
+        type=Path,
+        default=env_path("GITHUB_STEP_SUMMARY"),
+        help="a Markdown file to append a summary line to "
+        "(default: $GITHUB_STEP_SUMMARY)",
     )
     outputs = argparse.ArgumentParser(add_help=False)
     outputs.add_argument(
-        "--github-output", type=Path, help="a file to append the outputs to"
+        "--github-output",
+        type=Path,
+        default=env_path("GITHUB_OUTPUT"),
+        help="a file to append the outputs to (default: $GITHUB_OUTPUT)",
     )
 
     selecting = commands.add_parser(

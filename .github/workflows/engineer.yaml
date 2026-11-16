@@ -63,19 +63,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
 
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
       - name: Select the approved Planned issues
         id: select
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_LINK: ${{ inputs.issue }}
           MAX_ISSUES: ${{ inputs.max-issues }}
-        run: >-
-          tools/engineer.py select
-          --repo "$GITHUB_REPOSITORY"
-          --issue "$ISSUE_LINK"
-          --max-issues "$MAX_ISSUES"
-          --github-output "$GITHUB_OUTPUT"
-          --summary "$GITHUB_STEP_SUMMARY"
+        run: tools/engineer.py select --issue "$ISSUE_LINK" --max-issues "$MAX_ISSUES"
 
   implement:
     needs: select
@@ -103,20 +102,14 @@ jobs:
         with:
           ref: main
 
-      - name: Read the issue
-        id: issue
-        run: >-
-          tools/engineer.py read
-          --repo "$GITHUB_REPOSITORY"
-          --number "$ISSUE"
-          --output claude-issue.md
-          --github-output "$GITHUB_OUTPUT"
-
       - name: Set up Python
-        if: steps.issue.outputs.approved == 'true'
         uses: actions/setup-python@v7
         with:
           python-version: '3.14'
+
+      - name: Read the issue
+        id: issue
+        run: tools/engineer.py read --number "$ISSUE" --output claude-issue.md
 
       - name: Install dependencies
         if: steps.issue.outputs.approved == 'true'
@@ -184,10 +177,8 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: >-
           tools/engineer.py report
-          --repo "$GITHUB_REPOSITORY"
           --number "$ISSUE"
           --branch "$BRANCH"
           --result "$RESULT"
           --claude-outcome "$CLAUDE_OUTCOME"
           --run-url "$RUN_URL"
-          --summary "$GITHUB_STEP_SUMMARY"

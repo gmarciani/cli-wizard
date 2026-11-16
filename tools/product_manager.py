@@ -13,10 +13,14 @@ The workflow runs the two commands around Claude Code:
              each with ``gh``, in the sections of the repository's issue
              templates. An issue is labelled with its type, ``Triage`` and its
              priority; a proposal whose title an issue already has is skipped.
+
+In GitHub Actions the repository, the step outputs and the run summary come
+from the environment; by hand, options name them.
 """
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -44,6 +48,12 @@ def gh(*args: str) -> str:
     if result.returncode != 0:
         raise RuntimeError(f"gh {' '.join(args[:2])} failed: {result.stderr.strip()}")
     return result.stdout.strip()
+
+
+def env_path(name: str) -> Path | None:
+    """Return the file an environment variable names, if it is set."""
+    value = os.environ.get(name)
+    return Path(value) if value else None
 
 
 def collect(args: argparse.Namespace) -> int:
@@ -242,7 +252,10 @@ def main(argv: list[str] | None = None) -> int:
 
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
-        "--repo", help="the repository, OWNER/NAME (default: the one gh infers)"
+        "--repo",
+        default=os.environ.get("GITHUB_REPOSITORY"),
+        help="the repository, OWNER/NAME (default: $GITHUB_REPOSITORY, "
+        "or the one gh infers)",
     )
 
     collecting = commands.add_parser(
@@ -252,7 +265,10 @@ def main(argv: list[str] | None = None) -> int:
         "--output", required=True, type=Path, help="the JSON file to write"
     )
     collecting.add_argument(
-        "--github-output", type=Path, help="a file to append the version output to"
+        "--github-output",
+        type=Path,
+        default=env_path("GITHUB_OUTPUT"),
+        help="a file to append the version output to (default: $GITHUB_OUTPUT)",
     )
     collecting.set_defaults(run=collect)
 
@@ -269,7 +285,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     opening.add_argument("--run-url", help="the workflow run to link from each issue")
     opening.add_argument(
-        "--summary", type=Path, help="a Markdown file to append the summary table to"
+        "--summary",
+        type=Path,
+        default=env_path("GITHUB_STEP_SUMMARY"),
+        help="a Markdown file to append the summary table to "
+        "(default: $GITHUB_STEP_SUMMARY)",
     )
     opening.add_argument(
         "--dry-run",

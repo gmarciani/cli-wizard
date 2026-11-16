@@ -60,11 +60,7 @@ jobs:
         id: context
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >-
-          tools/product_manager.py collect
-          --repo "$GITHUB_REPOSITORY"
-          --output existing-issues.json
-          --github-output "$GITHUB_OUTPUT"
+        run: tools/product_manager.py collect --output existing-issues.json
 
       - name: Propose features and bug fixes
         id: claude
@@ -158,6 +154,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
 
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
       - name: Open an issue for each proposal
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -166,7 +167,5 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: >-
           printf '%s' "$PROPOSALS" | tools/product_manager.py open -
-          --repo "$GITHUB_REPOSITORY"
           --version "$VERSION"
           --run-url "$RUN_URL"
-          --summary "$GITHUB_STEP_SUMMARY"
