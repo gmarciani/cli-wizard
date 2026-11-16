@@ -133,6 +133,7 @@ on the repository through
 |---|---|---|
 | [Code Review](.github/workflows/code-review.yaml) | a pull request is opened, pushed to, reopened or marked ready | reviews the change and posts inline comments; read-only |
 | [Product Manager](.github/workflows/product-manager.yaml) | Fridays at 9am ET, or run by hand | proposes five features and five bug fixes, each bug reproduced first, and opens an issue for each, labelled with its type, `Triage` and a priority |
+| [Engineer](.github/workflows/engineer.yaml) | Tuesdays at 9am ET, or run by hand | implements up to three open issues labelled `Planned`, oldest first, and opens a draft pull request for each |
 
 They need, once:
 
@@ -149,6 +150,12 @@ They need, once:
 
 GitHub withholds secrets from pull requests opened from forks, so Code
 Review skips them; review those by hand.
+
+Product Manager and Engineer make a weekly loop: triage Friday's proposals,
+label `Planned` the issues to build, and Engineer opens a draft pull request
+for each on Tuesday. The label approves the issue's text as it stands, so an
+issue edited afterwards waits to be labelled again. An issue Engineer cannot
+implement gets a comment saying why and loses the label.
 
 Product Manager opens its issues with a script that runs by hand too;
 `--help` lists its options:

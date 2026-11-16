@@ -23,6 +23,26 @@ cli-wizard generate --configuration examples/cli-wizard.yaml --api examples/open
   --output examples/my-cli --force
 ```
 
+## Making a change
+
+- Keep the change to what was asked, and follow the conventions below for
+  where code belongs, how errors are raised and how generated code is
+  formatted.
+- Every change comes with tests that fail without it; see
+  [Testing conventions](#testing-conventions).
+- A change to `src/cli_wizard/templates/` is followed by regenerating the
+  example with the command above, and the result is part of the change.
+- A change someone using cli-wizard or a generated CLI would notice gets a
+  short entry in the topmost version section of `CHANGELOG.md`, under the
+  subsection and heading its entries use, about what they experience and
+  never about tests. Any other change gets no entry, and its pull request the
+  `Skip Changelog Update` label.
+- Before finishing, `tox -e format`, `tox -e lint`, `tox -e type` and
+  `pytest tests/ -q` pass.
+- Commits and pull request titles follow Conventional Commits, such as
+  `fix(generator): ...` or `feat: ...`. A pull request's description fills
+  the sections of `.github/PULL_REQUEST_TEMPLATE.md`.
+
 ## Architecture
 
 **Two unrelated config systems, easy to conflate.** `~/.cli_wizard/cli-wizard.yaml`
