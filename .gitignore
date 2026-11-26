@@ -5,9 +5,6 @@
 .idea
 *.iml
 
-# AI
-.claude/worktrees
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -63,3 +60,7 @@ docs/_build/
 
 # Design specs and implementation plans (working documents, not deliverables)
 docs/superpowers/
+
+# AI
+.claude/worktrees
+.claude/logs

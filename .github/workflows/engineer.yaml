@@ -1,0 +1,190 @@
+# Implements the open issues labelled Planned, opening a draft pull request for
+# each.
+#
+# Labelling an issue Planned approves its text: an issue whose title or body
+# was edited after it was labelled is skipped until it is labelled again, and
+# Claude reads the title and body only, never the comments, so nobody can
+# steer it after a maintainer has approved the issue.
+#
+# Run by hand, it takes either the link of one issue to implement, retried
+# even if it already had a pull request, or the most issues to take on; not
+# both.
+#
+# Two jobs:
+# - select picks the approved issues, oldest first, skipping those that
+#   already had a pull request from their engineer/issue-<number> branch.
+# - implement runs Claude Code on the issue's branch: it changes the code as
+#   CLAUDE.md says, commits, and submits the change with tools/engineer.py,
+#   which runs the project's checks and, only if they pass, pushes the branch
+#   and opens the draft pull request. Claude has no other way to push. When
+#   the run ends without a pull request, the job explains why on the issue and
+#   removes Planned, so the issue is not retried until it is labelled again.
+#
+# A draft opened with the workflow's token runs no check, and none is relied
+# on: the change is validated before it is submitted.
+#
+# tools/engineer.py holds the logic of the steps around Claude, and runs by
+# hand too.
+#
+# Requires the CLAUDE_CODE_OAUTH_TOKEN repository secret; see "Continuous AI"
+# in DEVELOPMENT.md. Claude acts on GitHub with the workflow's own token, which
+# reaches this repository only, and each job grants it the least it needs.
+name: 🛠️ Engineer
+
+on:
+  schedule:
+    # Tuesdays at 9am Eastern, after the issues the New Ideas workflow
+    # proposes on Friday have been groomed and triaged.
+    - cron: '0 9 * * 2'
+      timezone: America/New_York
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: 'Link of the one issue to implement; not with max-issues'
+        required: false
+        type: string
+      max-issues:
+        description: 'Most issues to implement, 3 by default; not with issue'
+        required: false
+        type: string
+
+# Nothing is granted by default: each job states what it needs.
+permissions: {}
+
+concurrency:
+  group: engineer
+  cancel-in-progress: false
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      issues: ${{ steps.select.outputs.issues }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . --group dev
+
+      - name: Select the approved Planned issues
+        id: select
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_LINK: ${{ inputs.issue }}
+          MAX_ISSUES: ${{ inputs.max-issues }}
+        run: tools/engineer.py select --issue "$ISSUE_LINK" --max-issues "$MAX_ISSUES"
+
+  implement:
+    needs: select
+    if: needs.select.outputs.issues != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        issue: ${{ fromJSON(needs.select.outputs.issues) }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ISSUE: ${{ matrix.issue }}
+      BRANCH: engineer/issue-${{ matrix.issue }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . --group dev
+
+      - name: Read the issue
+        id: issue
+        run: tools/engineer.py read --number "$ISSUE"
+
+      - name: Create the issue's branch
+        if: steps.issue.outputs.approved == 'true'
+        run: |
+          git config user.name "claude[bot]"
+          git config user.email "giacomo.marciani@gmail.com"
+          git checkout -b "$BRANCH"
+
+      - name: Implement the issue
+        id: claude
+        if: steps.issue.outputs.approved == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Implement GitHub issue #${{ matrix.issue }} of this repository.
+            Its title and body are in claude-issue.md: that is the whole
+            specification. A maintainer approved it by labelling it Planned.
+
+            Follow CLAUDE.md, which says how a change is made here and how
+            its commit and pull request are written.
+
+            You are on the branch ${{ env.BRANCH }}. Once the change is
+            complete:
+
+            1. Commit it as one commit.
+            2. Write the pull request description to claude-pr.md.
+            3. Run `tools/engineer.py submit --number ${{ matrix.issue }}`.
+               It runs the project's checks and, only if they pass, pushes
+               the branch and opens the draft pull request. If it fails, fix
+               what it reports, amend the commit and run it again.
+
+            Do not touch .github/workflows, which this workflow's token
+            cannot push, or claude-issue.md.
+
+            If the issue is unclear, contradicts the code or CLAUDE.md, or
+            is too large for one pull request, change nothing, open no pull
+            request, set implemented to false, and say why in reason, so a
+            maintainer can clarify it.
+          claude_args: >-
+            --max-turns 80
+            --allowedTools "Read,Glob,Grep,Write,Edit,MultiEdit,Bash(cli-wizard:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*),Bash(tox:*),Bash(ls:*),Bash(git diff:*),Bash(git status:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(tools/engineer.py submit:*)"
+            --json-schema '{
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["implemented", "reason"],
+              "properties": {
+                "implemented": {"type": "boolean"},
+                "reason": {"type": "string"}
+              }
+            }'
+
+      - name: Explain a missing pull request
+        if: always() && steps.issue.outputs.approved == 'true'
+        env:
+          CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
+          RESULT: ${{ steps.claude.outputs.structured_output }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >-
+          tools/engineer.py conclude
+          --number "$ISSUE"
+          --result "$RESULT"
+          --claude-outcome "$CLAUDE_OUTCOME"
+          --run-url "$RUN_URL"
